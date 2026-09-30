@@ -15,9 +15,8 @@ beforeEach(() => {
 })
 
 describe('favorites', () => {
-  it('seeds from the instruments marked favourite in the fixtures', () => {
-    const seeded = instruments.filter((item) => item.favorite).map((item) => item.id)
-    expect([...useSession.getState().favorites].sort()).toEqual(seeded.sort())
+  it('starts empty until the backend favorite query resolves', () => {
+    expect([...useSession.getState().favorites]).toEqual([])
   })
 
   it('adds an instrument that was not a favourite', () => {
@@ -28,6 +27,7 @@ describe('favorites', () => {
 
   it('removes one that was', () => {
     const id = instruments.find((item) => item.favorite)!.id
+    useSession.getState().replaceFavorites([id])
     useSession.getState().toggleFavorite(id)
     expect(useSession.getState().favorites.has(id)).toBe(false)
   })
@@ -48,7 +48,7 @@ describe('favorites', () => {
     expect(after).not.toBe(before)
     // The old Set must be untouched, or a memoised row comparing against it
     // would conclude nothing changed.
-    expect(before.has(instruments[0].id)).toBe(instruments[0].favorite)
+    expect(before.has(instruments[0].id)).toBe(false)
   })
 
   it('leaves other instruments alone', () => {

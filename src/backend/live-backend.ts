@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ClientPortalAdapter } from './adapters/client-portal'
 import { TradingApiAdapter } from './adapters/trading-api'
 import type { WaveXBackend } from './contract'
-import type { Account, Profile } from '../data/types'
+import type { Account, Instrument, Profile, Timeframe } from '../data/types'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
 import type { PortalBootstrap } from './responses/portal'
@@ -32,6 +32,17 @@ function needs(item: string, capture: string): never {
     'blocked',
     `Not wired yet: ${item}. Needs one captured response from ${capture} — see docs/RESPONSE-CAPTURES.md.`,
   )
+}
+
+const chartLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+
+const chartOptions: Record<Timeframe, { resolution: string; count: number }> = {
+  '1D': { resolution: '15', count: 96 },
+  '5D': { resolution: '60', count: 120 },
+  '1W': { resolution: '60', count: 168 },
+  '1M': { resolution: 'D', count: 30 },
+  '3M': { resolution: 'D', count: 90 },
+  '6M': { resolution: 'D', count: 180 },
 }
 
 /** The one response shape guide §2 documents: open, pending and total counts. */
@@ -128,6 +139,37 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       verified: user.verified,
       kycStatus: user.verified ? 'Verified' : 'Not started',
     }
+  }
+
+  async function readMarkets(): Promise<Instrument[]> {
+    const raw = await trading.marketData(requireSession())
+    return raw.catalogue.map((entry) => {
+      const metadata = raw.metadata.get(entry.ticker)
+      const snapshot = raw.snapshots.get(entry.ticker)
+      if (!metadata || !snapshot || (metadata.precision !== 2 && metadata.precision !== 4)) {
+        throw new BackendError('malformed', `Price snapshot unavailable for ${entry.ticker}.`, {
+          endpoint: 'currentDayData',
+        })
+      }
+      const price = (snapshot.bid + snapshot.ask) / 2
+      return {
+        id: entry.ticker.toLowerCase(),
+        symbol: formatSymbol(entry.ticker),
+        name: formatSymbol(entry.ticker),
+        description: formatSymbol(entry.ticker),
+        icon: instrumentIcon(entry.ticker),
+        iconLabel: entry.ticker.slice(0, 1),
+        price,
+        precision: metadata.precision,
+        changePercent: snapshot.open === 0 ? 0 : ((price - snapshot.open) / snapshot.open) * 100,
+        bid: snapshot.bid,
+        ask: snapshot.ask,
+        spark: [snapshot.open, snapshot.low, snapshot.high, price],
+        category: entry.category,
+        favorite: false,
+        contractSize: metadata.lot,
+      }
+    })
   }
 
   function requireSession(): SessionMaterial {
@@ -238,16 +280,41 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
     },
 
     markets: {
-      // Guide §7.11 (precision, lot step, margin rules per instrument) is
-      // still outstanding on top of the capture.
-      catalogue: async () => needs('market catalogue', 'collect=mwatch and collect=symbolSpreadApp'),
-      favorites: async () => needs('favorites', 'collect=getfav'),
-      setFavorite: async () => needs('favorite toggle', 'collect=updateFavorite'),
-      // Guide §7.5: no live-quote transport is documented at all. A capture
-      // does not unblock this one — the subscription contract is missing.
-      quoteSnapshot: async () =>
-        needs('live quotes', 'the live-price WebSocket or polling spec (guide §7.5)'),
-      candles: async () => needs('chart history', 'watchlist_charting on the charting host'),
+      catalogue: readMarkets,
+      favorites: () => trading.favoriteIds(requireSession()),
+      setFavorite: (request) => trading.setFavorite(requireSession(), request),
+      async quoteSnapshot(instrumentIds) {
+        const wanted = new Set(instrumentIds)
+        return (await readMarkets()).filter((item) => wanted.has(item.id))
+      },
+      async candles(instrumentId, timeframe) {
+        const option = chartOptions[timeframe]
+        let history: Awaited<ReturnType<typeof trading.chart>>
+        try {
+          history = await trading.chart(requireSession(), instrumentId, option.resolution, option.count)
+        } catch (cause) {
+          if (cause instanceof BackendError) throw cause
+          throw new BackendError('malformed', 'Chart history returned an unexpected shape.', {
+            endpoint: 'chartBars',
+            cause,
+          })
+        }
+        if (history.closes.length === 0) {
+          throw new BackendError('malformed', 'Chart history is empty.', { endpoint: 'chartBars' })
+        }
+        const min = Math.min(...history.lows)
+        const max = Math.max(...history.highs)
+        return {
+          points: history.closes,
+          labels: history.timestamps.map((timestamp) => chartLabel.format(new Date(timestamp * 1000))),
+          cursorIndex: history.closes.length - 1,
+          cursorOpen: history.opens.at(-1)!,
+          cursorClose: history.closes.at(-1)!,
+          min,
+          max,
+          step: (max - min) / 4 || 1,
+        }
+      },
     },
 
     orders: {
@@ -301,4 +368,18 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       markNotificationsRead: async () => needs('notification read state', 'apiNotificationsRead'),
     },
   }
+}
+
+function formatSymbol(ticker: string): string {
+  return /^[A-Z]{6}$/.test(ticker) ? `${ticker.slice(0, 3)}/${ticker.slice(3)}` : ticker
+}
+
+function instrumentIcon(ticker: string): Instrument['icon'] {
+  if (ticker.startsWith('XAU')) return 'gold'
+  if (ticker.startsWith('XAG')) return 'silver'
+  if (ticker.startsWith('BTC')) return 'bitcoin'
+  if (ticker.startsWith('ETH')) return 'ethereum'
+  if (ticker.startsWith('EUR')) return 'euro'
+  if (ticker.includes('WTI') || ticker.includes('OIL')) return 'oil'
+  return 'generic'
 }

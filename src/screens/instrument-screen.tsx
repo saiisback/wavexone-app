@@ -20,14 +20,17 @@ import {
   radius,
 } from '../design-system'
 import { PriceChart } from '../features/chart/price-chart'
-import { instruments, instrumentsById, timeframes, xauChart } from '../data/mock'
+import { useBackendQuery } from '../backend/provider'
 import { directionOf, formatPercent, formatPrice } from '../data/format'
 import { useSession } from '../data/store'
 import type { Timeframe } from '../data/types'
+import { useMarketData } from '../features/markets/use-market-data'
+import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 import type { RootStackParamList } from '../navigation/types'
 
 type InstrumentRoute = RouteProp<RootStackParamList, 'Instrument'>
+const TIMEFRAMES: readonly Timeframe[] = ['1D', '5D', '1W', '1M', '3M', '6M']
 
 /** Instrument detail: quote, timeframe switch, chart and the Sell / Buy pair. */
 export function InstrumentScreen() {
@@ -36,14 +39,36 @@ export function InstrumentScreen() {
   const { openOrderTicket } = useAppNavigation()
 
   const [timeframe, setTimeframe] = useState<Timeframe>('1M')
+  const { catalogue, setFavorite } = useMarketData()
+  const chart = useBackendQuery(`chart:${params.instrumentId}:${timeframe}`, (backend) =>
+    backend.markets.candles(params.instrumentId, timeframe),
+  )
 
-  const instrument = instrumentsById.get(params.instrumentId) ?? instruments[0]
-  const direction = directionOf(instrument.changePercent)
+  const instrument =
+    catalogue.status === 'ready'
+      ? catalogue.data.find((item) => item.id === params.instrumentId)
+      : undefined
 
-  const isFavorite = useSession((state) => state.favorites.has(instrument.id))
+  const isFavorite = useSession((state) => state.favorites.has(params.instrumentId))
   const toggleFavorite = useSession((state) => state.toggleFavorite)
 
-  const chart = xauChart[timeframe]
+  if (catalogue.status !== 'ready' || !instrument) {
+    return (
+      <Screen>
+        <Gutter style={styles.state}>
+          <QueryStateView state={catalogue} emptyTitle="Instrument unavailable" render={() => null} />
+        </Gutter>
+      </Screen>
+    )
+  }
+
+  const direction = directionOf(instrument.changePercent)
+
+  const favorite = () => {
+    const next = !isFavorite
+    toggleFavorite(instrument.id)
+    void setFavorite(instrument.id, next).catch(() => toggleFavorite(instrument.id))
+  }
 
   return (
     <Screen>
@@ -62,7 +87,7 @@ export function InstrumentScreen() {
         </View>
 
         <CircleButton
-          onPress={() => toggleFavorite(instrument.id)}
+          onPress={favorite}
           accessibilityLabel={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
         >
           <StarIcon size={22} color={isFavorite ? colors.gold : colors.text} filled={isFavorite} />
@@ -95,7 +120,7 @@ export function InstrumentScreen() {
         </Gutter>
 
         <Gutter style={styles.timeframes}>
-          {timeframes.map((option) => {
+          {TIMEFRAMES.map((option) => {
             const selected = option === timeframe
             return (
               <Pressable
@@ -116,18 +141,21 @@ export function InstrumentScreen() {
         </Gutter>
 
         <Gutter style={styles.chart}>
-          <PriceChart
+          <QueryStateView
+            state={chart}
+            render={(series) => <PriceChart
             // Remounting per timeframe keeps the plot's measured size honest
             // when the axis gutter width changes with longer labels.
             key={timeframe}
-            series={chart.points}
-            months={chart.labels}
-            cursorIndex={chart.cursorIndex}
-            cursorOpen={chart.cursorOpen}
-            cursorClose={chart.cursorClose}
-            min={chart.min}
-            max={chart.max}
-            step={chart.step}
+            series={series.points}
+            months={series.labels}
+            cursorIndex={series.cursorIndex}
+            cursorOpen={series.cursorOpen}
+            cursorClose={series.cursorClose}
+            min={series.min}
+            max={series.max}
+            step={series.step}
+          />}
           />
         </Gutter>
       </View>
@@ -154,6 +182,7 @@ export function InstrumentScreen() {
 const QUOTE_MARK_TINT = 'rgba(255, 255, 255, 0.08)'
 
 const styles = StyleSheet.create({
+  state: { paddingTop: 32 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

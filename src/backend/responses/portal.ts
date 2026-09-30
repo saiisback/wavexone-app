@@ -2,7 +2,10 @@ import { z } from 'zod'
 
 import type { Notification } from '../../data/types'
 
-const finiteNumber = z.coerce.number().refine(Number.isFinite, 'Expected a finite number')
+const finiteNumber = z
+  .union([z.number(), z.string().trim().min(1)])
+  .transform(Number)
+  .refine(Number.isFinite, 'Expected a finite number')
 const successSchema = z.literal('success')
 
 const portalUserSchema = z.object({

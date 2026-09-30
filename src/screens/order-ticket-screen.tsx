@@ -16,9 +16,10 @@ import {
   colors,
   useActionMenu,
 } from '../design-system'
-import { instruments, instrumentsById } from '../data/mock'
 import { formatLots, formatMoney, formatPrice } from '../data/format'
-import { selectAccount, useSession } from '../data/store'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { useMarketData } from '../features/markets/use-market-data'
+import { QueryStateView } from '../features/shared/query-state'
 import type { RootStackParamList } from '../navigation/types'
 
 type OrderRoute = RouteProp<RootStackParamList, 'OrderTicket'>
@@ -36,13 +37,28 @@ export function OrderTicketScreen() {
   const { goBack } = useNavigation()
   const showMenu = useActionMenu()
 
-  const account = useSession(selectAccount)
-  const instrument = instrumentsById.get(params.instrumentId) ?? instruments[0]
+  const accountData = useAccountData()
+  const { catalogue } = useMarketData()
   const side = params.side
 
   const [lots, setLots] = useState(0.5)
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
+
+  if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    const state = accountData.status !== 'ready' ? accountData : catalogue
+    return (
+      <Sheet title={`${side} order`}>
+        <QueryStateView state={state} render={() => null} />
+      </Sheet>
+    )
+  }
+
+  const account = accountData.data.account
+  const instrument = catalogue.data.find((item) => item.id === params.instrumentId)
+  if (!instrument) {
+    return <Sheet title={`${side} order`}><Text>Instrument unavailable.</Text></Sheet>
+  }
 
   const price = side === 'Buy' ? instrument.ask : instrument.bid
   const margin = (price * instrument.contractSize * lots) / account.leverage

@@ -14,15 +14,18 @@ import {
   fonts,
   radius,
 } from '../design-system'
-import { instruments } from '../data/mock'
 import { directionOf, formatPercent, formatPrice } from '../data/format'
 import { useTradeDraft } from '../data/trade-draft'
+import { useMarketData } from '../features/markets/use-market-data'
+import { QueryStateView } from '../features/shared/query-state'
 
 /** Instrument chooser for the Trade tab. */
 export function InstrumentPickerScreen() {
   const { goBack } = useNavigation()
   const [query, setQuery] = useState('')
   const setInstrumentId = useTradeDraft((state) => state.setInstrumentId)
+  const { catalogue } = useMarketData()
+  const instruments = catalogue.status === 'ready' ? catalogue.data : []
 
   const needle = query.trim().toLowerCase()
   const rows = needle
@@ -39,6 +42,9 @@ export function InstrumentPickerScreen() {
 
   return (
     <Sheet title="Choose instrument" subtitle={`${instruments.length} markets available`}>
+      {catalogue.status !== 'ready' ? (
+        <QueryStateView state={catalogue} render={() => null} />
+      ) : null}
       <View style={styles.searchField}>
         <SearchIcon size={20} color={colors.text} />
         <TextInput

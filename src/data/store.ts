@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { accounts, instruments, notifications } from './mock'
+import { accounts, notifications } from './mock'
 
 /**
  * Client-side session state.
@@ -22,6 +22,7 @@ type SessionState = {
 
   selectAccount: (accountId: string) => void
   toggleFavorite: (instrumentId: string) => void
+  replaceFavorites: (instrumentIds: readonly string[]) => void
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: () => void
   setMarketPeriod: (period: MarketPeriod) => void
@@ -37,7 +38,7 @@ export type SettingKey =
 
 export const useSession = create<SessionState>((set) => ({
   accountId: null,
-  favorites: new Set(instruments.filter((item) => item.favorite).map((item) => item.id)),
+  favorites: new Set<string>(),
   readNotifications: new Set<string>(),
   marketPeriod: 'This month',
   settings: {
@@ -59,6 +60,7 @@ export const useSession = create<SessionState>((set) => ({
       else next.add(instrumentId)
       return { favorites: next }
     }),
+  replaceFavorites: (instrumentIds) => set({ favorites: new Set(instrumentIds) }),
 
   markNotificationRead: (id) =>
     set((state) => {

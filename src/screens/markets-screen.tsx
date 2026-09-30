@@ -17,9 +17,10 @@ import {
   useActionMenu,
 } from '../design-system'
 import { MarketRow } from '../features/markets/market-row'
-import { instruments, instrumentsById } from '../data/mock'
 import { useSession } from '../data/store'
 import type { Instrument } from '../data/types'
+import { useMarketData } from '../features/markets/use-market-data'
+import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
 const FILTERS = ['Favorites', 'All', 'Forex', 'Metals', 'Crypto', 'Energy'] as const
@@ -32,6 +33,7 @@ type Filter = (typeof FILTERS)[number]
 export function MarketsScreen() {
   const { openInstrument, openOrderTicket } = useAppNavigation()
   const showMenu = useActionMenu()
+  const { catalogue, setFavorite } = useMarketData()
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
@@ -40,6 +42,7 @@ export function MarketsScreen() {
   const toggleFavorite = useSession((state) => state.toggleFavorite)
 
   const needle = query.trim().toLowerCase()
+  const instruments = catalogue.status === 'ready' ? catalogue.data : []
   const rows = instruments.filter((item) => {
     const matchesFilter =
       filter === 'All' || (filter === 'Favorites' ? favorites.has(item.id) : item.category === filter)
@@ -49,7 +52,7 @@ export function MarketsScreen() {
   })
 
   const openRowMenu = (instrumentId: string) => {
-    const instrument = instrumentsById.get(instrumentId)
+    const instrument = instruments.find((item) => item.id === instrumentId)
     if (!instrument) return
 
     showMenu({
@@ -61,7 +64,18 @@ export function MarketsScreen() {
         { label: 'Sell', onSelect: () => openOrderTicket(instrumentId, 'Sell') },
         {
           label: favorites.has(instrumentId) ? 'Remove from favourites' : 'Add to favourites',
-          onSelect: () => toggleFavorite(instrumentId),
+          onSelect: () => {
+            const next = !favorites.has(instrumentId)
+            toggleFavorite(instrumentId)
+            void setFavorite(instrumentId, next).catch(() => {
+              toggleFavorite(instrumentId)
+              showMenu({
+                title: 'Favourite not updated',
+                message: 'The server did not save that change. Try again.',
+                options: [{ label: 'Got it' }],
+              })
+            })
+          },
         },
       ],
     })
@@ -152,7 +166,13 @@ export function MarketsScreen() {
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={filter === 'Favorites' ? NoFavorites : Empty}
+        ListEmptyComponent={
+          catalogue.status === 'ready' ? (
+            filter === 'Favorites' ? <NoFavorites /> : <Empty />
+          ) : (
+            <QueryStateView state={catalogue} render={() => null} />
+          )
+        }
         ListFooterComponent={rows.length > 0 ? Hint : null}
       />
     </Screen>

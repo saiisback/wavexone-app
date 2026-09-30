@@ -1,11 +1,9 @@
 import { create } from 'zustand'
 
-import { instruments } from './mock'
-
 export type OrderType = 'Market' | 'Limit' | 'Stop'
 
 type TradeDraftState = {
-  instrumentId: string
+  instrumentId: string | null
   orderType: OrderType
   lots: number
 
@@ -22,7 +20,7 @@ type TradeDraftState = {
  * make the navigation state non-serialisable.
  */
 export const useTradeDraft = create<TradeDraftState>((set) => ({
-  instrumentId: instruments[0].id,
+  instrumentId: null,
   orderType: 'Market',
   lots: 0.5,
 

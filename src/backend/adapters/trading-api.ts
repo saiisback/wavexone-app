@@ -3,7 +3,14 @@ import { z } from 'zod'
 import { BackendError } from '../errors'
 import type { Gate } from '../gate'
 import { unwrapEnvelope } from '../http'
-import { parseCheckedSession } from '../responses/trading'
+import {
+  parseChartHistory,
+  parseCheckedSession,
+  parseDailySnapshots,
+  parseFavoriteIds,
+  parseMarketCatalogue,
+  parseSymbolMetadata,
+} from '../responses/trading'
 import type { SessionMaterial } from '../secure-session-store'
 
 /**
@@ -156,6 +163,64 @@ export class TradingApiAdapter {
       Secretkey: material.secretKey,
       Bearer: material.bearerToken,
     }
+  }
+
+  async marketData(material: SessionMaterial) {
+    const headers = this.headers(material)
+    const catalogue = parseMarketCatalogue(await this.gate.callJson('marketWatch', { headers }))
+    const metadata = parseSymbolMetadata(await this.gate.callJson('symbolSpread', { headers }))
+    const symbols = catalogue.map((item) => item.ticker)
+    const snapshots = parseDailySnapshots(
+      await this.gate.callJson('currentDayData', {
+        body: { data: JSON.stringify(symbols), timeline: '1D' },
+        headers,
+      }),
+    )
+    return { catalogue, metadata, snapshots }
+  }
+
+  async favoriteIds(material: SessionMaterial): Promise<string[]> {
+    const response = await this.gate.call('favorites', {
+      query: { token: material.accountToken, data: 'all' },
+      headers: this.headers(material),
+    })
+    return parseFavoriteIds(response.json)
+  }
+
+  async setFavorite(
+    material: SessionMaterial,
+    request: { instrumentId: string; favorite: boolean; idempotencyKey: string },
+  ): Promise<void> {
+    await this.gate.call('toggleFavorite', {
+      query: {
+        token: material.accountToken,
+        data: JSON.stringify({
+          symbol: request.instrumentId.toUpperCase(),
+          watch: request.favorite ? '1' : '0',
+          type: request.favorite ? 'add' : 'remove',
+        }),
+      },
+      headers: this.headers(material),
+      idempotencyKey: request.idempotencyKey,
+    })
+  }
+
+  async chart(material: SessionMaterial, instrumentId: string, resolution: string, count: number) {
+    const toTs = Math.floor(Date.now() / 1000)
+    const fromTs = toTs - count * 24 * 60 * 60
+    const response = await this.gate.call('chartBars', {
+      query: {
+        symbol: instrumentId.toUpperCase(),
+        fromTs: String(fromTs),
+        toTs: String(toTs),
+        count: String(count),
+        previouscount: '0',
+        resolution,
+        firstDataRequest: 'true',
+      },
+      headers: this.headers(material),
+    })
+    return parseChartHistory(response.json)
   }
 
   /**

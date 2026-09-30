@@ -1,6 +1,8 @@
 import {
   checkedSessionResponse,
+  chartHistoryResponse,
   closedHistoryResponse,
+  dailySnapshotResponse,
   emptyClosedHistoryResponse,
   favoritesResponse,
   marketCatalogueResponse,
@@ -11,7 +13,9 @@ import {
 } from './fixtures/trading-responses'
 import {
   parseCheckedSession,
+  parseChartHistory,
   parseClosedHistory,
+  parseDailySnapshots,
   parseFavoriteIds,
   parseMarketCatalogue,
   parseOpenPositions,
@@ -65,6 +69,18 @@ describe('trading response parsers', () => {
       lot: 100,
     })
     expect(parseFavoriteIds(favoritesResponse)).toEqual(['xauusd', 'eurusd'])
+  })
+
+  it('parses daily quote snapshots and chart arrays without inventing fields', () => {
+    expect(parseDailySnapshots(dailySnapshotResponse).get('XAUUSD')).toMatchObject({
+      bid: 2400.1,
+      ask: 2400.35,
+      open: 2390,
+    })
+    expect(parseChartHistory(chartHistoryResponse).closes).toEqual([2395, 2400, 2405])
+    expect(() =>
+      parseDailySnapshots({ ...dailySnapshotResponse, XAUUSD: { ...dailySnapshotResponse.XAUUSD, broker: null } }),
+    ).toThrow()
   })
 
   it('rejects malformed stringified favorites', () => {

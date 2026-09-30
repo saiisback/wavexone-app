@@ -20,10 +20,11 @@ import {
   colors,
   radius,
 } from '../design-system'
-import { instruments, instrumentsById } from '../data/mock'
 import { directionOf, formatLots, formatMoney, formatPercent, formatPrice } from '../data/format'
-import { selectAccount, useSession } from '../data/store'
 import { useTradeDraft, type OrderType } from '../data/trade-draft'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { useMarketData } from '../features/markets/use-market-data'
+import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
 const ORDER_TYPES: readonly OrderType[] = ['Market', 'Limit', 'Stop']
@@ -37,14 +38,30 @@ export function TradeScreen() {
   const { openAccountSwitcher, openInstrumentPicker, openOrderTicket, openInstrument } =
     useAppNavigation()
 
-  const account = useSession(selectAccount)
+  const accountData = useAccountData()
+  const { catalogue } = useMarketData()
   const instrumentId = useTradeDraft((state) => state.instrumentId)
   const orderType = useTradeDraft((state) => state.orderType)
   const lots = useTradeDraft((state) => state.lots)
   const setOrderType = useTradeDraft((state) => state.setOrderType)
   const setLots = useTradeDraft((state) => state.setLots)
 
-  const instrument = instrumentsById.get(instrumentId) ?? instruments[0]
+  if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    const state = accountData.status !== 'ready' ? accountData : catalogue
+    return (
+      <Screen>
+        <Gutter style={styles.state}>
+          <QueryStateView state={state} render={() => null} />
+        </Gutter>
+      </Screen>
+    )
+  }
+
+  const account = accountData.data.account
+  const instrument = catalogue.data.find((item) => item.id === instrumentId) ?? catalogue.data[0]
+  if (!instrument) {
+    return <Screen><Gutter style={styles.state}><Text>No markets available.</Text></Gutter></Screen>
+  }
   const margin = (instrument.price * instrument.contractSize * lots) / account.leverage
   const spread = instrument.ask - instrument.bid
 
@@ -214,6 +231,7 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  state: { paddingTop: 32 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -35,6 +35,22 @@ export const marketCatalogueResponse = {
 export const symbolMetadataResponse = {
   XAUUSD: { spread: 0.25, decimal: 2, lot: 100 },
   EURUSD: { spread: 0.0002, decimal: 4, lot: 100000 },
+  BTCUSD: { spread: 10, decimal: 2, lot: 1 },
+} as const
+
+export const dailySnapshotResponse = {
+  XAUUSD: { broker: '2400.10', feed: '2400.35', open: 2390, high: 2410, low: 2380, volume: 1200 },
+  BTCUSD: { broker: '68000.00', feed: '68010.00', open: 67500, high: 68500, low: 67000, volume: 800 },
+} as const
+
+export const chartHistoryResponse = {
+  s: 'ok',
+  t: [1727654400, 1727740800, 1727827200],
+  o: [2390, 2395, 2400],
+  h: [2400, 2405, 2410],
+  l: [2380, 2385, 2390],
+  c: [2395, 2400, 2405],
+  v: [100, 110, 120],
 } as const
 
 export const favoritesResponse = {

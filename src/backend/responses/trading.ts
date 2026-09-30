@@ -3,7 +3,10 @@ import { z } from 'zod'
 import type { InstrumentCategory } from '../../data/types'
 import type { OrderCounts } from '../contract'
 
-const finiteNumber = z.coerce.number().refine(Number.isFinite, 'Expected a finite number')
+const finiteNumber = z
+  .union([z.number(), z.string().trim().min(1)])
+  .transform(Number)
+  .refine(Number.isFinite, 'Expected a finite number')
 const nonNegativeInteger = finiteNumber.refine(
   (value) => Number.isInteger(value) && value >= 0,
   'Expected a non-negative integer',
@@ -148,6 +151,64 @@ export function parseSymbolMetadata(input: unknown): Map<string, SymbolMetadata>
       { spread: metadata.spread, precision: metadata.decimal, lot: metadata.lot },
     ]),
   )
+}
+
+const dailySnapshotSchema = z.record(
+  z.string(),
+  z.object({
+    broker: finiteNumber,
+    feed: finiteNumber,
+    open: finiteNumber,
+    high: finiteNumber,
+    low: finiteNumber,
+    volume: finiteNumber,
+  }),
+)
+
+export type DailySnapshot = {
+  bid: number
+  ask: number
+  open: number
+  high: number
+  low: number
+  volume: number
+}
+
+export function parseDailySnapshots(input: unknown): Map<string, DailySnapshot> {
+  const parsed = dailySnapshotSchema.parse(input)
+  return new Map(
+    Object.entries(parsed).map(([symbol, value]) => [
+      symbol,
+      { bid: value.broker, ask: value.feed, open: value.open, high: value.high, low: value.low, volume: value.volume },
+    ]),
+  )
+}
+
+const chartHistorySchema = z.object({
+  s: z.literal('ok'),
+  t: z.array(finiteNumber),
+  o: z.array(finiteNumber),
+  h: z.array(finiteNumber),
+  l: z.array(finiteNumber),
+  c: z.array(finiteNumber),
+  v: z.array(finiteNumber).optional(),
+})
+
+export type ChartHistoryRecord = {
+  timestamps: number[]
+  opens: number[]
+  highs: number[]
+  lows: number[]
+  closes: number[]
+}
+
+export function parseChartHistory(input: unknown): ChartHistoryRecord {
+  const parsed = chartHistorySchema.parse(input)
+  const length = parsed.t.length
+  if ([parsed.o, parsed.h, parsed.l, parsed.c].some((values) => values.length !== length)) {
+    throw new Error('Chart history arrays have different lengths')
+  }
+  return { timestamps: parsed.t, opens: parsed.o, highs: parsed.h, lows: parsed.l, closes: parsed.c }
 }
 
 const favoritesEnvelopeSchema = z.object({

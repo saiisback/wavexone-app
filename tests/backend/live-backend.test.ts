@@ -2,7 +2,14 @@ import { createLiveBackend } from '../../src/backend/live-backend'
 import { BackendError } from '../../src/backend/errors'
 import type { BackendConfig } from '../../src/backend/gate'
 import { portalBootstrapResponse } from './fixtures/portal-responses'
-import { tradingAccountsResponse } from './fixtures/trading-responses'
+import {
+  chartHistoryResponse,
+  dailySnapshotResponse,
+  favoritesResponse,
+  marketCatalogueResponse,
+  symbolMetadataResponse,
+  tradingAccountsResponse,
+} from './fixtures/trading-responses'
 
 /**
  * The live backend is mostly *refusals* today, and that is the behaviour
@@ -327,16 +334,56 @@ describe('accounts', () => {
   })
 })
 
+describe('markets', () => {
+  it('joins catalogue, metadata, and daily snapshots with normalized ids', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify(marketCatalogueResponse) },
+      { body: JSON.stringify(symbolMetadataResponse) },
+      { body: JSON.stringify(dailySnapshotResponse) },
+    )
+
+    await expect(backend.markets.catalogue()).resolves.toEqual([
+      expect.objectContaining({ id: 'xauusd', symbol: 'XAU/USD', precision: 2, bid: 2400.1 }),
+      expect.objectContaining({ id: 'btcusd', symbol: 'BTC/USD', precision: 2 }),
+    ])
+  })
+
+  it('fails explicitly when a catalogue instrument has no price snapshot', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify(marketCatalogueResponse) },
+      { body: JSON.stringify(symbolMetadataResponse) },
+      { body: JSON.stringify({ XAUUSD: dailySnapshotResponse.XAUUSD }) },
+    )
+    await expect(backend.markets.catalogue()).rejects.toMatchObject({ kind: 'malformed' })
+  })
+
+  it('parses stringified favorites and timeframe chart history', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch({ body: JSON.stringify(favoritesResponse) })
+    await expect(backend.markets.favorites()).resolves.toEqual(['xauusd', 'eurusd'])
+
+    const chartFetch = scriptFetch({ body: JSON.stringify(chartHistoryResponse) })
+    await expect(backend.markets.candles('xauusd', '1M')).resolves.toMatchObject({
+      points: [2395, 2400, 2405],
+      cursorClose: 2405,
+    })
+    expect(chartFetch.mock.calls[0][0]).toContain('resolution=D')
+  })
+})
+
 describe('the methods that are not wired yet', () => {
   const backend = () => createLiveBackend(CONFIG)
 
   /** Every contract method except the ones that are genuinely implemented. */
   const unwired: [string, () => Promise<unknown>][] = [
-    ['markets.catalogue', () => backend().markets.catalogue()],
-    ['markets.favorites', () => backend().markets.favorites()],
-    ['markets.setFavorite', () => backend().markets.setFavorite('a', true)],
-    ['markets.quoteSnapshot', () => backend().markets.quoteSnapshot(['a'])],
-    ['markets.candles', () => backend().markets.candles('a', '1D')],
     ['orders.list', () => backend().orders.list('a')],
     ['orders.history', () => backend().orders.history('a')],
     ['funds.configuration', () => backend().funds.configuration('a')],
@@ -356,14 +403,14 @@ describe('the methods that are not wired yet', () => {
   it('points every refusal at the capture list', async () => {
     // One place to look, rather than a scavenger hunt through error strings.
     const message = await backend()
-      .markets.catalogue()
+      .orders.list('a')
       .catch((error: Error) => error.message)
     expect(message).toContain('docs/RESPONSE-CAPTURES.md')
   })
 
   it('never reaches the network for an unwired method', async () => {
     const fetchMock = scriptFetch()
-    await expect(backend().markets.catalogue()).rejects.toThrow()
+    await expect(backend().orders.list('a')).rejects.toThrow()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

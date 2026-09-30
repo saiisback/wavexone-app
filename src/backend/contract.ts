@@ -29,6 +29,12 @@ export type SwitchAccountRequest = {
   idempotencyKey: string
 }
 
+export type SetFavoriteRequest = {
+  instrumentId: string
+  favorite: boolean
+  idempotencyKey: string
+}
+
 export type OrderSide = 'Buy' | 'Sell'
 
 export type PlaceOrderRequest = {
@@ -103,7 +109,7 @@ export interface WaveXBackend {
   markets: {
     catalogue(): Promise<readonly Instrument[]>
     favorites(): Promise<readonly string[]>
-    setFavorite(instrumentId: string, favorite: boolean): Promise<void>
+    setFavorite(request: SetFavoriteRequest): Promise<void>
     quoteSnapshot(instrumentIds: readonly string[]): Promise<readonly Instrument[]>
     candles(instrumentId: string, timeframe: Timeframe): Promise<ChartSeries>
   }

@@ -14,6 +14,7 @@ export type {
   OrderSide,
   PlaceOrderRequest,
   SignInResult,
+  SetFavoriteRequest,
   SwitchAccountRequest,
   TransferRequest,
 } from './contract'
