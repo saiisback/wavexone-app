@@ -132,10 +132,16 @@ export function ActivityScreen() {
               </Text>
               <Text
                 variant="display"
-                color={account.monthNetResult < 0 ? colors.red : colors.greenOnInk}
+                color={
+                  account.monthNetResult === undefined || account.monthNetResult >= 0
+                    ? colors.greenOnInk
+                    : colors.red
+                }
                 style={styles.summaryValue}
               >
-                {formatSignedMoney(account.monthNetResult)}
+                {account.monthNetResult === undefined
+                  ? 'Unavailable'
+                  : formatSignedMoney(account.monthNetResult)}
               </Text>
             </View>
 
@@ -144,13 +150,13 @@ export function ActivityScreen() {
             <View style={styles.summaryRight}>
               <Text variant="body" color={colors.onInkMuted}>
                 <Text variant="strong" color={colors.onInk}>
-                  {account.monthTrades}
+                  {account.monthTrades ?? '—'}
                 </Text>
                 {' trades'}
               </Text>
               <Text variant="body" color={colors.onInkMuted}>
                 <Text variant="strong" color={colors.onInk}>
-                  {account.monthWinRate}%
+                  {account.monthWinRate === undefined ? '—' : `${account.monthWinRate}%`}
                 </Text>
                 {' win rate'}
               </Text>

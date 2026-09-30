@@ -15,11 +15,13 @@ import {
   useActionMenu,
 } from '../design-system'
 import { ScreenHeader } from '../features/shared/screen-header'
-import { profile } from '../data/mock'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { QueryStateView } from '../features/shared/query-state'
 
 /** Account → Profile & verification. */
 export function ProfileScreen() {
   const showMenu = useActionMenu()
+  const accountData = useAccountData()
 
   const editLater = (field: string) =>
     showMenu({
@@ -27,6 +29,19 @@ export function ProfileScreen() {
       message: 'Editing profile details needs the account endpoints. Available once the backend is connected.',
       options: [{ label: 'Got it' }],
     })
+
+  if (accountData.status !== 'ready') {
+    return (
+      <Screen>
+        <ScreenHeader title="Profile & verification" />
+        <Gutter style={styles.state}>
+          <QueryStateView state={accountData} render={() => null} />
+        </Gutter>
+      </Screen>
+    )
+  }
+
+  const { profile } = accountData.data
 
   return (
     <Screen>
@@ -97,6 +112,7 @@ export function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  state: { paddingTop: 32 },
   content: {
     paddingBottom: TAB_BAR_CLEARANCE,
     gap: 14,

@@ -28,8 +28,8 @@ import {
   useActionMenu,
 } from '../design-system'
 import { useAppSession } from '../backend/session-provider'
-import { profile } from '../data/mock'
-import { selectAccount, useSession } from '../data/store'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 import type { MoreStackParamList } from '../navigation/types'
 
@@ -43,8 +43,7 @@ export function AccountScreen() {
   const { openAccountSwitcher, openHomeScreen } = useAppNavigation()
   const showMenu = useActionMenu()
   const { signOut } = useAppSession()
-
-  const account = useSession(selectAccount)
+  const accountData = useAccountData()
 
   const notConnected = (title: string, message: string) =>
     showMenu({ title, message, options: [{ label: 'Got it' }] })
@@ -112,6 +111,23 @@ export function AccountScreen() {
         },
       ],
     })
+
+  if (accountData.status !== 'ready' || !accountData.data.account) {
+    return (
+      <Screen>
+        <Gutter style={styles.state}>
+          <QueryStateView
+            state={accountData}
+            isEmpty={(data) => data.account === null}
+            emptyTitle="No trading account"
+            render={() => null}
+          />
+        </Gutter>
+      </Screen>
+    )
+  }
+
+  const { account, profile } = accountData.data
 
   return (
     <Screen>
@@ -229,6 +245,7 @@ export function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
+  state: { paddingTop: 32 },
   content: {
     paddingTop: 10,
     paddingBottom: TAB_BAR_CLEARANCE,

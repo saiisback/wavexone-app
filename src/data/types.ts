@@ -65,10 +65,10 @@ export type Account = {
   /** Human date printed on the portfolio band. */
   asOf: string
   floatingPnl: number
-  openPositions: number
-  monthNetResult: number
-  monthTrades: number
-  monthWinRate: number
+  openPositions?: number
+  monthNetResult?: number
+  monthTrades?: number
+  monthWinRate?: number
 }
 
 export type Position = {

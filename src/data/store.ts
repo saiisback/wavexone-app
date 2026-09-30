@@ -14,7 +14,7 @@ import { accounts, instruments, notifications } from './mock'
 export type MarketPeriod = 'Today' | 'This week' | 'This month' | 'This year'
 
 type SessionState = {
-  accountId: string
+  accountId: string | null
   favorites: ReadonlySet<string>
   readNotifications: ReadonlySet<string>
   marketPeriod: MarketPeriod
@@ -36,7 +36,7 @@ export type SettingKey =
   | 'confirmOrders'
 
 export const useSession = create<SessionState>((set) => ({
-  accountId: accounts[0].id,
+  accountId: null,
   favorites: new Set(instruments.filter((item) => item.favorite).map((item) => item.id)),
   readNotifications: new Set<string>(),
   marketPeriod: 'This month',

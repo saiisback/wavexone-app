@@ -24,6 +24,11 @@ export type SignInResult =
 
 export type OrderCounts = { open: number; pending: number; total: number }
 
+export type SwitchAccountRequest = {
+  accountId: string
+  idempotencyKey: string
+}
+
 export type OrderSide = 'Buy' | 'Sell'
 
 export type PlaceOrderRequest = {
@@ -91,7 +96,7 @@ export interface WaveXBackend {
   accounts: {
     summary(accountId: string): Promise<Account>
     list(): Promise<readonly Account[]>
-    switchAccount(accountId: string): Promise<void>
+    switchAccount(request: SwitchAccountRequest): Promise<void>
     profile(): Promise<Profile>
   }
 

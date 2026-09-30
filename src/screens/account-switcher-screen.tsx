@@ -1,6 +1,8 @@
 import { useNavigation } from '@react-navigation/native'
+import * as Crypto from 'expo-crypto'
 import { StyleSheet, View } from 'react-native'
 
+import { useBackend } from '../backend/provider'
 import {
   Badge,
   Card,
@@ -11,34 +13,58 @@ import {
   colors,
   useActionMenu,
 } from '../design-system'
-import { accounts } from '../data/mock'
 import { formatMoney, formatPercent, directionOf } from '../data/format'
 import { useSession } from '../data/store'
 import type { Account } from '../data/types'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { QueryStateView } from '../features/shared/query-state'
 
 /** Reached from the account pill on Positions and Trade, and from More. */
 export function AccountSwitcherScreen() {
   const { goBack } = useNavigation()
   const showMenu = useActionMenu()
+  const backend = useBackend()
+  const accountData = useAccountData()
 
   const activeId = useSession((state) => state.accountId)
   const select = useSession((state) => state.selectAccount)
 
-  const choose = (accountId: string) => {
-    select(accountId)
-    goBack()
+  const choose = async (accountId: string) => {
+    try {
+      await backend.accounts.switchAccount({
+        accountId,
+        idempotencyKey: Crypto.randomUUID(),
+      })
+      select(accountId)
+      goBack()
+    } catch {
+      showMenu({
+        title: 'Could not switch account',
+        message: 'Your previous account is still selected. Try again.',
+        options: [{ label: 'Got it' }],
+      })
+    }
   }
 
   return (
     <Sheet title="Switch account" subtitle="Applies across every screen">
-      {accounts.map((item) => (
-        <AccountCard
-          key={item.id}
-          account={item}
-          active={item.id === activeId}
-          onPress={choose}
-        />
-      ))}
+      <QueryStateView
+        state={accountData}
+        isEmpty={(data) => data.accounts.length === 0}
+        emptyTitle="No trading accounts"
+        render={(data) => (
+          <>
+            {data.accounts.map((item) => (
+              <AccountCard
+                key={item.id}
+                account={item}
+                active={item.id === activeId}
+                onPress={(id) => void choose(id)}
+              />
+            ))}
+          </>
+        )}
+      />
 
       <PressableScale
         scaleTo={0.99}

@@ -14,6 +14,7 @@ export type {
   OrderSide,
   PlaceOrderRequest,
   SignInResult,
+  SwitchAccountRequest,
   TransferRequest,
 } from './contract'
 export { BackendError, userMessageFor, type BackendErrorKind } from './errors'

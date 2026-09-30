@@ -3,9 +3,11 @@ import { z } from 'zod'
 import { ClientPortalAdapter } from './adapters/client-portal'
 import { TradingApiAdapter } from './adapters/trading-api'
 import type { WaveXBackend } from './contract'
+import type { Account, Profile } from '../data/types'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
 import type { PortalBootstrap } from './responses/portal'
+import { parseTradingAccounts } from './responses/trading'
 import { createSessionStore, type SessionMaterial, type SessionStore } from './secure-session-store'
 
 /**
@@ -56,11 +58,76 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
     portal.reset()
   }
 
+  function invalidateAccountData(): void {
+    bootstrap = null
+  }
+
   async function readBootstrap(): Promise<PortalBootstrap> {
     if (bootstrap) return bootstrap
     const loaded = await portal.readBootstrap(requireSession())
     bootstrap = loaded
     return loaded
+  }
+
+  async function readAccounts(): Promise<Account[]> {
+    const session = requireSession()
+    const portalData = await readBootstrap()
+    const response = await gate.callJson('accountList', {
+      query: { token: session.accountToken },
+      headers: trading.headers(session),
+    })
+
+    let tradingAccounts: ReturnType<typeof parseTradingAccounts>
+    try {
+      tradingAccounts = parseTradingAccounts(response)
+    } catch (cause) {
+      throw new BackendError('malformed', 'Account list returned an unexpected shape.', {
+        endpoint: 'accountList',
+        cause,
+      })
+    }
+
+    return tradingAccounts.map((tradingAccount) => {
+      const portalAccount = portalData.accounts.find((account) => account.id === tradingAccount.id)
+      if (!portalAccount) {
+        throw new BackendError(
+          'malformed',
+          'An account was missing its portal balance details.',
+          { endpoint: 'accountList' },
+        )
+      }
+
+      const floatingPnl = portalAccount.equity - tradingAccount.balance
+      const changePercent =
+        tradingAccount.balance === 0 ? 0 : (floatingPnl / tradingAccount.balance) * 100
+
+      return {
+        id: tradingAccount.id,
+        mode: tradingAccount.mode,
+        number: portalAccount.number,
+        currency: portalAccount.currency,
+        leverage: portalAccount.leverage,
+        equity: portalAccount.equity,
+        balance: tradingAccount.balance,
+        freeMargin: portalAccount.fund,
+        changePercent,
+        asOf: 'Current account snapshot',
+        floatingPnl,
+      }
+    })
+  }
+
+  async function readProfile(): Promise<Profile> {
+    const user = (await readBootstrap()).user
+    return {
+      holder: user.holder ?? 'WaveXOne client',
+      avatarUrl: '',
+      email: user.email ?? '',
+      phone: user.phone ?? '',
+      country: '',
+      verified: user.verified,
+      kycStatus: user.verified ? 'Verified' : 'Not started',
+    }
   }
 
   function requireSession(): SessionMaterial {
@@ -142,15 +209,32 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
     },
 
     accounts: {
-      summary: async () => needs('account summary', 'collect=accountList'),
-      list: async () => needs('account list', 'collect=accountList'),
-      async switchAccount() {
-        // The request is known (`collect=switchAccount&token=…&switchtoken=…`),
-        // but guide §4.2 lists a portal `switchAccount` too and §7.7 asks
-        // which one wins. Picking wrong desynchronises the two sessions.
-        needs('account switching', 'both switchAccount routes, plus a decision on which to use')
+      async summary(accountId) {
+        const account = (await readAccounts()).find((item) => item.id === accountId)
+        if (!account) throw new BackendError('rejected', 'That account is no longer available.')
+        return account
       },
-      profile: async () => needs('profile', 'apiBootstrap'),
+      list: readAccounts,
+      async switchAccount(request) {
+        const session = requireSession()
+        await gate.call('switchAccountTrading', {
+          query: { token: session.accountToken, switchtoken: request.accountId },
+          headers: trading.headers(session),
+          idempotencyKey: request.idempotencyKey,
+        })
+        await gate.call('switchAccountPortal', {
+          body: { token: request.accountId },
+          idempotencyKey: request.idempotencyKey,
+        })
+
+        invalidateAccountData()
+        await readBootstrap()
+
+        const switched = { ...session, accountToken: request.accountId, orderFingerprint: undefined }
+        material = switched
+        await store.write(switched)
+      },
+      profile: readProfile,
     },
 
     markets: {

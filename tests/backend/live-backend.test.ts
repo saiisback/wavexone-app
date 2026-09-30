@@ -2,6 +2,7 @@ import { createLiveBackend } from '../../src/backend/live-backend'
 import { BackendError } from '../../src/backend/errors'
 import type { BackendConfig } from '../../src/backend/gate'
 import { portalBootstrapResponse } from './fixtures/portal-responses'
+import { tradingAccountsResponse } from './fixtures/trading-responses'
 
 /**
  * The live backend is mostly *refusals* today, and that is the behaviour
@@ -266,15 +267,71 @@ describe('orders.counts', () => {
   })
 })
 
+describe('accounts', () => {
+  it('joins trading balances with portal equity and leverage by account id', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    scriptFetch({ body: JSON.stringify(tradingAccountsResponse) })
+    await expect(backend.accounts.list()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'account-1',
+        number: '10001',
+        mode: 'LIVE',
+        balance: 1250.5,
+        equity: 1275.25,
+        leverage: 500,
+      }),
+    ])
+  })
+
+  it('rejects an account that has no matching portal monetary data', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    scriptFetch({
+      body: JSON.stringify([{ ...tradingAccountsResponse[0], account_id: 'missing-portal' }]),
+    })
+    await expect(backend.accounts.list()).rejects.toMatchObject({ kind: 'malformed' })
+  })
+
+  it('maps the authenticated portal user to the app profile', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    await expect(backend.accounts.profile()).resolves.toMatchObject({
+      holder: 'Example User',
+      email: 'person@example.invalid',
+      verified: true,
+      kycStatus: 'Verified',
+    })
+  })
+
+  it('switches both transports with one user-intent key', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    const fetchMock = scriptFetch(
+      { body: '{"status":"success"}' },
+      { body: '{"status":"success"}' },
+      { body: JSON.stringify(portalBootstrapResponse) },
+    )
+    await backend.accounts.switchAccount({ accountId: 'account-1', idempotencyKey: 'switch-1' })
+
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('collect=switchAccount'))).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('/switchAccount'))).toBe(true)
+  })
+})
+
 describe('the methods that are not wired yet', () => {
   const backend = () => createLiveBackend(CONFIG)
 
   /** Every contract method except the ones that are genuinely implemented. */
   const unwired: [string, () => Promise<unknown>][] = [
-    ['accounts.summary', () => backend().accounts.summary('a')],
-    ['accounts.list', () => backend().accounts.list()],
-    ['accounts.switchAccount', () => backend().accounts.switchAccount('a')],
-    ['accounts.profile', () => backend().accounts.profile()],
     ['markets.catalogue', () => backend().markets.catalogue()],
     ['markets.favorites', () => backend().markets.favorites()],
     ['markets.setFavorite', () => backend().markets.setFavorite('a', true)],
@@ -299,7 +356,7 @@ describe('the methods that are not wired yet', () => {
   it('points every refusal at the capture list', async () => {
     // One place to look, rather than a scavenger hunt through error strings.
     const message = await backend()
-      .accounts.list()
+      .markets.catalogue()
       .catch((error: Error) => error.message)
     expect(message).toContain('docs/RESPONSE-CAPTURES.md')
   })

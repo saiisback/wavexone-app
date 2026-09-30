@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { StyleSheet, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { useBackendQuery } from '../backend/provider'
 import {
   CardPlusIcon,
   CircleAction,
@@ -20,10 +21,11 @@ import {
 } from '../design-system'
 import { MarketRow } from '../features/markets/market-row'
 import { SectionHeader } from '../features/shared/section-header'
-import { marketWatch } from '../data/mock'
 import { formatMoney } from '../data/format'
-import { selectAccount, useSession, type MarketPeriod } from '../data/store'
+import { useSession, type MarketPeriod } from '../data/store'
 import type { Instrument } from '../data/types'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
 const PERIODS: readonly MarketPeriod[] = ['Today', 'This week', 'This month', 'This year']
@@ -35,14 +37,16 @@ const PERIODS: readonly MarketPeriod[] = ['Today', 'This week', 'This month', 'T
 export function BalanceScreen() {
   const { openInstrument } = useAppNavigation()
   const [query, setQuery] = useState('')
+  const markets = useBackendQuery('markets:catalogue', (backend) => backend.markets.catalogue())
 
   const needle = query.trim().toLowerCase()
+  const catalogue = markets.status === 'ready' ? markets.data : []
   const rows = needle
-    ? marketWatch.filter(
+    ? catalogue.filter(
         (item) =>
           item.symbol.toLowerCase().includes(needle) || item.name.toLowerCase().includes(needle),
       )
-    : marketWatch
+    : catalogue
 
   const renderItem = ({ item }: { item: Instrument }) => (
     <MarketRow
@@ -69,7 +73,18 @@ export function BalanceScreen() {
         keyExtractor={keyExtractor}
         ListHeaderComponent={<BalanceHeader query={query} onChangeQuery={setQuery} />}
         ItemSeparatorComponent={Separator}
-        ListEmptyComponent={Empty}
+        ListEmptyComponent={
+          markets.status === 'ready' && markets.data.length > 0 ? (
+            <Empty />
+          ) : (
+            <QueryStateView
+              state={markets}
+              isEmpty={(data) => data.length === 0}
+              emptyTitle="No markets available"
+              render={() => null}
+            />
+          )
+        }
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -89,9 +104,10 @@ function BalanceHeader({
   const showMenu = useActionMenu()
   const { openFunding } = useAppNavigation()
 
-  const account = useSession(selectAccount)
+  const accountData = useAccountData()
   const period = useSession((state) => state.marketPeriod)
   const setPeriod = useSession((state) => state.setMarketPeriod)
+  const account = accountData.status === 'ready' ? accountData.data.account : null
 
   const pickPeriod = () =>
     showMenu({
@@ -115,7 +131,7 @@ function BalanceHeader({
           Your Balance
         </Text>
         <Text variant="display" color={colors.onInk} style={styles.balanceValue}>
-          {formatMoney(account.equity)}
+          {account ? formatMoney(account.equity) : '—'}
         </Text>
 
         <View style={styles.actions}>

@@ -3,27 +3,21 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
 import {
-  AssetIcon,
   Avatar,
   BellIcon,
-  BoltIcon,
-  Card,
   Delta,
-  Divider,
   Gutter,
   Pressable,
   PressableScale,
   Screen,
   TAB_BAR_CLEARANCE,
   Text,
-  TrendUpIcon,
   Watermark,
   colors,
 } from '../design-system'
-import { SectionHeader } from '../features/shared/section-header'
-import { instrumentsById, profile, signals } from '../data/mock'
 import { directionOf, formatMoney, formatPercent } from '../data/format'
-import { selectAccount, selectUnreadCount, useSession } from '../data/store'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { QueryStateView, UnavailableState } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 import type { HomeStackParamList } from '../navigation/types'
 
@@ -32,13 +26,26 @@ type Navigation = NativeStackNavigationProp<HomeStackParamList, 'Dashboard'>
 /** Home tab: greeting, portfolio summary, two stat tiles and the signal feed. */
 export function HomeScreen() {
   const { navigate } = useNavigation<Navigation>()
-  const { openInstrument, openTab } = useAppNavigation()
+  const { openTab } = useAppNavigation()
+  const accountData = useAccountData()
 
-  const account = useSession(selectAccount)
-  const unread = useSession(selectUnreadCount)
+  if (accountData.status !== 'ready' || !accountData.data.account) {
+    return (
+      <Screen>
+        <Gutter style={styles.state}>
+          <QueryStateView
+            state={accountData}
+            isEmpty={(data) => data.account === null}
+            emptyTitle="No trading account"
+            render={() => null}
+          />
+        </Gutter>
+      </Screen>
+    )
+  }
 
-  const signal = signals[0]
-  const signalInstrument = instrumentsById.get(signal.instrumentId)
+  const { account, profile } = accountData.data
+  const unread = 0
 
   return (
     <Screen>
@@ -104,89 +111,11 @@ export function HomeScreen() {
           </PressableScale>
         </Gutter>
 
-        <Gutter style={styles.tiles}>
-          {/* Design-only figures: the integration guide has no endpoint behind
-              either metric, so they are presented as static marketing copy. */}
-          <Card style={styles.tile}>
-            <Text variant="caption" color={colors.textMuted} style={styles.tileLabel}>
-              Market Sentiment
-            </Text>
-            <View style={styles.tileValue}>
-              <Text variant="heading" style={styles.tileHeadline}>
-                Bullish
-              </Text>
-              <TrendUpIcon size={22} color={colors.green} />
-            </View>
-            <View style={styles.tileFooter}>
-              <Text variant="caption" weight="bold" color={colors.green} style={styles.tileFine}>
-                {formatPercent(account.changePercent)}
-              </Text>
-              <Text variant="caption" color={colors.textMuted} style={styles.tileFine}>
-                last 7 days
-              </Text>
-            </View>
-          </Card>
-
-          <Card style={styles.tile}>
-            <Text variant="caption" color={colors.textMuted} style={styles.tileLabel}>
-              Execution
-            </Text>
-            <View style={styles.tileValue}>
-              <Text variant="heading" style={styles.tileHeadline}>
-                &lt;50ms
-              </Text>
-              <BoltIcon size={22} color={colors.gold} />
-            </View>
-            <View style={styles.tileFooter}>
-              <Text variant="caption" style={styles.tileFine}>
-                Fast. Reliable. Global.
-              </Text>
-            </View>
-          </Card>
-        </Gutter>
-
-        <Gutter style={styles.section}>
-          <SectionHeader
-            title="Trading Signals"
-            action="See more"
-            onPressAction={() => navigate('Signals')}
-          />
-        </Gutter>
-
         <Gutter>
-          <PressableScale scaleTo={0.99} onPress={() => openInstrument(signal.instrumentId)}>
-            <Card style={styles.signal}>
-              <View style={styles.signalHeader}>
-                {signalInstrument ? (
-                  <AssetIcon
-                    kind={signalInstrument.icon}
-                    label={signalInstrument.iconLabel}
-                    tint={signalInstrument.iconTint}
-                    size={40}
-                  />
-                ) : null}
-                <View style={styles.signalIdentity}>
-                  <Text variant="strong">{signalInstrument?.symbol}</Text>
-                  <Text variant="caption" color={colors.textMuted}>
-                    {signalInstrument?.description}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.signalHeadline}>{signal.headline}</Text>
-
-              <Divider />
-
-              <View style={styles.signalFooter}>
-                <Text variant="caption" color={colors.textMuted}>
-                  {signal.date}
-                </Text>
-                <Text variant="caption" color={colors.textMuted}>
-                  {signal.source}
-                </Text>
-              </View>
-            </Card>
-          </PressableScale>
+          <UnavailableState
+            title="Trading signals unavailable"
+            message="No confirmed trading-signal endpoint is available for this account."
+          />
         </Gutter>
       </ScrollView>
     </Screen>
@@ -194,6 +123,7 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  state: { paddingTop: 32 },
   content: {
     paddingTop: 12,
     paddingBottom: TAB_BAR_CLEARANCE,
