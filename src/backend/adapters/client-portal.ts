@@ -1,6 +1,7 @@
 import { BackendError } from '../errors'
 import type { Gate } from '../gate'
 import { logBackendEvent } from '../redact'
+import { parsePortalBootstrap, type PortalBootstrap } from '../responses/portal'
 import type { SessionMaterial } from '../secure-session-store'
 
 /**
@@ -50,6 +51,20 @@ export class ClientPortalAdapter {
       await this.establish(material)
       return call()
     }
+  }
+
+  async readBootstrap(material: SessionMaterial): Promise<PortalBootstrap> {
+    return this.read(material, async () => {
+      const response = await this.gate.call('bootstrap')
+      try {
+        return parsePortalBootstrap(response.json)
+      } catch (cause) {
+        throw new BackendError('malformed', 'Portal bootstrap returned an unexpected shape.', {
+          endpoint: 'bootstrap',
+          cause,
+        })
+      }
+    })
   }
 
   /**

@@ -2,6 +2,7 @@ import { ClientPortalAdapter } from '../../src/backend/adapters/client-portal'
 import { BackendError } from '../../src/backend/errors'
 import { Gate, type BackendConfig } from '../../src/backend/gate'
 import type { SessionMaterial } from '../../src/backend/secure-session-store'
+import { portalBootstrapResponse } from './fixtures/portal-responses'
 
 /**
  * Guide §3.2. The portal is a second, cookie-backed session, and the rule
@@ -109,6 +110,24 @@ describe('read', () => {
     const call = jest.fn().mockRejectedValue(new TypeError('bug'))
     await expect(adapter().read(MATERIAL, call)).rejects.toBeInstanceOf(TypeError)
     expect(call).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('readBootstrap', () => {
+  it('establishes the cookie session and parses the portal bootstrap', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ status: 200, text: async () => '{"status":"success"}' })
+      .mockResolvedValueOnce({
+        status: 200,
+        text: async () => JSON.stringify(portalBootstrapResponse),
+      })
+
+    await expect(adapter().readBootstrap(MATERIAL)).resolves.toMatchObject({
+      user: { id: '1', accountId: 'account-1' },
+      accounts: [{ id: 'account-1', number: '10001' }],
+    })
+    expect(fetchMock.mock.calls[0][0]).toContain('setPortalSession')
+    expect(fetchMock.mock.calls[1][0]).toContain('apiBootstrap')
   })
 })
 

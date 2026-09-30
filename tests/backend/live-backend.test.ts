@@ -1,6 +1,7 @@
 import { createLiveBackend } from '../../src/backend/live-backend'
 import { BackendError } from '../../src/backend/errors'
 import type { BackendConfig } from '../../src/backend/gate'
+import { portalBootstrapResponse } from './fixtures/portal-responses'
 
 /**
  * The live backend is mostly *refusals* today, and that is the behaviour
@@ -35,12 +36,27 @@ function scriptFetch(...replies: { status?: number; body: string }[]) {
     mock.mockResolvedValueOnce({ status: reply.status ?? 200, text: async () => reply.body })
   }
   // Anything beyond the script is an unexpected call.
-  mock.mockResolvedValue({ status: 200, text: async () => '{"status":"success","data":{}}' })
+  mock.mockResolvedValue({
+    status: 200,
+    text: async () => JSON.stringify(portalBootstrapResponse),
+  })
   globalThis.fetch = mock as unknown as typeof fetch
   return mock
 }
 
-const CHECK_OK = { body: '{"status":"success","data":{"token":"acct-1","secretkey":"sk-1"}}' }
+const CHECK_OK = {
+  body: JSON.stringify({
+    userID: 'user-1',
+    status: 'success',
+    token: 'acct-1',
+    mode: 'live',
+    session_id: 'session-1',
+    password: 'server-echo',
+    verify: '1',
+    secret_key: 'sk-1',
+    footprint: 'server-fp',
+  }),
+}
 const BEARER_OK = { body: 'raw.bearer' }
 
 beforeEach(() => {
@@ -66,6 +82,19 @@ describe('session', () => {
       kind: 'authenticated',
     })
     expect([...mockStore.values()].join()).toContain('raw.bearer')
+  })
+
+  it('establishes the portal and loads bootstrap immediately after sign-in', async () => {
+    const fetchMock = scriptFetch(CHECK_OK, BEARER_OK)
+
+    await createLiveBackend(CONFIG).session.signIn('a@b.com', 'pw')
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('setPortalSession'),
+        expect.stringContaining('apiBootstrap'),
+      ]),
+    )
   })
 
   it('never writes the password to storage', async () => {
@@ -99,6 +128,17 @@ describe('session', () => {
     await expect(createLiveBackend(CONFIG).session.restore()).resolves.toBe(true)
   })
 
+  it('re-establishes the portal and reloads bootstrap after restore', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    await createLiveBackend(CONFIG).session.signIn('a@b.com', 'pw')
+
+    const fetchMock = scriptFetch({ body: '{"status":"success","data":{}}' })
+    await createLiveBackend(CONFIG).session.restore()
+
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('setPortalSession'))).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('apiBootstrap'))).toBe(true)
+  })
+
   it('refreshes the bearer when the stored session is no longer valid', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     await createLiveBackend(CONFIG).session.signIn('a@b.com', 'pw')
@@ -127,6 +167,23 @@ describe('session', () => {
 
     await backend.session.signOut()
     expect(mockStore.has('wavex.session.v1')).toBe(false)
+  })
+
+  it('invalidates portal and bootstrap state on sign-out', async () => {
+    const fetchMock = scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    await backend.session.signOut()
+
+    fetchMock
+      .mockResolvedValueOnce({ status: 200, text: async () => CHECK_OK.body })
+      .mockResolvedValueOnce({ status: 200, text: async () => BEARER_OK.body })
+    await backend.session.signIn('a@b.com', 'pw')
+
+    const portalCalls = fetchMock.mock.calls.filter(([url]) =>
+      url.includes('setPortalSession') || url.includes('apiBootstrap'),
+    )
+    expect(portalCalls).toHaveLength(4)
   })
 
   it('refuses to refresh when there is no session at all', async () => {

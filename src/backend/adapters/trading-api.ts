@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BackendError } from '../errors'
 import type { Gate } from '../gate'
 import { unwrapEnvelope } from '../http'
+import { parseCheckedSession } from '../responses/trading'
 import type { SessionMaterial } from '../secure-session-store'
 
 /**
@@ -63,21 +64,44 @@ export class TradingApiAdapter {
       })
     }
 
-    const verified = pick(body.data, 'verified', 'isVerified', 'verification')
+    const verified = pick(body.data, 'verify', 'verified', 'isVerified', 'verification')
     if (verified === '0' || verified === 'false' || verified === 'pending') {
       return { kind: 'verification-required', accountToken }
     }
 
-    const bearerToken = await this.issueBearer(accountToken, secretKey, footprint)
+    let session: ReturnType<typeof parseCheckedSession>
+    try {
+      session = parseCheckedSession({
+        status: 'success',
+        token: accountToken,
+        secret_key: secretKey,
+        verify: '1',
+        footprint: pick(body.data, 'footprint'),
+        userID: pick(body.data, 'userID'),
+        mode: pick(body.data, 'mode'),
+        session_id: pick(body.data, 'session_id'),
+      })
+    } catch (cause) {
+      throw new BackendError('malformed', 'Sign-in returned an unreadable session.', {
+        endpoint: 'check',
+        cause,
+      })
+    }
+
+    const bearerToken = await this.issueBearer(
+      session.accountToken,
+      session.secretKey,
+      session.footprint ?? footprint,
+    )
     return {
       kind: 'authenticated',
       material: {
-        accountToken,
-        secretKey,
+        accountToken: session.accountToken,
+        secretKey: session.secretKey,
         bearerToken,
         // Guide §3.1 step 2 says the footprint comes back; trust the server's
         // value when it does, so both sides agree on the device identity.
-        footprint: pick(body.data, 'footprint') ?? footprint,
+        footprint: session.footprint ?? footprint,
         issuedAt: new Date().toISOString(),
       },
     }

@@ -5,6 +5,7 @@ import { TradingApiAdapter } from './adapters/trading-api'
 import type { WaveXBackend } from './contract'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
+import type { PortalBootstrap } from './responses/portal'
 import { createSessionStore, type SessionMaterial, type SessionStore } from './secure-session-store'
 
 /**
@@ -48,6 +49,19 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
 
   /** In-memory copy of what the keychain holds, so reads are not async-chatty. */
   let material: SessionMaterial | null = null
+  let bootstrap: PortalBootstrap | null = null
+
+  function invalidateSessionData(): void {
+    bootstrap = null
+    portal.reset()
+  }
+
+  async function readBootstrap(): Promise<PortalBootstrap> {
+    if (bootstrap) return bootstrap
+    const loaded = await portal.readBootstrap(requireSession())
+    bootstrap = loaded
+    return loaded
+  }
 
   function requireSession(): SessionMaterial {
     if (!material) {
@@ -67,7 +81,14 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         }
 
         material = outcome.material
-        await store.write(outcome.material)
+        try {
+          await readBootstrap()
+          await store.write(outcome.material)
+        } catch (error) {
+          material = null
+          invalidateSessionData()
+          throw error
+        }
         return { kind: 'authenticated' }
       },
 
@@ -80,11 +101,13 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         // balance that is hours stale.
         if (await trading.isSessionValid(stored)) {
           material = stored
+          await readBootstrap()
           return true
         }
 
         try {
           await this.refresh()
+          await readBootstrap()
           return true
         } catch {
           await this.signOut()
@@ -113,7 +136,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       async signOut() {
         // Guide §3.3: "Clear all stored session material on logout."
         material = null
-        portal.reset()
+        invalidateSessionData()
         await store.clear()
       },
     },

@@ -47,6 +47,38 @@ const CHECK_OK = { body: '{"status":"success","data":{"token":"acct-1","secretke
 const BEARER_OK = { body: 'raw.bearer.token' }
 
 describe('signIn', () => {
+  it('parses the confirmed live check response and drops the echoed password', async () => {
+    scriptFetch(
+      {
+        body: JSON.stringify({
+          userID: 'user-1',
+          status: 'success',
+          token: 'acct-1',
+          mode: 'live',
+          session_id: 'session-1',
+          password: 'echoed-secret',
+          verify: '1',
+          secret_key: 'sk-1',
+          footprint: 'server-fp',
+        }),
+      },
+      BEARER_OK,
+    )
+
+    const outcome = await adapter().signIn('a@b.com', 'request-secret', 'local-fp')
+
+    expect(outcome).toMatchObject({
+      kind: 'authenticated',
+      material: {
+        accountToken: 'acct-1',
+        secretKey: 'sk-1',
+        footprint: 'server-fp',
+      },
+    })
+    expect(JSON.stringify(outcome)).not.toContain('echoed-secret')
+    expect(JSON.stringify(outcome)).not.toContain('request-secret')
+  })
+
   it('completes the check then bearer handshake and returns usable material', async () => {
     const fetchMock = scriptFetch(CHECK_OK, BEARER_OK)
 
