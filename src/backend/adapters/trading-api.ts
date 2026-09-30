@@ -9,6 +9,9 @@ import {
   parseDailySnapshots,
   parseFavoriteIds,
   parseMarketCatalogue,
+  parseOpenPositions,
+  parseClosedHistory,
+  parseOrderCounts,
   parseSymbolMetadata,
 } from '../responses/trading'
 import type { SessionMaterial } from '../secure-session-store'
@@ -221,6 +224,30 @@ export class TradingApiAdapter {
       headers: this.headers(material),
     })
     return parseChartHistory(response.json)
+  }
+
+  async orderCounts(material: SessionMaterial) {
+    const response = await this.gate.call('ordersCount', {
+      query: { token: material.accountToken },
+      headers: this.headers(material),
+    })
+    return parseOrderCounts(response.json)
+  }
+
+  async openOrders(material: SessionMaterial) {
+    const response = await this.gate.call('orders', {
+      query: { token: material.accountToken },
+      headers: this.headers(material),
+    })
+    return parseOpenPositions(response.json)
+  }
+
+  async closedOrders(material: SessionMaterial) {
+    const response = await this.gate.call('closedHistory', {
+      query: { token: material.accountToken, page: '1', type: 'all', filter: 'all', from: '', to: '' },
+      headers: this.headers(material),
+    })
+    return parseClosedHistory(response.json)
   }
 
   /**

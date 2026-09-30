@@ -17,10 +17,12 @@ import {
   useActionMenu,
 } from '../design-system'
 import { PositionCard } from '../features/positions/position-card'
-import { instrumentsById, positions, positionsById } from '../data/mock'
+import { useBackendQuery } from '../backend/provider'
 import { formatLots, formatSignedMoney } from '../data/format'
-import { selectAccount, useSession } from '../data/store'
 import type { Position } from '../data/types'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { useMarketData } from '../features/markets/use-market-data'
+import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
 const TABS = ['Open', 'Pending', 'Closed'] as const
@@ -38,7 +40,26 @@ export function PositionsScreen() {
   const showMenu = useActionMenu()
   const { openInstrument, openAccountSwitcher, openOrderTicket } = useAppNavigation()
 
-  const account = useSession(selectAccount)
+  const accountData = useAccountData()
+  const { catalogue } = useMarketData()
+  const accountId = accountData.status === 'ready' ? accountData.data.account?.id : null
+  const openPositions = useBackendQuery(`positions:${accountId ?? 'none'}`, (backend) =>
+    accountId ? backend.orders.list(accountId) : Promise.resolve([]),
+  )
+  const closedPositions = useBackendQuery(`history:${accountId ?? 'none'}`, (backend) =>
+    accountId ? backend.orders.history(accountId) : Promise.resolve([]),
+  )
+
+  if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    const state = accountData.status !== 'ready' ? accountData : catalogue
+    return <Screen><Gutter style={styles.loading}><QueryStateView state={state} render={() => null} /></Gutter></Screen>
+  }
+
+  const account = accountData.data.account
+  const positionState = tab === 'Closed' ? closedPositions : openPositions
+  const positions = positionState.status === 'ready' ? positionState.data : []
+  const instrumentsById = new Map(catalogue.data.map((item) => [item.id, item]))
+  const positionsById = new Map(positions.map((item) => [item.id, item]))
 
   const rows = positions.filter((item) => item.state === tab)
   const openCount = positions.filter((item) => item.state === 'Open').length
@@ -163,13 +184,15 @@ export function PositionsScreen() {
         ItemSeparatorComponent={Separator}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
+        ListEmptyComponent={positionState.status !== 'ready' ? (
+          <QueryStateView state={positionState} render={() => null} />
+        ) : (
           <View style={styles.empty}>
             <Text variant="body" color={colors.textMuted}>
               No {tab.toLowerCase()} positions on this account.
             </Text>
           </View>
-        }
+        )}
       />
     </Screen>
   )
@@ -179,6 +202,7 @@ const keyExtractor = (item: Position) => item.id
 const Separator = () => <View style={styles.separator} />
 
 const styles = StyleSheet.create({
+  loading: { paddingTop: 32 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',

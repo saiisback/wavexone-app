@@ -211,7 +211,7 @@ describe('orders.counts', () => {
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
 
-    scriptFetch({ body: '{"status":"success","data":{"open":2,"pending":1,"total":3}}' })
+    scriptFetch({ body: '{"status":"success","open_count":"2","pending_count":"1","total_count":"3"}' })
     await expect(backend.orders.counts('acct-1')).resolves.toEqual({
       open: 2,
       pending: 1,
@@ -224,7 +224,7 @@ describe('orders.counts', () => {
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
 
-    scriptFetch({ body: '{"open":"2","pending":"1","total":"3"}' })
+    scriptFetch({ body: '{"status":"success","open_count":"2","pending_count":"1","total_count":"3"}' })
     await expect(backend.orders.counts('acct-1')).resolves.toEqual({
       open: 2,
       pending: 1,
@@ -232,17 +232,13 @@ describe('orders.counts', () => {
     })
   })
 
-  it('defaults a missing count to zero rather than undefined', async () => {
+  it('rejects a missing count rather than inventing zero', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
 
-    scriptFetch({ body: '{"open":2}' })
-    await expect(backend.orders.counts('acct-1')).resolves.toEqual({
-      open: 2,
-      pending: 0,
-      total: 0,
-    })
+    scriptFetch({ body: '{"status":"success","open_count":"2"}' })
+    await expect(backend.orders.counts('acct-1')).rejects.toThrow()
   })
 
   it('rejects a shape it cannot trust instead of showing a wrong number', async () => {
@@ -250,8 +246,8 @@ describe('orders.counts', () => {
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
 
-    scriptFetch({ body: '{"open":"plenty"}' })
-    await expect(backend.orders.counts('acct-1')).rejects.toMatchObject({ kind: 'malformed' })
+    scriptFetch({ body: '{"status":"success","open_count":"plenty","pending_count":"1","total_count":"3"}' })
+    await expect(backend.orders.counts('acct-1')).rejects.toThrow()
   })
 
   it('sends the account token and both trading credentials', async () => {
@@ -260,7 +256,7 @@ describe('orders.counts', () => {
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
 
-    const fetchMock = scriptFetch({ body: '{"open":0,"pending":0,"total":0}' })
+    const fetchMock = scriptFetch({ body: '{"status":"success","open_count":"0","pending_count":"0","total_count":"0"}' })
     await backend.orders.counts('acct-9')
 
     const [url, init] = fetchMock.mock.calls[0]
@@ -384,10 +380,7 @@ describe('the methods that are not wired yet', () => {
 
   /** Every contract method except the ones that are genuinely implemented. */
   const unwired: [string, () => Promise<unknown>][] = [
-    ['orders.list', () => backend().orders.list('a')],
-    ['orders.history', () => backend().orders.history('a')],
     ['funds.configuration', () => backend().funds.configuration('a')],
-    ['funds.history', () => backend().funds.history('a')],
     ['engagement.notifications', () => backend().engagement.notifications()],
   ]
 
@@ -403,14 +396,14 @@ describe('the methods that are not wired yet', () => {
   it('points every refusal at the capture list', async () => {
     // One place to look, rather than a scavenger hunt through error strings.
     const message = await backend()
-      .orders.list('a')
+      .funds.configuration('a')
       .catch((error: Error) => error.message)
     expect(message).toContain('docs/RESPONSE-CAPTURES.md')
   })
 
   it('never reaches the network for an unwired method', async () => {
     const fetchMock = scriptFetch()
-    await expect(backend().orders.list('a')).rejects.toThrow()
+    await expect(backend().funds.configuration('a')).rejects.toThrow()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

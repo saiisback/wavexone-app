@@ -18,10 +18,13 @@ import {
 } from '../design-system'
 import { ActivityRow } from '../features/activity/activity-row'
 import { ScreenHeader } from '../features/shared/screen-header'
-import { activity, activityById, instrumentsById } from '../data/mock'
+import { useBackendQuery } from '../backend/provider'
 import { formatSignedMoney } from '../data/format'
-import { selectAccount, useSession, type MarketPeriod } from '../data/store'
+import { type MarketPeriod } from '../data/store'
 import type { ActivityEntry } from '../data/types'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { useMarketData } from '../features/markets/use-market-data'
+import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
 const TABS = ['Trades', 'Funds', 'Orders'] as const
@@ -38,8 +41,38 @@ export function ActivityScreen() {
 
   const showMenu = useActionMenu()
   const { openInstrument, openFunding } = useAppNavigation()
-  const account = useSession(selectAccount)
+  const accountData = useAccountData()
+  const { catalogue } = useMarketData()
+  const accountId = accountData.status === 'ready' ? accountData.data.account?.id : null
+  const funds = useBackendQuery(`funds-history:${accountId ?? 'none'}`, (backend) =>
+    accountId ? backend.funds.history(accountId) : Promise.resolve([]),
+  )
+  const trades = useBackendQuery(`trade-history:${accountId ?? 'none'}`, (backend) =>
+    accountId ? backend.orders.history(accountId) : Promise.resolve([]),
+  )
 
+  if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    const state = accountData.status !== 'ready' ? accountData : catalogue
+    return <Screen><Gutter style={styles.loading}><QueryStateView state={state} render={() => null} /></Gutter></Screen>
+  }
+  const account = accountData.data.account
+  const instrumentsById = new Map(catalogue.data.map((item) => [item.id, item]))
+  const tradeEntries: ActivityEntry[] = trades.status === 'ready'
+    ? trades.data.map((position) => ({
+        id: position.id,
+        kind: 'trade',
+        instrumentId: position.instrumentId,
+        title: instrumentsById.get(position.instrumentId)?.symbol ?? position.instrumentId,
+        subtitle: `${position.side} ${position.lots}`,
+        date: '',
+        time: '',
+        amount: position.pnl,
+        group: 'Earlier',
+        tab: 'Trades',
+      }))
+    : []
+  const activity = tab === 'Funds' ? (funds.status === 'ready' ? funds.data : []) : tradeEntries
+  const activityById = new Map(activity.map((entry) => [entry.id, entry]))
   const items = buildItems(activity.filter((entry) => entry.tab === tab))
 
   const openFilter = () =>
@@ -211,6 +244,7 @@ const getItemType = (item: ListItem) => item.type
 const Separator = () => <View style={styles.separator} />
 
 const styles = StyleSheet.create({
+  loading: { paddingTop: 32 },
   summary: {
     backgroundColor: colors.ink,
     borderRadius: 24,

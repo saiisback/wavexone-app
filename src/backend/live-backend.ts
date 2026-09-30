@@ -1,9 +1,7 @@
-import { z } from 'zod'
-
 import { ClientPortalAdapter } from './adapters/client-portal'
 import { TradingApiAdapter } from './adapters/trading-api'
 import type { WaveXBackend } from './contract'
-import type { Account, Instrument, Profile, Timeframe } from '../data/types'
+import type { Account, ActivityEntry, Instrument, Position, Profile, Timeframe } from '../data/types'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
 import type { PortalBootstrap } from './responses/portal'
@@ -44,15 +42,6 @@ const chartOptions: Record<Timeframe, { resolution: string; count: number }> = {
   '3M': { resolution: 'D', count: 90 },
   '6M': { resolution: 'D', count: 180 },
 }
-
-/** The one response shape guide §2 documents: open, pending and total counts. */
-const countsSchema = z
-  .object({
-    open: z.coerce.number(),
-    pending: z.coerce.number(),
-    total: z.coerce.number(),
-  })
-  .partial()
 
 export function createLiveBackend(config: BackendConfig): WaveXBackend {
   const gate = new Gate(config)
@@ -170,6 +159,65 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         contractSize: metadata.lot,
       }
     })
+  }
+
+  async function readPositions(): Promise<Position[]> {
+    const [orders, markets] = await Promise.all([
+      trading.openOrders(requireSession()),
+      readMarkets(),
+    ])
+    const byId = new Map(markets.map((item) => [item.id, item]))
+    return orders.map((order) => {
+      const instrument = byId.get(order.instrumentId)
+      if (!instrument) {
+        throw new BackendError('malformed', `Missing quote for ${order.instrumentId}.`, {
+          endpoint: 'orders',
+        })
+      }
+      const current = order.state === 'Pending'
+        ? order.trigger ?? order.entry
+        : order.side === 'Buy' ? instrument.bid : instrument.ask
+      const direction = order.side === 'Buy' ? 1 : -1
+      return {
+        id: order.id,
+        instrumentId: order.instrumentId,
+        side: order.side,
+        lots: order.lots,
+        entry: order.entry,
+        current,
+        pnl: order.state === 'Pending'
+          ? 0
+          : (current - order.entry) * order.lots * instrument.contractSize * direction,
+        state: order.state,
+      }
+    })
+  }
+
+  async function readHistory(): Promise<Position[]> {
+    const history = await trading.closedOrders(requireSession())
+    return history.orders.map((order) => {
+      if (order.current === undefined || order.pnl === undefined) {
+        throw new BackendError('malformed', 'Closed order is missing its close price or P&L.', {
+          endpoint: 'closedHistory',
+        })
+      }
+      return { ...order, current: order.current, pnl: order.pnl }
+    })
+  }
+
+  async function readFundingHistory(): Promise<ActivityEntry[]> {
+    const data = await readBootstrap()
+    return data.transactions.map((transaction) => ({
+      id: transaction.id,
+      kind: transaction.type.toLowerCase().includes('withdraw') ? 'withdrawal' : 'deposit',
+      title: transaction.type,
+      subtitle: transaction.status ?? transaction.method ?? '',
+      date: transaction.date ?? transaction.createdAt.slice(0, 10),
+      time: transaction.time ?? transaction.createdAt.slice(11, 16),
+      amount: transaction.amount,
+      group: 'Earlier',
+      tab: 'Funds',
+    }))
   }
 
   function requireSession(): SessionMaterial {
@@ -319,32 +367,13 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
 
     orders: {
       async counts() {
-        const session = requireSession()
-        // `orderscount` takes the account token and nothing else — the token
-        // *is* the account. Switching accounts means re-issuing the session
-        // (`switchAccount`), not passing an id alongside.
-        const body = await gate.callJson('ordersCount', {
-          query: { token: session.accountToken },
-          headers: trading.headers(session),
-        })
-
-        const parsed = countsSchema.safeParse(body)
-        if (!parsed.success) {
-          throw new BackendError('malformed', 'Order counts came back in an unexpected shape.', {
-            endpoint: 'ordersCount',
-          })
-        }
-        return {
-          open: parsed.data.open ?? 0,
-          pending: parsed.data.pending ?? 0,
-          total: parsed.data.total ?? 0,
-        }
+        return trading.orderCounts(requireSession())
       },
 
       // Guide §7.2 also asks for an account that actually holds an open
       // position, since an empty list teaches nothing about the row shape.
-      list: async () => needs('open positions', 'collect=orders on a funded account'),
-      history: async () => needs('closed history', 'collect=history_of_closed_orders'),
+      list: readPositions,
+      history: readHistory,
       // These four are phase 2 regardless of any capture: guide §7.3 requires
       // written authorization before a trading mutation runs anywhere.
       place: async () => needs('order placement', 'written authorization (guide §7.3)'),
@@ -360,7 +389,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       requestWithdrawal: async () =>
         needs('withdrawal', 'a non-live test method (guide §7.4)'),
       transfer: async () => needs('transfer', 'a non-live test method (guide §7.4)'),
-      history: async () => needs('funding history', 'collect=payout_in_out'),
+      history: readFundingHistory,
     },
 
     engagement: {
