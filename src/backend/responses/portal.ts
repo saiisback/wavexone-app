@@ -70,7 +70,7 @@ export type PortalBootstrap = {
     accountId: string
     verified: boolean
   }
-  accounts: Array<{
+  accounts: {
     id: string
     number: string
     balance: number
@@ -79,9 +79,9 @@ export type PortalBootstrap = {
     currency: string
     isDemo: boolean
     leverage: number
-  }>
+  }[]
   summary: z.infer<typeof portalSummarySchema>
-  transactions: Array<{
+  transactions: {
     id: string
     createdAt: string
     amount: number
@@ -95,7 +95,7 @@ export type PortalBootstrap = {
     currency?: string
     accountId?: string
     reference?: string
-  }>
+  }[]
 }
 
 function truthyFlag(value: boolean | number | string): boolean {
@@ -176,9 +176,9 @@ const fundingConfigurationSchema = z.object({
 })
 
 export type PortalFundingConfiguration = {
-  depositMethods: Array<z.infer<typeof depositMethodSchema> & { id: string }>
-  withdrawModes: Array<z.infer<typeof withdrawModeSchema> & { id: string }>
-  withdrawFields: Array<z.infer<typeof withdrawFieldSchema> & { id: string }>
+  depositMethods: (z.infer<typeof depositMethodSchema> & { id: string })[]
+  withdrawModes: (z.infer<typeof withdrawModeSchema> & { id: string })[]
+  withdrawFields: (z.infer<typeof withdrawFieldSchema> & { id: string })[]
   kycVerified: boolean
   availableFund: number
   minimumDeposit: number

@@ -5,8 +5,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 import { BackendProvider } from './src/backend/provider'
-import { ActionMenuProvider } from './src/design-system'
+import { SessionProvider, useAppSession } from './src/backend/session-provider'
+import { ActionMenuProvider, Gutter, Screen, Text } from './src/design-system'
 import { RootNavigator } from './src/navigation/root-navigator'
+import { SignInScreen } from './src/screens/sign-in-screen'
 
 export default function App() {
   return (
@@ -18,13 +20,34 @@ export default function App() {
          * on the instance, so a second one would let a mutation run twice.
          */}
         <BackendProvider>
-          <ActionMenuProvider>
-            <RootNavigator />
-          </ActionMenuProvider>
+          <SessionProvider>
+            <ActionMenuProvider>
+              <SessionGate />
+            </ActionMenuProvider>
+          </SessionProvider>
         </BackendProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )
 }
 
-const styles = { root: { flex: 1 } } as const
+function SessionGate() {
+  const { state } = useAppSession()
+
+  if (state === 'restoring') {
+    return (
+      <Screen edges={['top', 'bottom']} style={styles.restoring}>
+        <Gutter>
+          <Text variant="strong">Restoring your secure session…</Text>
+        </Gutter>
+      </Screen>
+    )
+  }
+
+  return state === 'signed-in' ? <RootNavigator /> : <SignInScreen />
+}
+
+const styles = {
+  root: { flex: 1 },
+  restoring: { justifyContent: 'center' },
+} as const

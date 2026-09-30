@@ -27,6 +27,7 @@ import {
   colors,
   useActionMenu,
 } from '../design-system'
+import { useAppSession } from '../backend/session-provider'
 import { profile } from '../data/mock'
 import { selectAccount, useSession } from '../data/store'
 import { useAppNavigation } from '../navigation/use-app-navigation'
@@ -41,6 +42,7 @@ export function AccountScreen() {
   const { navigate } = useNavigation<Navigation>()
   const { openAccountSwitcher, openHomeScreen } = useAppNavigation()
   const showMenu = useActionMenu()
+  const { signOut } = useAppSession()
 
   const account = useSession(selectAccount)
 
@@ -106,11 +108,7 @@ export function AccountScreen() {
         {
           label: 'Log out',
           destructive: true,
-          onSelect: () =>
-            notConnected(
-              'Not connected yet',
-              'Sign-in and sign-out arrive with the authentication module.',
-            ),
+          onSelect: () => void signOut(),
         },
       ],
     })

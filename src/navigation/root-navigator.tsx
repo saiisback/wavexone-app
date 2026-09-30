@@ -23,6 +23,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
  * swipe-to-dismiss, the dimmed backdrop and keyboard avoidance are native
  * rather than reimplemented in JS.
  */
+/** Mounted only after `SessionProvider` has established both backend sessions. */
 export function RootNavigator() {
   return (
     <NavigationContainer theme={navigationTheme}>
