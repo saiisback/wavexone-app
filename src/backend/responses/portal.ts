@@ -54,13 +54,22 @@ const portalTransactionSchema = z.object({
   reference: z.string().optional(),
 })
 
+const portalTransactionsSchema = z
+  .union([
+    z.array(portalTransactionSchema),
+    z.object({ items: z.array(portalTransactionSchema) }),
+  ])
+  .transform((transactions) =>
+    Array.isArray(transactions) ? transactions : transactions.items,
+  )
+
 const portalBootstrapSchema = z.object({
   status: successSchema,
   data: z.object({
     user: portalUserSchema,
     accounts: z.array(portalAccountSchema),
     summary: portalSummarySchema,
-    transactions: z.array(portalTransactionSchema),
+    transactions: portalTransactionsSchema,
   }),
 })
 

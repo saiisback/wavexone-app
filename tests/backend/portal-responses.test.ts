@@ -31,6 +31,23 @@ describe('portal response parsers', () => {
     })
   })
 
+  it('parses the paginated transaction object returned by apiBootstrap', () => {
+    const paginated = {
+      ...portalBootstrapResponse,
+      data: {
+        ...portalBootstrapResponse.data,
+        transactions: {
+          items: portalBootstrapResponse.data.transactions,
+          page: 1,
+          limit: 100,
+          total: portalBootstrapResponse.data.transactions.length,
+        },
+      },
+    }
+
+    expect(parsePortalBootstrap(paginated).transactions).toHaveLength(1)
+  })
+
   it.each([Number.NaN, Number.POSITIVE_INFINITY])('rejects non-finite portal equity: %s', (equity) => {
     const invalid = {
       ...portalBootstrapResponse,
