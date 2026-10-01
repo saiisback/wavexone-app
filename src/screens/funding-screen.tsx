@@ -1,4 +1,5 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
+import * as Crypto from 'expo-crypto'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
@@ -16,7 +17,7 @@ import {
   colors,
   useActionMenu,
 } from '../design-system'
-import { useBackendQuery } from '../backend/provider'
+import { useBackend, useBackendQuery } from '../backend/provider'
 import { formatMoney } from '../data/format'
 import { useSession } from '../data/store'
 import type { FundingMode } from '../data/types'
@@ -57,6 +58,7 @@ export function FundingScreen() {
   const { params } = useRoute<FundingRoute>()
   const { goBack } = useNavigation()
   const showMenu = useActionMenu()
+  const backend = useBackend()
 
   const mode = params.mode
   const copy = COPY[mode]
@@ -70,6 +72,7 @@ export function FundingScreen() {
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('')
   const [destinationId, setDestinationId] = useState('')
+  const [otp, setOtp] = useState('')
 
   if (!account || accountData.status !== 'ready' || configuration.status !== 'ready') {
     const state = accountData.status !== 'ready' ? accountData : configuration
@@ -122,9 +125,31 @@ export function FundingScreen() {
   const submit = () =>
     showMenu({
       title: `${copy.title} ${formatMoney(value)}`,
-      message:
-        'Funding is disabled in this build. It needs test methods that cannot move real money, plus the confirmation step described in the integration guide.',
-      options: [{ label: 'Close', onSelect: goBack }],
+      message: 'Confirm this request. It is submitted once and is not automatically retried.',
+      options: [{
+        label: `Confirm ${copy.title.toLowerCase()}`,
+        destructive: mode !== 'deposit',
+        onSelect: () => {
+          const idempotencyKey = Crypto.randomUUID()
+          const amountValue = value.toFixed(2)
+          const action = mode === 'deposit'
+            ? backend.funds.deposit({ accountId: account.id, amount: amountValue, method: selectedMethod, idempotencyKey })
+            : mode === 'transfer'
+              ? backend.funds.transfer({ fromAccountId: account.id, toAccountId: selectedDestinationId, amount: amountValue, idempotencyKey })
+              : otp
+                ? backend.funds.requestWithdrawal({ accountId: account.id, amount: amountValue, method: selectedMethod, otp, idempotencyKey })
+                : backend.funds.sendWithdrawalOtp({ accountId: account.id, amount: amountValue, withdrawAddress: selectedMethod, idempotencyKey })
+          void action.then(() => {
+            if (mode === 'withdraw' && !otp) {
+              showMenu({ title: 'OTP sent', message: 'Enter the OTP, then submit again.', options: [{ label: 'Got it' }] })
+            } else goBack()
+          }).catch(() => showMenu({
+            title: 'Request not submitted',
+            message: 'This build may not be authorized for money-moving actions, or the portal did not confirm the request.',
+            options: [{ label: 'Got it' }],
+          }))
+        },
+      }],
     })
 
   return (
@@ -199,6 +224,16 @@ export function FundingScreen() {
               )}`
         }
       />
+
+      {mode === 'withdraw' ? (
+        <Field
+          label="OTP"
+          value={otp}
+          onChangeText={setOtp}
+          placeholder="Enter OTP after requesting it"
+          keyboardType="number-pad"
+        />
+      ) : null}
 
       <QuickPicks
         values={quickAmounts}

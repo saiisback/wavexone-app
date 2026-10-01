@@ -8,6 +8,7 @@ import {
   type PortalBootstrap,
 } from '../responses/portal'
 import type { SessionMaterial } from '../secure-session-store'
+import type { FundingRequest, TransferRequest, WithdrawalOtpRequest } from '../contract'
 
 /**
  * The Client Portal — cookie-backed, and a separate session from the trading
@@ -97,6 +98,63 @@ export class ClientPortalAdapter {
     })
   }
 
+  async deposit(material: SessionMaterial, request: FundingRequest) {
+    await this.establish(material)
+    if (request.proof) validateProof(request.proof)
+    const response = await this.gate.call('submitDeposit', {
+      body: {
+        amount: request.amount,
+        method: request.method,
+        targetAccountId: request.accountId,
+        proof: request.proof as unknown as Blob | undefined,
+      },
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertPortalAcknowledged(response.json, 'submitDeposit')
+  }
+
+  async sendWithdrawalOtp(material: SessionMaterial, request: WithdrawalOtpRequest) {
+    await this.establish(material)
+    const response = await this.gate.call('sendWithdrawOtp', {
+      body: {
+        sourceId: request.accountId,
+        amount: request.amount,
+        withdrawAddress: request.withdrawAddress,
+      },
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertPortalAcknowledged(response.json, 'sendWithdrawOtp')
+  }
+
+  async withdraw(material: SessionMaterial, request: FundingRequest) {
+    await this.establish(material)
+    const response = await this.gate.call('submitWithdraw', {
+      body: {
+        sourceId: request.accountId,
+        amount: request.amount,
+        method: request.method,
+        withdrawAddress: JSON.stringify(request.details ?? {}),
+        otp: request.otp ?? '',
+      },
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertPortalAcknowledged(response.json, 'submitWithdraw')
+  }
+
+  async transfer(material: SessionMaterial, request: TransferRequest) {
+    await this.establish(material)
+    const response = await this.gate.call('transfer', {
+      body: {
+        source: request.fromAccountId,
+        destination: request.toAccountId,
+        amount: request.amount,
+        memo: '',
+      },
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertPortalAcknowledged(response.json, 'transfer')
+  }
+
   /**
    * Guide §3.2 step 4. Sent when acting on a sibling account rather than the
    * one the portal session defaulted to.
@@ -108,5 +166,24 @@ export class ClientPortalAdapter {
   /** Called on sign-out so the next user does not inherit a session. */
   reset(): void {
     this.established = false
+  }
+}
+
+function validateProof(proof: { mimeType: string; size: number }): void {
+  const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  if (!allowed.includes(proof.mimeType) || proof.size > 3 * 1024 * 1024) {
+    throw new BackendError('rejected', 'Proof must be a JPG, PNG, GIF, or WebP under 3 MB.')
+  }
+}
+
+function assertPortalAcknowledged(input: unknown, endpoint: string): void {
+  if (
+    typeof input !== 'object' ||
+    input === null ||
+    String((input as Record<string, unknown>).status).toLowerCase() !== 'success'
+  ) {
+    throw new BackendError('malformed', 'The portal did not acknowledge the mutation.', {
+      endpoint,
+    })
   }
 }

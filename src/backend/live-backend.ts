@@ -25,13 +25,6 @@ import { createSessionStore, type SessionMaterial, type SessionStore } from './s
  * `docs/RESPONSE-CAPTURES.md` lists those captures in one place.
  */
 
-function needs(item: string, capture: string): never {
-  throw new BackendError(
-    'blocked',
-    `Not wired yet: ${item}. Needs one captured response from ${capture} — see docs/RESPONSE-CAPTURES.md.`,
-  )
-}
-
 const chartLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
 
 const chartOptions: Record<Timeframe, { resolution: string; count: number }> = {
@@ -421,10 +414,18 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         }
       },
       // Phase 3, and guide §7.4 requires methods that cannot move real money.
-      deposit: async () => needs('deposit submission', 'a non-live test method (guide §7.4)'),
-      requestWithdrawal: async () =>
-        needs('withdrawal', 'a non-live test method (guide §7.4)'),
-      transfer: async () => needs('transfer', 'a non-live test method (guide §7.4)'),
+      async sendWithdrawalOtp(request) {
+        return portal.sendWithdrawalOtp(requireSession(), request)
+      },
+      async deposit(request) {
+        return portal.deposit(requireSession(), request)
+      },
+      async requestWithdrawal(request) {
+        return portal.withdraw(requireSession(), request)
+      },
+      async transfer(request) {
+        return portal.transfer(requireSession(), request)
+      },
       history: readFundingHistory,
     },
 

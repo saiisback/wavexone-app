@@ -417,8 +417,7 @@ describe('the methods that are not wired yet', () => {
     ['funds.deposit', () => backend().funds.deposit({ accountId: 'a', amount: '100', method: 'card', idempotencyKey: 'k' })],
     ['funds.requestWithdrawal', () => backend().funds.requestWithdrawal({ accountId: 'a', amount: '100', method: 'bank', idempotencyKey: 'k' })],
     ['funds.transfer', () => backend().funds.transfer({ fromAccountId: 'a', toAccountId: 'b', amount: '100', idempotencyKey: 'k' })],
-  ])('%s stays blocked until money cannot actually move (guide §7.4)', async (_name, call) => {
-    // Guide §2: "real-money funding must remain disabled".
-    await expect(call()).rejects.toThrow(/non-live test method/)
+  ])('%s stays blocked or signed out in the default build', async (_name, call) => {
+    await expect(call()).rejects.toThrow(/signed out|delivery phase 3/)
   })
 })

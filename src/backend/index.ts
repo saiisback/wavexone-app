@@ -17,6 +17,7 @@ export type {
   SetFavoriteRequest,
   SwitchAccountRequest,
   TransferRequest,
+  WithdrawalOtpRequest,
 } from './contract'
 export { BackendError, userMessageFor, type BackendErrorKind } from './errors'
 export { DENIED_ENDPOINTS, type Phase } from './endpoints'

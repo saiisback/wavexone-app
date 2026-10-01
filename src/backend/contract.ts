@@ -83,6 +83,16 @@ export type FundingRequest = {
   /** Decimal string. */
   amount: string
   method: string
+  details?: Readonly<Record<string, string>>
+  otp?: string
+  proof?: { uri: string; name: string; mimeType: string; size: number }
+  idempotencyKey: string
+}
+
+export type WithdrawalOtpRequest = {
+  accountId: string
+  amount: string
+  withdrawAddress: string
   idempotencyKey: string
 }
 
@@ -130,6 +140,7 @@ export interface WaveXBackend {
 
   funds: {
     configuration(accountId: string): Promise<FundingConfiguration>
+    sendWithdrawalOtp(request: WithdrawalOtpRequest): Promise<void>
     deposit(request: FundingRequest): Promise<void>
     requestWithdrawal(request: FundingRequest): Promise<void>
     transfer(request: TransferRequest): Promise<void>
