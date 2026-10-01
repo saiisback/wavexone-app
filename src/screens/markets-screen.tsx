@@ -1,9 +1,10 @@
 import { FlashList } from '@shopify/flash-list'
 import { useState } from 'react'
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
 
 import {
   Gutter,
+  Input,
   Pressable,
   SCREEN_PADDING,
   Screen,
@@ -121,7 +122,7 @@ export function MarketsScreen() {
       <Gutter style={styles.search}>
         <View style={styles.searchField}>
           <SearchIcon size={22} color={colors.text} />
-          <TextInput
+          <Input
             value={query}
             onChangeText={setQuery}
             placeholder="Search markets"

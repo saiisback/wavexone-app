@@ -1,7 +1,6 @@
-# Response captures still needed
+# Response capture status
 
-**Status:** blocking Phase 1 (guide §8)
-**Who can clear it:** anyone with a real WaveXOne login and Postman
+**Status:** Phase-1 structural shapes captured and implemented on 2026-09-30.
 
 ## Why this file exists
 
@@ -53,10 +52,10 @@ defeat that.
 gitignored in this repo for the same reason. Field *names* are what's needed
 here — the values can be scrubbed to `"x"` and the capture is just as useful.
 
-## Phase 1 — unblocks the read-only integration
+## Phase 1 — implemented read-only integration
 
-These nine are the whole of Phase 1. Each maps to a method in
-`src/backend/contract.ts`.
+The nine reads below now have redacted synthetic fixtures, Zod parsers, and
+domain mappings. Raw responses and credentials were not committed.
 
 | # | Request | Unblocks |
 |---|---|---|
@@ -74,18 +73,17 @@ Also useful, lower priority: `collect=payout_in_out` (funding history),
 `apiTransfers`, `apiWalletHistory`, `collect=userGroup` (leverage and spread
 per group), `collect=detail`.
 
-## Phase 1 — not unblocked by a capture
+## Remaining read-only limitation
 
 Two gaps need a written answer, not a response body:
 
-- **Live prices (guide §7.5).** No quote transport is documented anywhere in
-  either collection. Is it a WebSocket or REST polling, and what is the
-  subscription contract? `markets.quoteSnapshot` stays refused until this is
-  answered — everything in the app that shows a moving price depends on it.
-- **Which `switchAccount` (guide §7.7).** A trading route
-  (`collect=switchAccount&token=…&switchtoken=…`) and a portal route
-  (`POST /switchAccount`) both exist. Calling the wrong one leaves the two
-  sessions pointing at different accounts.
+- **Live ticks (guide §7.5).** No WebSocket/SSE subscription contract is
+  documented. The app uses confirmed `getCurrentDayData` REST snapshots and
+  does not describe them as tick-level live prices.
+- **Charts.** The collection's `charting_base_url` host failed DNS resolution.
+  Configure `EXPO_PUBLIC_WAVEX_CHARTING_URL` when a working host is supplied.
+- **Account switching.** Both documented switch routes are called with one
+  idempotency key; local selection changes only after both acknowledge.
 
 ## Phase 2 / 3 — after authorization
 
@@ -104,9 +102,10 @@ format (`<hex>_<accountId>`) is known only from URL samples. The response
 shape is a guess — see `issueOrderFingerprint` in
 `src/backend/adapters/trading-api.ts`.
 
-## What happens when these arrive
+## Safe future capture procedure
 
-Each capture is a mechanical change: add a Zod schema, map it to the domain
-type in `src/data/types.ts`, delete the `needs(...)` line. Roughly an hour per
-endpoint, and the screens can then be moved off `src/data/mock.ts` one at a
-time.
+Capture only on an authorized account, redact every scalar value, retain field
+names and types, and add the shape to `tests/backend/fixtures/`. Never commit a
+Postman export, raw token, password, portal cookie, fingerprint, name, contact
+detail, or real financial amount. Add a failing parser test before changing an
+adapter.

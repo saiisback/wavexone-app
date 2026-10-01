@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list'
 import { useState } from 'react'
-import { StyleSheet, TextInput, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { useBackendQuery } from '../backend/provider'
@@ -8,6 +8,7 @@ import {
   CardPlusIcon,
   CircleAction,
   Gutter,
+  Input,
   Logo,
   SCREEN_PADDING,
   Screen,
@@ -150,7 +151,7 @@ function BalanceHeader({
       <Gutter style={styles.search}>
         <View style={styles.searchField}>
           <SearchIcon size={22} color={colors.text} />
-          <TextInput
+          <Input
             value={query}
             onChangeText={onChangeQuery}
             placeholder="Search markets"

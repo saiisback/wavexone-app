@@ -1,5 +1,5 @@
 import { accounts, instruments, notifications } from '../../src/data/mock'
-import { selectAccount, selectUnreadCount, useSession } from '../../src/data/store'
+import { useSession } from '../../src/data/store'
 
 /**
  * The session store is what every list row subscribes to, so the property
@@ -61,12 +61,12 @@ describe('favorites', () => {
 
 describe('notifications', () => {
   it('starts with everything unread', () => {
-    expect(selectUnreadCount(useSession.getState())).toBe(notifications.length)
+    expect(unreadCount()).toBe(notifications.length)
   })
 
   it('drops the unread count by one when a single notification is read', () => {
     useSession.getState().markNotificationRead(notifications[0].id)
-    expect(selectUnreadCount(useSession.getState())).toBe(notifications.length - 1)
+    expect(unreadCount()).toBe(notifications.length - 1)
   })
 
   it('does no work when the same notification is read twice', () => {
@@ -78,37 +78,36 @@ describe('notifications', () => {
     store.markNotificationRead(notifications[0].id)
 
     expect(useSession.getState().readNotifications).toBe(after)
-    expect(selectUnreadCount(useSession.getState())).toBe(notifications.length - 1)
+    expect(unreadCount()).toBe(notifications.length - 1)
   })
 
   it('clears the badge when everything is marked read', () => {
-    useSession.getState().markAllNotificationsRead()
-    expect(selectUnreadCount(useSession.getState())).toBe(0)
+    useSession.getState().markAllNotificationsRead(notifications.map((item) => item.id))
+    expect(unreadCount()).toBe(0)
   })
 
   it('ignores an id that is not a notification', () => {
     useSession.getState().markNotificationRead('not-a-notification')
-    expect(selectUnreadCount(useSession.getState())).toBe(notifications.length)
+    expect(unreadCount()).toBe(notifications.length)
   })
 })
 
 describe('account selection', () => {
   it('starts on the first fixture account', () => {
-    expect(selectAccount(useSession.getState()).id).toBe(accounts[0].id)
+    expect(useSession.getState().accountId).toBeNull()
   })
 
   it('follows a selection', () => {
     useSession.getState().selectAccount(accounts[1].id)
-    expect(selectAccount(useSession.getState()).id).toBe(accounts[1].id)
+    expect(useSession.getState().accountId).toBe(accounts[1].id)
   })
 
-  it('falls back to the first account rather than returning undefined', () => {
-    // Every screen reads this unconditionally; returning undefined would
-    // crash the header rather than degrade.
-    useSession.setState({ accountId: 'deleted-account' })
-    expect(selectAccount(useSession.getState())).toBe(accounts[0])
-  })
 })
+
+function unreadCount() {
+  const read = useSession.getState().readNotifications
+  return notifications.filter((item) => !read.has(item.id)).length
+}
 
 describe('settings', () => {
   it('requires order confirmation by default (guide §6.8)', () => {

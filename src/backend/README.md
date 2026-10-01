@@ -11,7 +11,7 @@ shapes a failure arrives in.
 |---|---|
 | `contract.ts` | The interface. The only file a screen should need to read. |
 | `mock-backend.ts` | The contract served from `src/data/mock.ts`. The default. |
-| `live-backend.ts` | The real one. Authentication is complete; data calls are not — see below. |
+| `live-backend.ts` | The real implementation: session, accounts, markets, orders, funding, and notifications. |
 | `gate.ts` | Denylist, phase gating, parameter checking, duplicate-submission guard. |
 | `http.ts` | The one `fetch`. TLS, timeouts, body encoding, envelope normalisation. |
 | `endpoints.ts` | Every allowed endpoint and its parameters, plus the twelve that are refused. |
@@ -62,21 +62,22 @@ Two things that transcription settled, both of which were previously wrong:
   a route calling `$this->input->post()` yields an empty body and a confusing
   400.
 
-## What the live backend does not do yet
+## Live coverage and remaining gap
 
-Authentication is implemented in full, because guide §3 documents it step by
-step. **Most data calls are not**, and the reason is now narrower than it was.
+Redacted structural probes now back strict Zod parsers for authentication,
+accounts, order counts, market catalogue and metadata, daily REST snapshots,
+favorites, open/closed orders, portal bootstrap, funding configuration, and
+notifications. Screens never fall back to fixture values after live mode is
+selected.
 
-The collections pin down every request. They contain **no successful response
-anywhere** — zero captured across the trading collection's 121 requests, and
-the portal's 15 examples are all unauthenticated `401`s and empty `200`s. So
-the field names inside a payload are still unknown, and writing mappers would
-mean inventing names that compile, read plausibly, and silently produce wrong
-numbers in a trading app.
+There is still no working tick-stream contract. Prices are labelled and treated
+as REST snapshots. The supplied chart host (`charting.fxinvezt.com`) returned
+DNS `ENOTFOUND` during verification, so chart reads show the reviewed error
+state until `EXPO_PUBLIC_WAVEX_CHARTING_URL` points at a working host.
 
-Those methods throw a `blocked` error naming the capture that unblocks them.
-`docs/RESPONSE-CAPTURES.md` lists all nine Phase 1 captures in one place. The
-exception is `orders.counts`, whose shape guide §2 does document.
+Phase 1 enables authentication and reads. Phase 2 enables trading mutations;
+Phase 3 enables portal/funding mutations. Raising the phase requires an
+explicitly authorized staging/test environment.
 
 ## Rules this module enforces
 
@@ -110,16 +111,14 @@ These are guide §6 requirements, in code rather than in a checklist:
 - **No password persistence** (§3.3). `password` is a parameter to `signIn`
   and appears nowhere else in the module.
 
-## Things the guide rules out that the UI currently shows
+## Things intentionally unavailable
 
 Worth resolving before Phase 1 ships:
 
-- **Trading Signals** has no confirmed endpoint (§4.8). The guide says to hide
-  the rows or treat them as an approved external destination. The app renders
-  them from fixtures today, and `contract.ts` has no `signals` method as a
-  result.
-- **Market Sentiment** and **`<50ms` execution** are design copy (§4.2). They
-  are not presented as account data, which is why there is no method for them.
+- **Trading Signals** has no confirmed endpoint (§4.8), so the screen renders
+  an unavailable state instead of fixture content.
+- **Market Sentiment** and **`<50ms` execution** were unsupported design copy
+  and are not shown as live account facts.
 - **Referrals and MAM/PAMM** appear in the guide's suggested interface groups
   but have no screen. They are left out rather than added as dead surface.
 

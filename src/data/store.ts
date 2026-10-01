@@ -1,7 +1,5 @@
 import { create } from 'zustand'
 
-import { accounts, notifications } from './mock'
-
 /**
  * Client-side session state.
  *
@@ -24,7 +22,7 @@ type SessionState = {
   toggleFavorite: (instrumentId: string) => void
   replaceFavorites: (instrumentIds: readonly string[]) => void
   markNotificationRead: (id: string) => void
-  markAllNotificationsRead: (ids?: readonly string[]) => void
+  markAllNotificationsRead: (ids: readonly string[]) => void
   replaceReadNotifications: (ids: readonly string[]) => void
   setMarketPeriod: (period: MarketPeriod) => void
   toggleSetting: (key: SettingKey) => void
@@ -69,8 +67,7 @@ export const useSession = create<SessionState>((set) => ({
       return { readNotifications: new Set(state.readNotifications).add(id) }
     }),
 
-  markAllNotificationsRead: (ids) =>
-    set({ readNotifications: new Set(ids ?? notifications.map((item) => item.id)) }),
+  markAllNotificationsRead: (ids) => set({ readNotifications: new Set(ids) }),
   replaceReadNotifications: (ids) => set({ readNotifications: new Set(ids) }),
 
   setMarketPeriod: (period) => set({ marketPeriod: period }),
@@ -78,11 +75,3 @@ export const useSession = create<SessionState>((set) => ({
   toggleSetting: (key) =>
     set((state) => ({ settings: { ...state.settings, [key]: !state.settings[key] } })),
 }))
-
-/** Unread badge on the dashboard bell. */
-export const selectUnreadCount = (state: SessionState) =>
-  notifications.reduce((total, item) => total + (state.readNotifications.has(item.id) ? 0 : 1), 0)
-
-/** The account currently being traded. */
-export const selectAccount = (state: SessionState) =>
-  accounts.find((item) => item.id === state.accountId) ?? accounts[0]

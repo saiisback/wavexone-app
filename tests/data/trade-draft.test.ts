@@ -18,8 +18,8 @@ const setLots = (updater: (previous: number) => number) =>
   useTradeDraft.getState().setLots(updater)
 
 describe('defaults', () => {
-  it('opens on the first instrument at half a lot', () => {
-    expect(useTradeDraft.getState().instrumentId).toBe(instruments[0].id)
+  it('waits for the live catalogue before selecting an instrument', () => {
+    expect(useTradeDraft.getState().instrumentId).toBeNull()
     expect(useTradeDraft.getState().orderType).toBe('Market')
     expect(lots()).toBe(0.5)
   })

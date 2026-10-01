@@ -1,11 +1,12 @@
 import { useNavigation } from '@react-navigation/native'
 import { useState } from 'react'
-import { StyleSheet, TextInput, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
 import {
   AssetIcon,
   Delta,
   Divider,
+  Input,
   Pressable,
   SearchIcon,
   Sheet,
@@ -47,7 +48,7 @@ export function InstrumentPickerScreen() {
       ) : null}
       <View style={styles.searchField}>
         <SearchIcon size={20} color={colors.text} />
-        <TextInput
+        <Input
           value={query}
           onChangeText={setQuery}
           placeholder="Search markets"
