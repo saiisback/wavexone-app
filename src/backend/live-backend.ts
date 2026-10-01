@@ -220,6 +220,18 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
     }))
   }
 
+  async function orderFingerprint(): Promise<string> {
+    const session = requireSession()
+    if (session.orderFingerprint?.endsWith(`_${session.accountToken}`)) {
+      return session.orderFingerprint
+    }
+    const fingerprint = await trading.issueOrderFingerprint(session, session.accountToken)
+    const updated = { ...session, orderFingerprint: fingerprint }
+    material = updated
+    await store.write(updated)
+    return fingerprint
+  }
+
   function requireSession(): SessionMaterial {
     if (!material) {
       throw new BackendError('auth', 'You are signed out.')
@@ -376,10 +388,22 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       history: readHistory,
       // These four are phase 2 regardless of any capture: guide §7.3 requires
       // written authorization before a trading mutation runs anywhere.
-      place: async () => needs('order placement', 'written authorization (guide §7.3)'),
-      modify: async () => needs('order modification', 'written authorization (guide §7.3)'),
-      cancel: async () => needs('order cancellation', 'written authorization (guide §7.3)'),
-      close: async () => needs('position close', 'written authorization (guide §7.3)'),
+      async place(request) {
+        const session = requireSession()
+        await trading.placeOrder(session, request, await orderFingerprint())
+      },
+      async modify(request) {
+        const session = requireSession()
+        await trading.modifyOrder(session, request, await orderFingerprint())
+      },
+      async cancel(request) {
+        const session = requireSession()
+        await trading.cancelOrder(session, request, await orderFingerprint())
+      },
+      async close(request) {
+        const session = requireSession()
+        await trading.closeOrder(session, request, await orderFingerprint())
+      },
     },
 
     funds: {

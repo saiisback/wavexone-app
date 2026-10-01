@@ -1,4 +1,5 @@
 import { FlashList } from '@shopify/flash-list'
+import * as Crypto from 'expo-crypto'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
@@ -17,7 +18,7 @@ import {
   useActionMenu,
 } from '../design-system'
 import { PositionCard } from '../features/positions/position-card'
-import { useBackendQuery } from '../backend/provider'
+import { useBackend, useBackendQuery } from '../backend/provider'
 import { formatLots, formatSignedMoney } from '../data/format'
 import type { Position } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
@@ -38,6 +39,7 @@ const ACTION_LABEL: Record<Tab, string> = {
 export function PositionsScreen() {
   const [tab, setTab] = useState<Tab>('Open')
   const showMenu = useActionMenu()
+  const backend = useBackend()
   const { openInstrument, openAccountSwitcher, openOrderTicket } = useAppNavigation()
 
   const accountData = useAccountData()
@@ -82,7 +84,21 @@ export function PositionsScreen() {
       title: `${ACTION_LABEL[tab]} — ${instrument.symbol}`,
       message: `${position.side} ${formatLots(position.lots)} · ${formatSignedMoney(position.pnl)}. Trading mutations are disabled in this build.`,
       options: [
-        { label: ACTION_LABEL[tab], destructive: true },
+        {
+          label: ACTION_LABEL[tab],
+          destructive: true,
+          onSelect: () => {
+            const request = { positionId: id, idempotencyKey: Crypto.randomUUID() }
+            const mutation = tab === 'Pending'
+              ? backend.orders.cancel(request)
+              : backend.orders.close(request)
+            void mutation.catch(() => showMenu({
+              title: 'Action not confirmed',
+              message: 'Check the position before trying again.',
+              options: [{ label: 'Got it' }],
+            }))
+          },
+        },
         { label: 'View chart', onSelect: () => openInstrument(position.instrumentId) },
       ],
     })

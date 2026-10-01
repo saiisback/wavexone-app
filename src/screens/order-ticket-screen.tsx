@@ -1,4 +1,5 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
+import * as Crypto from 'expo-crypto'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
@@ -20,6 +21,7 @@ import { formatLots, formatMoney, formatPrice } from '../data/format'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
+import { useBackend } from '../backend/provider'
 import type { RootStackParamList } from '../navigation/types'
 
 type OrderRoute = RouteProp<RootStackParamList, 'OrderTicket'>
@@ -36,6 +38,7 @@ export function OrderTicketScreen() {
   const { params } = useRoute<OrderRoute>()
   const { goBack } = useNavigation()
   const showMenu = useActionMenu()
+  const backend = useBackend()
 
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
@@ -70,9 +73,25 @@ export function OrderTicketScreen() {
   const place = () =>
     showMenu({
       title: `${side} ${formatLots(lots)} ${instrument.symbol}`,
-      message:
-        'Order placement is disabled in this build. It needs a staging account and written authorisation before any trading mutation runs.',
-      options: [{ label: 'Close', onSelect: goBack }],
+      message: `Confirm this ${side.toLowerCase()} order. It will be submitted once and is not automatically retried.`,
+      options: [{
+        label: `Confirm ${side}`,
+        destructive: true,
+        onSelect: () => {
+          void backend.orders.place({
+            instrumentId: instrument.id,
+            side,
+            lots: lots.toFixed(2),
+            stopLoss: stopLoss || undefined,
+            takeProfit: takeProfit || undefined,
+            idempotencyKey: Crypto.randomUUID(),
+          }).then(goBack).catch(() => showMenu({
+            title: 'Order not submitted',
+            message: 'This build is not authorized for trading, or the server did not confirm the order.',
+            options: [{ label: 'Got it' }],
+          }))
+        },
+      }],
     })
 
   return (

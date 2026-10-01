@@ -15,6 +15,7 @@ import {
   parseSymbolMetadata,
 } from '../responses/trading'
 import type { SessionMaterial } from '../secure-session-store'
+import type { CloseOrderRequest, ModifyOrderRequest, PlaceOrderRequest } from '../contract'
 
 /**
  * `/api-v1/v1.php?collect=…` — the trading API.
@@ -250,6 +251,59 @@ export class TradingApiAdapter {
     return parseClosedHistory(response.json)
   }
 
+  async placeOrder(material: SessionMaterial, request: PlaceOrderRequest, fingerprint: string) {
+    const response = await this.gate.call('placeOrder', {
+      query: {
+        token: material.accountToken,
+        type: request.limitPrice ? 'limit' : 'market',
+        bs: request.side.toLowerCase(),
+        symbol: request.instrumentId.toUpperCase(),
+        lot: request.lots,
+        sl: request.stopLoss ?? '',
+        target: request.takeProfit ?? '',
+        trigger: request.limitPrice ?? '',
+        clicked: '1',
+        fingerprint,
+      },
+      headers: this.headers(material),
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertAcknowledged(response.json, 'placeOrder')
+  }
+
+  async modifyOrder(material: SessionMaterial, request: ModifyOrderRequest, fingerprint: string) {
+    const response = await this.gate.call('modifyOrder', {
+      query: {
+        token: material.accountToken,
+        orderID: request.positionId,
+        stoploss: request.stopLoss ?? '',
+        target: request.takeProfit ?? '',
+        fingerprint,
+      },
+      headers: this.headers(material),
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertAcknowledged(response.json, 'modifyOrder')
+  }
+
+  async closeOrder(material: SessionMaterial, request: CloseOrderRequest, fingerprint: string) {
+    const response = await this.gate.call('closePosition', {
+      query: { token: material.accountToken, id: request.positionId, fingerprint },
+      headers: this.headers(material),
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertAcknowledged(response.json, 'closePosition')
+  }
+
+  async cancelOrder(material: SessionMaterial, request: CloseOrderRequest, fingerprint: string) {
+    const response = await this.gate.call('bulkCancelPending', {
+      query: { token: material.accountToken, bulkCloseId: request.positionId, fingerprint },
+      headers: this.headers(material),
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertAcknowledged(response.json, 'bulkCancelPending')
+  }
+
   /**
    * The per-account `fingerprint` every order mutation carries.
    *
@@ -297,5 +351,17 @@ export class TradingApiAdapter {
       )
     }
     return fingerprint
+  }
+}
+
+function assertAcknowledged(input: unknown, endpoint: string): void {
+  if (
+    typeof input !== 'object' ||
+    input === null ||
+    String((input as Record<string, unknown>).status).toLowerCase() !== 'success'
+  ) {
+    throw new BackendError('malformed', 'The service did not acknowledge the mutation.', {
+      endpoint,
+    })
   }
 }

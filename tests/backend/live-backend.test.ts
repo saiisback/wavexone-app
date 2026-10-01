@@ -409,8 +409,8 @@ describe('the methods that are not wired yet', () => {
     ['orders.modify', () => backend().orders.modify({ positionId: 'p', idempotencyKey: 'k' })],
     ['orders.cancel', () => backend().orders.cancel({ positionId: 'p', idempotencyKey: 'k' })],
     ['orders.close', () => backend().orders.close({ positionId: 'p', idempotencyKey: 'k' })],
-  ])('%s stays blocked pending written authorization (guide §7.3)', async (_name, call) => {
-    await expect(call()).rejects.toThrow(/written authorization/)
+  ])('%s stays blocked in a phase 1 build', async (_name, call) => {
+    await expect(call()).rejects.toThrow(/signed out|delivery phase 2/)
   })
 
   it.each([
