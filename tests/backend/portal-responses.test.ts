@@ -59,6 +59,18 @@ describe('portal response parsers', () => {
     expect(() => parsePortalBootstrap(invalid)).toThrow()
   })
 
+  it('accepts zero leverage for an account without configured leverage', () => {
+    const withoutLeverage = {
+      ...portalBootstrapResponse,
+      data: {
+        ...portalBootstrapResponse.data,
+        accounts: [{ ...portalBootstrapResponse.data.accounts[0], leverage: 0 }],
+      },
+    }
+
+    expect(parsePortalBootstrap(withoutLeverage).accounts[0].leverage).toBe(0)
+  })
+
   it('parses funding methods, limits, and KYC state', () => {
     const funding = parseFundingConfiguration(fundingConfigurationResponse)
 

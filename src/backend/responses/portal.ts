@@ -25,7 +25,7 @@ const portalAccountSchema = z.object({
   equity: finiteNumber,
   currency: z.string().min(1),
   isDemo: z.boolean(),
-  leverage: finiteNumber.refine((value) => value > 0, 'Expected positive leverage'),
+  leverage: finiteNumber.refine((value) => value >= 0, 'Expected non-negative leverage'),
 })
 
 const portalSummarySchema = z.object({
