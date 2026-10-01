@@ -1,4 +1,5 @@
 import { FlashList } from '@shopify/flash-list'
+import * as Crypto from 'expo-crypto'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -15,20 +16,35 @@ import {
   colors,
 } from '../design-system'
 import { ScreenHeader } from '../features/shared/screen-header'
-import { notifications } from '../data/mock'
+import { useBackend, useBackendQuery } from '../backend/provider'
 import { useSession } from '../data/store'
 import type { Notification } from '../data/types'
+import { QueryStateView } from '../features/shared/query-state'
 
 /** Reached from the bell on the dashboard. */
 export function NotificationsScreen() {
   const read = useSession((state) => state.readNotifications)
   const markRead = useSession((state) => state.markNotificationRead)
   const markAllRead = useSession((state) => state.markAllNotificationsRead)
+  const replaceRead = useSession((state) => state.replaceReadNotifications)
+  const backend = useBackend()
+  const notificationsState = useBackendQuery('notifications', (client) =>
+    client.engagement.notifications(),
+  )
+  const notifications = notificationsState.status === 'ready' ? notificationsState.data : []
 
   const unread = notifications.length - read.size
 
+  const reconcileRead = (ids: readonly string[]) => {
+    const before = [...read]
+    ids.forEach(markRead)
+    void backend.engagement
+      .markNotificationsRead({ ids, idempotencyKey: Crypto.randomUUID() })
+      .catch(() => replaceRead(before))
+  }
+
   const renderItem = ({ item }: { item: Notification }) => (
-    <NotificationRow id={item.id} item={item} onPress={markRead} />
+    <NotificationRow id={item.id} item={item} onPress={(id) => reconcileRead([id])} />
   )
 
   return (
@@ -41,7 +57,13 @@ export function NotificationsScreen() {
             accessibilityRole="button"
             hitSlop={8}
             disabled={unread === 0}
-            onPress={markAllRead}
+            onPress={() => {
+              const ids = notifications.map((item) => item.id)
+              markAllRead(ids)
+              void backend.engagement
+                .markNotificationsRead({ ids, idempotencyKey: Crypto.randomUUID() })
+                .catch(() => replaceRead([...read]))
+            }}
           >
             <Text variant="caption" color={unread === 0 ? colors.textSubtle : colors.text}>
               Mark all read
@@ -57,6 +79,7 @@ export function NotificationsScreen() {
         ItemSeparatorComponent={Separator}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={<QueryStateView state={notificationsState} isEmpty={(items) => items.length === 0} emptyTitle="No notifications" render={() => null} />}
       />
     </Screen>
   )

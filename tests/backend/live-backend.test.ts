@@ -1,7 +1,11 @@
 import { createLiveBackend } from '../../src/backend/live-backend'
 import { BackendError } from '../../src/backend/errors'
 import type { BackendConfig } from '../../src/backend/gate'
-import { portalBootstrapResponse } from './fixtures/portal-responses'
+import {
+  fundingConfigurationResponse,
+  notificationsResponse,
+  portalBootstrapResponse,
+} from './fixtures/portal-responses'
 import {
   chartHistoryResponse,
   dailySnapshotResponse,
@@ -375,37 +379,30 @@ describe('markets', () => {
   })
 })
 
+describe('portal reads', () => {
+  it('maps funding configuration and notifications', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    scriptFetch({ body: JSON.stringify(fundingConfigurationResponse) })
+    await expect(backend.funds.configuration('account-1')).resolves.toMatchObject({
+      depositMethods: ['Bank transfer'],
+      withdrawalMethods: ['Bank transfer'],
+      availableFund: 900.25,
+      minimumDeposit: 100,
+      kycStatus: 'Verified',
+    })
+
+    scriptFetch({ body: JSON.stringify(notificationsResponse) })
+    await expect(backend.engagement.notifications()).resolves.toEqual([
+      expect.objectContaining({ id: 'notification-1', kind: 'order', title: 'Order filled' }),
+    ])
+  })
+})
+
 describe('the methods that are not wired yet', () => {
   const backend = () => createLiveBackend(CONFIG)
-
-  /** Every contract method except the ones that are genuinely implemented. */
-  const unwired: [string, () => Promise<unknown>][] = [
-    ['funds.configuration', () => backend().funds.configuration('a')],
-    ['engagement.notifications', () => backend().engagement.notifications()],
-  ]
-
-  it.each(unwired)('%s refuses and names what would unblock it', async (_name, call) => {
-    // The refusal is the feature: it turns "this screen shows nothing" into
-    // a specific request to the backend team. Since the collections settled
-    // the request side, that request is now a named capture rather than a
-    // guide item — see docs/RESPONSE-CAPTURES.md.
-    await expect(call()).rejects.toMatchObject({ kind: 'blocked' })
-    await expect(call()).rejects.toThrow(/Needs one captured response|guide §7\.\d/)
-  })
-
-  it('points every refusal at the capture list', async () => {
-    // One place to look, rather than a scavenger hunt through error strings.
-    const message = await backend()
-      .funds.configuration('a')
-      .catch((error: Error) => error.message)
-    expect(message).toContain('docs/RESPONSE-CAPTURES.md')
-  })
-
-  it('never reaches the network for an unwired method', async () => {
-    const fetchMock = scriptFetch()
-    await expect(backend().funds.configuration('a')).rejects.toThrow()
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
 
   it.each([
     ['orders.place', () => backend().orders.place({ instrumentId: 'a', side: 'Buy' as const, lots: '1', idempotencyKey: 'k' })],

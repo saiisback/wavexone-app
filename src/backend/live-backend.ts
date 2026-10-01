@@ -383,7 +383,19 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
     },
 
     funds: {
-      configuration: async () => needs('funding configuration', 'apiRedeemConfig'),
+      async configuration(accountId) {
+        const config = await portal.fundingConfiguration(requireSession(), accountId)
+        return {
+          depositMethods: config.depositMethods.map((method) => method.name),
+          withdrawalMethods: config.withdrawModes.map((method) => method.name),
+          withdrawalFields: config.withdrawFields,
+          quickAmounts: [config.minimumDeposit, config.minimumDeposit * 2, config.minimumDeposit * 5],
+          kycStatus: config.kycVerified ? 'Verified' : 'Not started',
+          availableFund: config.availableFund,
+          minimumDeposit: config.minimumDeposit,
+          minimumWithdrawal: config.minimumDeposit,
+        }
+      },
       // Phase 3, and guide §7.4 requires methods that cannot move real money.
       deposit: async () => needs('deposit submission', 'a non-live test method (guide §7.4)'),
       requestWithdrawal: async () =>
@@ -393,8 +405,11 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
     },
 
     engagement: {
-      notifications: async () => needs('notifications', 'apiNotifications'),
-      markNotificationsRead: async () => needs('notification read state', 'apiNotificationsRead'),
+      async notifications() {
+        return (await portal.notifications(requireSession())).items
+      },
+      markNotificationsRead: (request) =>
+        portal.markNotificationsRead(requireSession(), request),
     },
   }
 }

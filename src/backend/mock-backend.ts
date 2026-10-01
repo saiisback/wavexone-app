@@ -103,8 +103,10 @@ export function createMockBackend(): WaveXBackend {
         settle({
           depositMethods: fundingMethods.deposit,
           withdrawalMethods: fundingMethods.withdraw,
+          withdrawalFields: [],
           quickAmounts,
           kycStatus: profile.kycStatus,
+          availableFund: accounts[0].freeMargin,
           minimumDeposit: 100,
           minimumWithdrawal: 100,
         }),

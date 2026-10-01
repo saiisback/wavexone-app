@@ -1,7 +1,12 @@
 import { BackendError } from '../errors'
 import type { Gate } from '../gate'
 import { logBackendEvent } from '../redact'
-import { parsePortalBootstrap, type PortalBootstrap } from '../responses/portal'
+import {
+  parseFundingConfiguration,
+  parseNotifications,
+  parsePortalBootstrap,
+  type PortalBootstrap,
+} from '../responses/portal'
 import type { SessionMaterial } from '../secure-session-store'
 
 /**
@@ -64,6 +69,31 @@ export class ClientPortalAdapter {
           cause,
         })
       }
+    })
+  }
+
+  async fundingConfiguration(material: SessionMaterial, accountId: string) {
+    return this.read(material, async () => {
+      const response = await this.gate.call('redeemConfig', { query: { accountToken: accountId } })
+      return parseFundingConfiguration(response.json)
+    })
+  }
+
+  async notifications(material: SessionMaterial) {
+    return this.read(material, async () => {
+      const response = await this.gate.call('notifications')
+      return parseNotifications(response.json)
+    })
+  }
+
+  async markNotificationsRead(
+    material: SessionMaterial,
+    request: { ids: readonly string[]; idempotencyKey: string },
+  ) {
+    await this.establish(material)
+    await this.gate.call('markNotificationsRead', {
+      body: { ids: request.ids },
+      idempotencyKey: request.idempotencyKey,
     })
   }
 

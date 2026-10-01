@@ -16,10 +16,12 @@ import {
   colors,
   useActionMenu,
 } from '../design-system'
-import { accounts, fundingMethods, quickAmounts } from '../data/mock'
+import { useBackendQuery } from '../backend/provider'
 import { formatMoney } from '../data/format'
-import { selectAccount, useSession } from '../data/store'
+import { useSession } from '../data/store'
 import type { FundingMode } from '../data/types'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { QueryStateView } from '../features/shared/query-state'
 import type { RootStackParamList } from '../navigation/types'
 
 type FundingRoute = RouteProp<RootStackParamList, 'Funding'>
@@ -58,23 +60,45 @@ export function FundingScreen() {
 
   const mode = params.mode
   const copy = COPY[mode]
-  const account = useSession(selectAccount)
+  const accountData = useAccountData()
+  const account = accountData.status === 'ready' ? accountData.data.account : null
+  const configuration = useBackendQuery(`funding:${account?.id ?? 'none'}`, (backend) =>
+    account ? backend.funds.configuration(account.id) : Promise.reject(new Error('No account')),
+  )
   const selectAccountId = useSession((state) => state.selectAccount)
 
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState<string>(
-    mode === 'withdraw' ? fundingMethods.withdraw[0] : fundingMethods.deposit[0],
-  )
-  const [destinationId, setDestinationId] = useState(
-    accounts.find((item) => item.id !== account.id)?.id ?? accounts[0].id,
-  )
+  const [method, setMethod] = useState('')
+  const [destinationId, setDestinationId] = useState('')
+
+  if (!account || accountData.status !== 'ready' || configuration.status !== 'ready') {
+    const state = accountData.status !== 'ready' ? accountData : configuration
+    return (
+      <Sheet title={copy.title} subtitle={copy.subtitle}>
+        <QueryStateView state={state} render={() => null} />
+      </Sheet>
+    )
+  }
+
+  const accounts = accountData.data.accounts
+  const fundingMethods = {
+    deposit: configuration.data.depositMethods,
+    withdraw: configuration.data.withdrawalMethods,
+  }
+  const quickAmounts = configuration.data.quickAmounts
+  const selectedMethod =
+    method ||
+    (mode === 'withdraw' ? fundingMethods.withdraw[0] : fundingMethods.deposit[0]) ||
+    ''
+  const selectedDestinationId =
+    destinationId || accounts.find((item) => item.id !== account.id)?.id || account.id
 
   const parsed = Number(amount.replace(/[^0-9.]/g, ''))
   const value = Number.isFinite(parsed) ? parsed : 0
-  const exceedsBalance = mode !== 'deposit' && value > account.freeMargin
+  const exceedsBalance = mode !== 'deposit' && value > configuration.data.availableFund
   const canSubmit = value > 0 && !exceedsBalance
 
-  const destination = accounts.find((item) => item.id === destinationId) ?? accounts[0]
+  const destination = accounts.find((item) => item.id === selectedDestinationId) ?? account
 
   const pickMethod = () =>
     showMenu({
@@ -127,7 +151,7 @@ export function FundingScreen() {
           <Text variant="body" color={colors.textMuted}>
             Available
           </Text>
-          <Text variant="strong">{formatMoney(account.freeMargin)}</Text>
+          <Text variant="strong">{formatMoney(configuration.data.availableFund)}</Text>
         </View>
       </Card>
 
@@ -136,7 +160,7 @@ export function FundingScreen() {
           <ListRow
             label="From"
             value={`${account.mode} · ${account.number}`}
-            onPress={() => pickAccount(selectAccountId, destinationId)}
+            onPress={() => pickAccount(selectAccountId, selectedDestinationId)}
           />
           <ListRow
             label="To"
@@ -149,7 +173,7 @@ export function FundingScreen() {
         <ListGroup>
           <ListRow
             label={mode === 'withdraw' ? 'Destination' : 'Payment method'}
-            value={method}
+            value={selectedMethod}
             divider={false}
             onPress={pickMethod}
           />
@@ -167,8 +191,12 @@ export function FundingScreen() {
         invalid={exceedsBalance}
         hint={
           exceedsBalance
-            ? `Above the available ${formatMoney(account.freeMargin)}`
-            : 'Minimum $10.00'
+            ? `Above the available ${formatMoney(configuration.data.availableFund)}`
+            : `Minimum ${formatMoney(
+                mode === 'withdraw'
+                  ? configuration.data.minimumWithdrawal
+                  : configuration.data.minimumDeposit,
+              )}`
         }
       />
 

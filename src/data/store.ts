@@ -24,7 +24,8 @@ type SessionState = {
   toggleFavorite: (instrumentId: string) => void
   replaceFavorites: (instrumentIds: readonly string[]) => void
   markNotificationRead: (id: string) => void
-  markAllNotificationsRead: () => void
+  markAllNotificationsRead: (ids?: readonly string[]) => void
+  replaceReadNotifications: (ids: readonly string[]) => void
   setMarketPeriod: (period: MarketPeriod) => void
   toggleSetting: (key: SettingKey) => void
 }
@@ -68,8 +69,9 @@ export const useSession = create<SessionState>((set) => ({
       return { readNotifications: new Set(state.readNotifications).add(id) }
     }),
 
-  markAllNotificationsRead: () =>
-    set({ readNotifications: new Set(notifications.map((item) => item.id)) }),
+  markAllNotificationsRead: (ids) =>
+    set({ readNotifications: new Set(ids ?? notifications.map((item) => item.id)) }),
+  replaceReadNotifications: (ids) => set({ readNotifications: new Set(ids) }),
 
   setMarketPeriod: (period) => set({ marketPeriod: period }),
 

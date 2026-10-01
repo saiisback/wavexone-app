@@ -68,11 +68,15 @@ export type CloseOrderRequest = {
 export type FundingConfiguration = {
   depositMethods: readonly string[]
   withdrawalMethods: readonly string[]
+  withdrawalFields: readonly { id: string; name: string; label: string }[]
   quickAmounts: readonly number[]
   kycStatus: Profile['kycStatus']
+  availableFund: number
   minimumDeposit: number
   minimumWithdrawal: number
 }
+
+export type MarkNotificationsReadRequest = { ids: readonly string[]; idempotencyKey: string }
 
 export type FundingRequest = {
   accountId: string
@@ -134,6 +138,6 @@ export interface WaveXBackend {
 
   engagement: {
     notifications(): Promise<readonly Notification[]>
-    markNotificationsRead(ids: readonly string[]): Promise<void>
+    markNotificationsRead(request: MarkNotificationsReadRequest): Promise<void>
   }
 }
