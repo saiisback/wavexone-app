@@ -50,6 +50,7 @@ export function parseCheckedSession(input: unknown): CheckedSession {
 
 export type TradingAccountRecord = {
   id: string
+  databaseId: string
   uid?: string
   balance: number
   mode: string
@@ -57,6 +58,7 @@ export type TradingAccountRecord = {
 }
 
 const tradingAccountSchema = z.object({
+  token: z.union([z.string(), z.number()]),
   account_id: z.union([z.string(), z.number()]),
   uid: z.union([z.string(), z.number()]).optional(),
   balance: finiteNumber,
@@ -66,7 +68,8 @@ const tradingAccountSchema = z.object({
 
 export function parseTradingAccounts(input: unknown): TradingAccountRecord[] {
   return z.array(tradingAccountSchema).parse(input).map((account) => ({
-    id: String(account.account_id),
+    id: String(account.token),
+    databaseId: String(account.account_id),
     ...(account.uid === undefined ? {} : { uid: String(account.uid) }),
     balance: account.balance,
     mode: account.book,
@@ -74,10 +77,12 @@ export function parseTradingAccounts(input: unknown): TradingAccountRecord[] {
   }))
 }
 
+const nullableCount = z.union([nonNegativeInteger, z.null()]).transform((value) => value ?? 0)
+
 const orderCountsSchema = z.object({
   status: successSchema,
-  open_count: nonNegativeInteger,
-  pending_count: nonNegativeInteger,
+  open_count: nullableCount,
+  pending_count: nullableCount,
   total_count: nonNegativeInteger,
 })
 
@@ -88,11 +93,13 @@ export function parseOrderCounts(input: unknown): OrderCounts {
 
 export type MarketRecord = {
   ticker: string
+  name: string
   market: string
   category: InstrumentCategory
 }
 
 const marketEntrySchema = z.object({
+  name: z.string().min(1),
   ticker: z.string().min(1),
   market: z.string().min(1),
 })
@@ -105,15 +112,26 @@ const marketCatalogueSchema = z.object({
 function marketCategory(market: string): InstrumentCategory {
   switch (market.toLowerCase()) {
     case 'metals':
+    case 'metal':
+    case 'silver':
       return 'Metals'
     case 'crypto':
       return 'Crypto'
     case 'energy':
     case 'energies':
+    case 'crudoil':
+    case 'ngas':
       return 'Energy'
     case 'forex':
     case 'fx':
+    case 'yen':
       return 'Forex'
+    case 'index':
+    case 'indices':
+      return 'Indices'
+    case 'stock':
+    case 'stocks':
+      return 'Stocks'
     default:
       throw new Error(`Unsupported market category: ${market}`)
   }
@@ -123,6 +141,7 @@ export function parseMarketCatalogue(input: unknown): MarketRecord[] {
   const parsed = marketCatalogueSchema.parse(input)
   return [...parsed.fx, ...parsed.crypto].map((entry) => ({
     ticker: entry.ticker,
+    name: entry.name,
     market: entry.market,
     category: marketCategory(entry.market),
   }))
@@ -138,7 +157,7 @@ const symbolMetadataSchema = z.record(
   z.string(),
   z.object({
     spread: finiteNumber,
-    decimal: nonNegativeInteger,
+    decimal: nonNegativeInteger.refine((value) => value <= 20, 'Expected at most 20 decimal places'),
     lot: finiteNumber.refine((value) => value > 0, 'Expected lot size to be positive'),
   }),
 )
@@ -219,7 +238,18 @@ const favoritesEnvelopeSchema = z.object({
 export function parseFavoriteIds(input: unknown): string[] {
   const envelope = favoritesEnvelopeSchema.parse(input)
   const decoded: unknown = JSON.parse(envelope.data)
-  return z.array(z.string().min(1)).parse(decoded).map((symbol) => symbol.toLowerCase())
+  return collectFavoriteSymbols(decoded).map((symbol) => symbol.toLowerCase())
+}
+
+function collectFavoriteSymbols(input: unknown): string[] {
+  if (typeof input === 'string') return input.length > 0 ? [input] : []
+  if (Array.isArray(input)) return input.flatMap(collectFavoriteSymbols)
+  if (!input || typeof input !== 'object') throw new Error('Unsupported favorites payload')
+
+  const record = input as Record<string, unknown>
+  if (typeof record.symbol === 'string') return [record.symbol]
+  if (typeof record.ticker === 'string') return [record.ticker]
+  return Object.values(record).flatMap(collectFavoriteSymbols)
 }
 
 export type TradingOrderRecord = {
@@ -294,10 +324,14 @@ function mapOrder(input: z.infer<typeof orderSchema>): TradingOrderRecord {
   }
 }
 
-const openPositionsSchema = z.object({
-  status: successSchema,
-  data: z.array(orderSchema),
-})
+const openPositionsSchema = z.union([
+  z.object({ status: successSchema, data: z.array(orderSchema) }),
+  z.object({
+    status: z.literal('fail'),
+    message: z.enum(['Orders Not available!', 'No Results']),
+    data: z.array(z.never()).length(0),
+  }),
+])
 
 export function parseOpenPositions(input: unknown): TradingOrderRecord[] {
   return openPositionsSchema.parse(input).data.map(mapOrder)

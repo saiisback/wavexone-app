@@ -275,6 +275,38 @@ describe('orders.counts', () => {
 })
 
 describe('accounts', () => {
+  it('joins a trading account id to the portal database id while keeping its API token', async () => {
+    const bootstrapWithSeparateIds = {
+      ...portalBootstrapResponse,
+      data: {
+        ...portalBootstrapResponse.data,
+        accounts: [
+          {
+            ...portalBootstrapResponse.data.accounts[0],
+            id: 7,
+            token: 'account-1',
+          },
+        ],
+      },
+    }
+    scriptFetch(
+      CHECK_OK,
+      BEARER_OK,
+      { body: '{"status":"success"}' },
+      { body: JSON.stringify(bootstrapWithSeparateIds) },
+    )
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    scriptFetch({
+      body: JSON.stringify([{ ...tradingAccountsResponse[0], token: 'account-1', account_id: 7 }]),
+    })
+
+    await expect(backend.accounts.list()).resolves.toEqual([
+      expect.objectContaining({ id: 'account-1', number: '10001' }),
+    ])
+  })
+
   it('joins trading balances with portal equity and leverage by account id', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
@@ -293,7 +325,7 @@ describe('accounts', () => {
     ])
   })
 
-  it('rejects an account that has no matching portal monetary data', async () => {
+  it('falls back to portal account data when the trading API uses a different id', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
@@ -301,7 +333,15 @@ describe('accounts', () => {
     scriptFetch({
       body: JSON.stringify([{ ...tradingAccountsResponse[0], account_id: 'missing-portal' }]),
     })
-    await expect(backend.accounts.list()).rejects.toMatchObject({ kind: 'malformed' })
+    await expect(backend.accounts.list()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'account-1',
+        number: '10001',
+        mode: 'LIVE',
+        balance: 1250.5,
+        equity: 1275.25,
+      }),
+    ])
   })
 
   it('maps the authenticated portal user to the app profile', async () => {
@@ -332,6 +372,21 @@ describe('accounts', () => {
     expect(fetchMock.mock.calls.some(([url]) => url.includes('collect=switchAccount'))).toBe(true)
     expect(fetchMock.mock.calls.some(([url]) => url.includes('/switchAccount'))).toBe(true)
   })
+
+  it('stops an account switch when trading reports a business failure', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    const fetchMock = scriptFetch({
+      body: '{"status":"fail","message":"account unavailable"}',
+    })
+
+    await expect(
+      backend.accounts.switchAccount({ accountId: 'account-2', idempotencyKey: 'switch-2' }),
+    ).rejects.toMatchObject({ kind: 'rejected' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('markets', () => {
@@ -339,19 +394,27 @@ describe('markets', () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
-    scriptFetch(
+    const marketFetch = scriptFetch(
       { body: JSON.stringify(marketCatalogueResponse) },
       { body: JSON.stringify(symbolMetadataResponse) },
       { body: JSON.stringify(dailySnapshotResponse) },
     )
 
     await expect(backend.markets.catalogue()).resolves.toEqual([
-      expect.objectContaining({ id: 'xauusd', symbol: 'XAU/USD', precision: 2, bid: 2400.1 }),
-      expect.objectContaining({ id: 'btcusd', symbol: 'BTC/USD', precision: 2 }),
+      expect.objectContaining({ id: 'c:xauusd', symbol: 'XAU/USD', name: 'Gold', precision: 2, bid: 2400.1 }),
+      expect.objectContaining({ id: 'x:btcusd', symbol: 'BTC/USD', name: 'Bitcoin', precision: 2 }),
+    ])
+
+    const currentDayRequest = marketFetch.mock.calls[2][1]
+    expect(marketFetch.mock.calls[0][0]).toContain('collect=watch')
+    expect(currentDayRequest.body).toBeInstanceOf(FormData)
+    expect(Array.from((currentDayRequest.body as FormData).entries())).toEqual([
+      ['data', 'https://charts.example/consolidated/data?symbol=XAUUSD,BTCUSD'],
+      ['timeline', '1D'],
     ])
   })
 
-  it('fails explicitly when a catalogue instrument has no price snapshot', async () => {
+  it('keeps instruments with available snapshots when one quote is missing', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
@@ -360,22 +423,24 @@ describe('markets', () => {
       { body: JSON.stringify(symbolMetadataResponse) },
       { body: JSON.stringify({ XAUUSD: dailySnapshotResponse.XAUUSD }) },
     )
-    await expect(backend.markets.catalogue()).rejects.toMatchObject({ kind: 'malformed' })
+    await expect(backend.markets.catalogue()).resolves.toEqual([
+      expect.objectContaining({ id: 'c:xauusd' }),
+    ])
   })
 
-  it('parses stringified favorites and timeframe chart history', async () => {
+  it('parses stringified favorites and refuses the deprecated chart endpoint', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
-    scriptFetch({ body: JSON.stringify(favoritesResponse) })
+    const favoritesFetch = scriptFetch({ body: JSON.stringify(favoritesResponse) })
     await expect(backend.markets.favorites()).resolves.toEqual(['xauusd', 'eurusd'])
+    expect(favoritesFetch.mock.calls[0][0]).toContain('data=%5B%5D')
 
     const chartFetch = scriptFetch({ body: JSON.stringify(chartHistoryResponse) })
-    await expect(backend.markets.candles('xauusd', '1M')).resolves.toMatchObject({
-      points: [2395, 2400, 2405],
-      cursorClose: 2405,
+    await expect(backend.markets.candles('xauusd', '1M')).rejects.toMatchObject({
+      kind: 'blocked',
     })
-    expect(chartFetch.mock.calls[0][0]).toContain('resolution=D')
+    expect(chartFetch).not.toHaveBeenCalled()
   })
 })
 

@@ -27,7 +27,7 @@ export type PositionCardProps = {
   lots: number
   entry: number
   current: number
-  precision: 2 | 4
+  precision: number
   pnl: number
   /** Copy on the footer button — "Close position", "Cancel order", … */
   actionLabel: string

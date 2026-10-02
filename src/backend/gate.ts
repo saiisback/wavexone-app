@@ -88,6 +88,15 @@ export class Gate {
     if (reason) throw new BackendError('blocked', reason, { endpoint: name })
   }
 
+  /**
+   * `getCurrentDayData` does not accept a symbol list directly. The supplied
+   * collection sends a chart-service URL in its `data` multipart field.
+   */
+  currentDayDataSource(symbols: readonly string[]): string {
+    const encodedSymbols = symbols.map((symbol) => encodeURIComponent(symbol)).join(',')
+    return `${this.config.chartingBaseUrl}/consolidated/data?symbol=${encodedSymbols}`
+  }
+
   async call(key: EndpointKey, options: CallOptions = {}): Promise<HttpResponse> {
     const spec = ENDPOINTS[key]
     Gate.assertAllowed(spec.name)

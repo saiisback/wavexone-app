@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 import { BackendProvider } from './src/backend/provider'
+import { SignedInDataBootstrap } from './src/backend/data-bootstrap'
 import { SessionProvider, useAppSession } from './src/backend/session-provider'
 import { ActionMenuProvider, Gutter, Screen, Text } from './src/design-system'
 import { RootNavigator } from './src/navigation/root-navigator'
@@ -44,7 +45,14 @@ function SessionGate() {
     )
   }
 
-  return state === 'signed-in' ? <RootNavigator /> : <SignInScreen />
+  return state === 'signed-in' ? (
+    <>
+      <SignedInDataBootstrap />
+      <RootNavigator />
+    </>
+  ) : (
+    <SignInScreen />
+  )
 }
 
 const styles = {

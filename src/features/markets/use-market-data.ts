@@ -4,8 +4,9 @@ import { useEffect } from 'react'
 import { useBackend, useBackendQuery } from '../../backend/provider'
 import { useSession } from '../../data/store'
 
-export function useMarketData() {
-  const accountId = useSession((state) => state.accountId)
+export function useMarketData(accountIdOverride?: string) {
+  const selectedAccountId = useSession((state) => state.accountId)
+  const accountId = accountIdOverride ?? selectedAccountId
   const replaceFavorites = useSession((state) => state.replaceFavorites)
   const backend = useBackend()
   const catalogue = useBackendQuery(`markets:${accountId ?? 'none'}`, (client) =>

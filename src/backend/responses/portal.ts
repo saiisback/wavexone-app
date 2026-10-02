@@ -19,13 +19,18 @@ const portalUserSchema = z.object({
 
 const portalAccountSchema = z.object({
   id: z.union([z.string(), z.number()]),
+  token: z.union([z.string(), z.number()]).optional(),
   code: z.union([z.string(), z.number()]),
   balance: finiteNumber,
   fund: finiteNumber,
   equity: finiteNumber,
   currency: z.string().min(1),
   isDemo: z.boolean(),
-  leverage: finiteNumber.refine((value) => value >= 0, 'Expected non-negative leverage'),
+  leverage: z.union([
+    finiteNumber.refine((value) => value >= 0, 'Expected non-negative leverage'),
+    z.literal('custom'),
+  ]),
+  leverageLabel: z.string().optional(),
 })
 
 const portalSummarySchema = z.object({
@@ -83,6 +88,8 @@ export type PortalBootstrap = {
     verified: boolean
   }
   accounts: {
+    /** Token, database id, and display code used by the two APIs. */
+    identifiers: string[]
     id: string
     number: string
     balance: number
@@ -125,16 +132,21 @@ export function parsePortalBootstrap(input: unknown): PortalBootstrap {
       accountId: String(data.user.accountId),
       verified: truthyFlag(data.user.verified),
     },
-    accounts: data.accounts.map((account) => ({
-      id: String(account.id),
-      number: String(account.code),
-      balance: account.balance,
-      fund: account.fund,
-      equity: account.equity,
-      currency: account.currency,
-      isDemo: account.isDemo,
-      leverage: account.leverage,
-    })),
+    accounts: data.accounts.map((account) => {
+      const id = String(account.token ?? account.id)
+      const number = String(account.code)
+      return {
+        identifiers: [...new Set([id, String(account.id), number])],
+        id,
+        number,
+        balance: account.balance,
+        fund: account.fund,
+        equity: account.equity,
+        currency: account.currency,
+        isDemo: account.isDemo,
+        leverage: parseLeverage(account.leverage, account.leverageLabel),
+      }
+    }),
     summary: data.summary,
     transactions: data.transactions.map((transaction) => ({
       id: String(transaction.id),
@@ -154,9 +166,19 @@ export function parsePortalBootstrap(input: unknown): PortalBootstrap {
   }
 }
 
+function parseLeverage(value: number | 'custom', label?: string): number {
+  if (value !== 'custom') return value
+  const parsed = Number(label?.match(/(?:^|:)\s*(\d+(?:\.\d+)?)\s*$/)?.[1])
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error('Custom leverage has no numeric leverage label')
+  }
+  return parsed
+}
+
 const depositMethodSchema = z.object({
   id: z.union([z.string(), z.number()]),
-  name: z.string().min(1),
+  name: z.string().min(1).optional(),
+  displayName: z.string().min(1).optional(),
   code: z.string().min(1),
   minimumAmount: finiteNumber,
   isBank: z.boolean().optional(),
@@ -173,7 +195,7 @@ const withdrawModeSchema = z.object({
 const withdrawFieldSchema = z.object({
   id: z.union([z.string(), z.number()]),
   name: z.string().min(1),
-  label: z.string().min(1),
+  label: z.string().min(1).optional(),
 })
 
 const fundingConfigurationSchema = z.object({
@@ -188,9 +210,9 @@ const fundingConfigurationSchema = z.object({
 })
 
 export type PortalFundingConfiguration = {
-  depositMethods: (z.infer<typeof depositMethodSchema> & { id: string })[]
+  depositMethods: (z.infer<typeof depositMethodSchema> & { id: string; name: string })[]
   withdrawModes: (z.infer<typeof withdrawModeSchema> & { id: string })[]
-  withdrawFields: (z.infer<typeof withdrawFieldSchema> & { id: string })[]
+  withdrawFields: (z.infer<typeof withdrawFieldSchema> & { id: string; label: string })[]
   kycVerified: boolean
   availableFund: number
   minimumDeposit: number
@@ -202,9 +224,17 @@ export function parseFundingConfiguration(input: unknown): PortalFundingConfigur
     throw new Error('Funding configuration has no deposit methods')
   }
   return {
-    depositMethods: data.depositMethods.map((method) => ({ ...method, id: String(method.id) })),
+    depositMethods: data.depositMethods.map((method) => {
+      const name = method.displayName ?? method.name
+      if (!name) throw new Error('Deposit method has no display name')
+      return { ...method, id: String(method.id), name }
+    }),
     withdrawModes: data.withdrawModes.map((method) => ({ ...method, id: String(method.id) })),
-    withdrawFields: data.withdrawFields.map((field) => ({ ...field, id: String(field.id) })),
+    withdrawFields: data.withdrawFields.map((field) => ({
+      ...field,
+      id: String(field.id),
+      label: field.label ?? field.name,
+    })),
     kycVerified: truthyFlag(data.kycVerified),
     availableFund: data.availableFund,
     minimumDeposit: Math.min(...data.depositMethods.map((method) => method.minimumAmount)),
@@ -233,12 +263,24 @@ const notificationsSchema = z.object({
 function notificationKind(value: string): Notification['kind'] {
   switch (value.toLowerCase()) {
     case 'price':
+      return 'price'
     case 'order':
+    case 'trade':
+      return 'order'
     case 'funds':
+    case 'withdraw':
+    case 'withdrawal':
+    case 'deposit':
+    case 'wallet':
+    case 'payment':
+      return 'funds'
     case 'news':
-      return value.toLowerCase() as Notification['kind']
+    case 'kyc':
+    case 'referral':
+    case 'account':
+      return 'news'
     default:
-      throw new Error(`Unsupported notification type: ${value}`)
+      return 'news'
   }
 }
 

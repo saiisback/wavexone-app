@@ -13,6 +13,7 @@ import {
   parseClosedHistory,
   parseOrderCounts,
   parseSymbolMetadata,
+  type DailySnapshot,
 } from '../responses/trading'
 import type { SessionMaterial } from '../secure-session-store'
 import type { CloseOrderRequest, ModifyOrderRequest, PlaceOrderRequest } from '../contract'
@@ -21,10 +22,8 @@ import type { CloseOrderRequest, ModifyOrderRequest, PlaceOrderRequest } from '.
  * `/api-v1/v1.php?collect=…` — the trading API.
  *
  * Guide §3.1 documents this handshake step by step, so it is implemented
- * exactly as written. The response *shapes* are not documented, so the
- * schemas below accept the several spellings this API family is known to use
- * and fail loudly when none is present, rather than silently producing an
- * object with `undefined` where a token should be.
+ * exactly as written. Live-tested response schemas are parsed strictly while
+ * the known legacy field spellings stay confined to this adapter.
  */
 
 /**
@@ -171,31 +170,45 @@ export class TradingApiAdapter {
 
   async marketData(material: SessionMaterial) {
     const headers = this.headers(material)
-    const catalogue = parseMarketCatalogue(await this.gate.callJson('marketWatch', { headers }))
-    const metadata = parseSymbolMetadata(await this.gate.callJson('symbolSpread', { headers }))
-    const symbols = catalogue.map((item) => item.ticker)
-    const snapshots = parseDailySnapshots(
-      await this.gate.callJson('currentDayData', {
-        body: { data: JSON.stringify(symbols), timeline: '1D' },
-        headers,
-      }),
+    const catalogue = parseResponse(
+      'watch',
+      await this.gate.callJson('watch', { headers }),
+      parseMarketCatalogue,
     )
+    const metadata = parseResponse(
+      'symbolSpread',
+      await this.gate.callJson('symbolSpread', { headers }),
+      parseSymbolMetadata,
+    )
+    const symbols = catalogue.map((item) => apiSymbol(item.ticker))
+    const snapshots = new Map<string, DailySnapshot>()
+    for (const batch of chunks(symbols, 20)) {
+      const parsed = parseResponse(
+        'currentDayData',
+        await this.gate.callJson('currentDayData', {
+          body: { data: this.gate.currentDayDataSource(batch), timeline: '1D' },
+          headers,
+        }),
+        parseDailySnapshots,
+      )
+      for (const [symbol, snapshot] of parsed) snapshots.set(symbol, snapshot)
+    }
     return { catalogue, metadata, snapshots }
   }
 
   async favoriteIds(material: SessionMaterial): Promise<string[]> {
     const response = await this.gate.call('favorites', {
-      query: { token: material.accountToken, data: 'all' },
+      query: { token: material.accountToken, data: '[]' },
       headers: this.headers(material),
     })
-    return parseFavoriteIds(response.json)
+    return parseResponse('favorites', response.json, parseFavoriteIds)
   }
 
   async setFavorite(
     material: SessionMaterial,
     request: { instrumentId: string; favorite: boolean; idempotencyKey: string },
   ): Promise<void> {
-    await this.gate.call('toggleFavorite', {
+    const response = await this.gate.call('toggleFavorite', {
       query: {
         token: material.accountToken,
         data: JSON.stringify({
@@ -207,6 +220,7 @@ export class TradingApiAdapter {
       headers: this.headers(material),
       idempotencyKey: request.idempotencyKey,
     })
+    unwrapEnvelope(response, 'toggleFavorite')
   }
 
   async chart(material: SessionMaterial, instrumentId: string, resolution: string, count: number) {
@@ -245,7 +259,7 @@ export class TradingApiAdapter {
 
   async closedOrders(material: SessionMaterial) {
     const response = await this.gate.call('closedHistory', {
-      query: { token: material.accountToken, page: '1', type: 'all', filter: 'all', from: '', to: '' },
+      query: { token: material.accountToken, page: '1', type: '', filter: '24hr', from: '', to: '' },
       headers: this.headers(material),
     })
     return parseClosedHistory(response.json)
@@ -352,6 +366,33 @@ export class TradingApiAdapter {
     }
     return fingerprint
   }
+}
+
+function parseResponse<T>(
+  endpoint: string,
+  input: unknown,
+  parser: (value: unknown) => T,
+): T {
+  try {
+    return parser(input)
+  } catch (cause) {
+    throw new BackendError('malformed', 'The service returned an unexpected response.', {
+      endpoint,
+      cause,
+    })
+  }
+}
+
+function apiSymbol(symbol: string): string {
+  return symbol.replace(/^[^:]+:/, '')
+}
+
+function chunks<T>(items: readonly T[], size: number): T[][] {
+  const result: T[][] = []
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size))
+  }
+  return result
 }
 
 function assertAcknowledged(input: unknown, endpoint: string): void {

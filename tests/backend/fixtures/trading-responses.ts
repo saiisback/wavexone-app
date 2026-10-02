@@ -13,6 +13,7 @@ export const checkedSessionResponse = {
 export const tradingAccountsResponse = [
   {
     uid: 'user-1',
+    token: 'account-1',
     account_id: 'account-1',
     balance: 1250.5,
     book: 'LIVE',
@@ -28,8 +29,8 @@ export const orderCountsResponse = {
 } as const
 
 export const marketCatalogueResponse = {
-  fx: [{ ticker: 'XAUUSD', market: 'metals' }],
-  crypto: [{ ticker: 'BTCUSD', market: 'crypto' }],
+  fx: [{ name: 'Gold', ticker: 'C:XAUUSD', market: 'metals' }],
+  crypto: [{ name: 'Bitcoin', ticker: 'X:BTCUSD', market: 'crypto' }],
 } as const
 
 export const symbolMetadataResponse = {

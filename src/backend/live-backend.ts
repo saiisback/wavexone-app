@@ -1,9 +1,10 @@
 import { ClientPortalAdapter } from './adapters/client-portal'
 import { TradingApiAdapter } from './adapters/trading-api'
 import type { WaveXBackend } from './contract'
-import type { Account, ActivityEntry, Instrument, Position, Profile, Timeframe } from '../data/types'
+import type { Account, ActivityEntry, Instrument, Position, Profile } from '../data/types'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
+import { unwrapEnvelope } from './http'
 import type { PortalBootstrap } from './responses/portal'
 import { parseTradingAccounts } from './responses/trading'
 import { createSessionStore, type SessionMaterial, type SessionStore } from './secure-session-store'
@@ -11,30 +12,12 @@ import { createSessionStore, type SessionMaterial, type SessionStore } from './s
 /**
  * The real backend.
  *
- * Authentication is implemented in full, because guide §3 documents it step
- * by step. Most data calls are not, and the reason is now narrower than it
- * was: the supplied collections pin down every *request* — method, path,
- * parameter names — but carry no successful *response* anywhere. The trading
- * collection captured none across its 121 requests; the portal's 15 examples
- * are all unauthenticated 401s and empty 200s.
- *
- * So the field names inside a payload are still unknown, and inventing them
- * would produce code that compiles, reads plausibly, and shows the wrong
- * balance. Each method below refuses with the capture that would unblock it.
- *
- * `docs/RESPONSE-CAPTURES.md` lists those captures in one place.
+ * Authentication and Phase 1 reads follow the live-tested 2026-10-02 API
+ * reference. Transport quirks stay below this seam: account-token identity,
+ * bare arrays/maps, stringified favorites, nullable zero counts, prefixed
+ * watch symbols, and portal envelopes are all converted to domain types here.
+ * State-changing Phase 2/3 operations remain gated until explicitly enabled.
  */
-
-const chartLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
-
-const chartOptions: Record<Timeframe, { resolution: string; count: number }> = {
-  '1D': { resolution: '15', count: 96 },
-  '5D': { resolution: '60', count: 120 },
-  '1W': { resolution: '60', count: 168 },
-  '1M': { resolution: 'D', count: 30 },
-  '3M': { resolution: 'D', count: 90 },
-  '6M': { resolution: 'D', count: 180 },
-}
 
 export function createLiveBackend(config: BackendConfig): WaveXBackend {
   const gate = new Gate(config)
@@ -80,28 +63,23 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       })
     }
 
-    return tradingAccounts.map((tradingAccount) => {
-      const portalAccount = portalData.accounts.find((account) => account.id === tradingAccount.id)
-      if (!portalAccount) {
-        throw new BackendError(
-          'malformed',
-          'An account was missing its portal balance details.',
-          { endpoint: 'accountList' },
-        )
-      }
-
-      const floatingPnl = portalAccount.equity - tradingAccount.balance
+    return portalData.accounts.map((portalAccount) => {
+      const tradingAccount = tradingAccounts.find((account) =>
+        portalAccount.identifiers.includes(account.id),
+      )
+      const balance = tradingAccount?.balance ?? portalAccount.balance
+      const floatingPnl = portalAccount.equity - balance
       const changePercent =
-        tradingAccount.balance === 0 ? 0 : (floatingPnl / tradingAccount.balance) * 100
+        balance === 0 ? 0 : (floatingPnl / balance) * 100
 
       return {
-        id: tradingAccount.id,
-        mode: tradingAccount.mode,
+        id: portalAccount.id,
+        mode: tradingAccount?.mode ?? (portalAccount.isDemo ? 'DEMO' : 'LIVE'),
         number: portalAccount.number,
         currency: portalAccount.currency,
         leverage: portalAccount.leverage,
         equity: portalAccount.equity,
-        balance: tradingAccount.balance,
+        balance,
         freeMargin: portalAccount.fund,
         changePercent,
         asOf: 'Current account snapshot',
@@ -125,22 +103,22 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
 
   async function readMarkets(): Promise<Instrument[]> {
     const raw = await trading.marketData(requireSession())
-    return raw.catalogue.map((entry) => {
-      const metadata = raw.metadata.get(entry.ticker)
-      const snapshot = raw.snapshots.get(entry.ticker)
-      if (!metadata || !snapshot || (metadata.precision !== 2 && metadata.precision !== 4)) {
-        throw new BackendError('malformed', `Price snapshot unavailable for ${entry.ticker}.`, {
-          endpoint: 'currentDayData',
-        })
-      }
+    const metadataBySymbol = normalizeSymbolMap(raw.metadata)
+    const snapshotsBySymbol = normalizeSymbolMap(raw.snapshots)
+    return raw.catalogue.flatMap((entry) => {
+      const plainTicker = apiSymbol(entry.ticker)
+      const normalizedTicker = plainTicker.toUpperCase()
+      const metadata = metadataBySymbol.get(normalizedTicker)
+      const snapshot = snapshotsBySymbol.get(normalizedTicker)
+      if (!metadata || !snapshot) return []
       const price = (snapshot.bid + snapshot.ask) / 2
-      return {
+      return [{
         id: entry.ticker.toLowerCase(),
-        symbol: formatSymbol(entry.ticker),
-        name: formatSymbol(entry.ticker),
-        description: formatSymbol(entry.ticker),
-        icon: instrumentIcon(entry.ticker),
-        iconLabel: entry.ticker.slice(0, 1),
+        symbol: formatSymbol(plainTicker),
+        name: entry.name,
+        description: entry.name,
+        icon: instrumentIcon(plainTicker),
+        iconLabel: plainTicker.slice(0, 1),
         price,
         precision: metadata.precision,
         changePercent: snapshot.open === 0 ? 0 : ((price - snapshot.open) / snapshot.open) * 100,
@@ -150,7 +128,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         category: entry.category,
         favorite: false,
         contractSize: metadata.lot,
-      }
+      }]
     })
   }
 
@@ -312,15 +290,18 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       list: readAccounts,
       async switchAccount(request) {
         const session = requireSession()
-        await gate.call('switchAccountTrading', {
+        const tradingResponse = await gate.call('switchAccountTrading', {
           query: { token: session.accountToken, switchtoken: request.accountId },
           headers: trading.headers(session),
           idempotencyKey: request.idempotencyKey,
         })
-        await gate.call('switchAccountPortal', {
+        unwrapEnvelope(tradingResponse, 'switchAccountTrading')
+
+        const portalResponse = await gate.call('switchAccountPortal', {
           body: { token: request.accountId },
           idempotencyKey: request.idempotencyKey,
         })
+        unwrapEnvelope(portalResponse, 'switchAccountPortal')
 
         invalidateAccountData()
         await readBootstrap()
@@ -340,33 +321,12 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         const wanted = new Set(instrumentIds)
         return (await readMarkets()).filter((item) => wanted.has(item.id))
       },
-      async candles(instrumentId, timeframe) {
-        const option = chartOptions[timeframe]
-        let history: Awaited<ReturnType<typeof trading.chart>>
-        try {
-          history = await trading.chart(requireSession(), instrumentId, option.resolution, option.count)
-        } catch (cause) {
-          if (cause instanceof BackendError) throw cause
-          throw new BackendError('malformed', 'Chart history returned an unexpected shape.', {
-            endpoint: 'chartBars',
-            cause,
-          })
-        }
-        if (history.closes.length === 0) {
-          throw new BackendError('malformed', 'Chart history is empty.', { endpoint: 'chartBars' })
-        }
-        const min = Math.min(...history.lows)
-        const max = Math.max(...history.highs)
-        return {
-          points: history.closes,
-          labels: history.timestamps.map((timestamp) => chartLabel.format(new Date(timestamp * 1000))),
-          cursorIndex: history.closes.length - 1,
-          cursorOpen: history.opens.at(-1)!,
-          cursorClose: history.closes.at(-1)!,
-          min,
-          max,
-          step: (max - min) / 4 || 1,
-        }
+      async candles() {
+        throw new BackendError(
+          'blocked',
+          'Historical charts are unavailable until WaveXOne provides the supported mobile candle-feed contract.',
+          { endpoint: 'chartBars' },
+        )
       },
     },
 
@@ -441,6 +401,16 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
 
 function formatSymbol(ticker: string): string {
   return /^[A-Z]{6}$/.test(ticker) ? `${ticker.slice(0, 3)}/${ticker.slice(3)}` : ticker
+}
+
+function apiSymbol(ticker: string): string {
+  return ticker.replace(/^[^:]+:/, '')
+}
+
+function normalizeSymbolMap<T>(entries: ReadonlyMap<string, T>): Map<string, T> {
+  return new Map(
+    Array.from(entries, ([symbol, value]) => [apiSymbol(symbol).toUpperCase(), value]),
+  )
 }
 
 function instrumentIcon(ticker: string): Instrument['icon'] {

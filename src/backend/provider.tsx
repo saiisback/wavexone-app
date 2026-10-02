@@ -12,7 +12,13 @@ import { BackendError, userMessageFor } from './errors'
  * backends would mean two memos and a mutation could run twice.
  */
 
-const BackendContext = createContext<WaveXBackend | null>(null)
+type BackendContextValue = {
+  backend: WaveXBackend
+  /** One promise per semantic query key, shared by every mounted consumer. */
+  queries: Map<string, { promise: Promise<unknown>; consumers: number }>
+}
+
+const BackendContext = createContext<BackendContextValue | null>(null)
 
 export function BackendProvider({
   children,
@@ -22,14 +28,17 @@ export function BackendProvider({
   /** Injected in tests; the app leaves it undefined. */
   backend?: WaveXBackend
 }) {
-  const value = useMemo(() => backend ?? createBackend(), [backend])
+  const value = useMemo<BackendContextValue>(() => ({
+    backend: backend ?? createBackend(),
+    queries: new Map(),
+  }), [backend])
   return <BackendContext value={value}>{children}</BackendContext>
 }
 
 export function useBackend(): WaveXBackend {
-  const backend = use(BackendContext)
-  if (!backend) throw new Error('useBackend must be used inside <BackendProvider>')
-  return backend
+  const context = use(BackendContext)
+  if (!context) throw new Error('useBackend must be used inside <BackendProvider>')
+  return context.backend
 }
 
 export type QueryState<T> =
@@ -49,7 +58,8 @@ export function useBackendQuery<T>(
   key: string,
   read: (backend: WaveXBackend) => Promise<T>,
 ): QueryState<T> {
-  const backend = useBackend()
+  const context = use(BackendContext)
+  if (!context) throw new Error('useBackendQuery must be used inside <BackendProvider>')
   // The result carries the key it belongs to, so a stale one can be spotted
   // during render instead of being cleared by a second setState.
   const [state, setState] = useState<QueryState<T> & { key: string }>({
@@ -72,8 +82,19 @@ export function useBackendQuery<T>(
     // that throws synchronously would otherwise escape the rejection handler
     // below and surface as an error thrown from the effect, which is the one
     // failure this hook exists to turn into a message.
-    Promise.resolve()
-      .then(() => latestRead.current(backend))
+    let entry = context.queries.get(key) as
+      | { promise: Promise<T>; consumers: number }
+      | undefined
+    if (!entry) {
+      entry = {
+        promise: Promise.resolve().then(() => latestRead.current(context.backend)),
+        consumers: 0,
+      }
+      context.queries.set(key, entry)
+    }
+    entry.consumers += 1
+
+    entry.promise
       .then(
       (data) => {
         if (!cancelled) setState({ status: 'ready', data, key })
@@ -94,8 +115,12 @@ export function useBackendQuery<T>(
 
     return () => {
       cancelled = true
+      const current = context.queries.get(key)
+      if (current !== entry) return
+      current.consumers -= 1
+      if (current.consumers === 0) context.queries.delete(key)
     }
-  }, [key, backend])
+  }, [key, context])
 
   // A result from the previous key is another instrument's numbers. Report
   // loading rather than showing them under the new heading.

@@ -19,7 +19,7 @@ export type MarketRowProps = {
   symbol: string
   name: string
   price: number
-  precision: 2 | 4
+  precision: number
   changePercent: number
   iconKind: AssetIconKind
   iconLabel?: string

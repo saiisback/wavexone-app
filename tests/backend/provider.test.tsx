@@ -95,6 +95,57 @@ describe('useBackend', () => {
 })
 
 describe('useBackendQuery', () => {
+  it('deduplicates one query key across concurrent consumers', async () => {
+    const read = jest.fn(async () => 'shared')
+
+    function Probe() {
+      const first = useBackendQuery('shared-key', read)
+      const second = useBackendQuery('shared-key', read)
+      return <Text>{`${first.status}:${second.status}`}</Text>
+    }
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => {
+      tree = renderer.create(
+        <BackendProvider backend={backendWith()}>
+          <Probe />
+        </BackendProvider>,
+      )
+    })
+    mounted.push(tree)
+    await flush()
+
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(tree.root.findByType(Text).props.children).toBe('ready:ready')
+  })
+
+  it('drops cached account data after its final consumer unmounts', async () => {
+    const backend = backendWith()
+    const read = jest.fn(async () => 'account-data')
+
+    function Probe() {
+      useBackendQuery('account-data', read)
+      return null
+    }
+
+    function Host({ visible }: { visible: boolean }) {
+      return <BackendProvider backend={backend}>{visible ? <Probe /> : null}</BackendProvider>
+    }
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => {
+      tree = renderer.create(<Host visible />)
+    })
+    mounted.push(tree)
+    await flush()
+
+    act(() => tree.update(<Host visible={false} />))
+    act(() => tree.update(<Host visible />))
+    await flush()
+
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
   it('starts in the loading state', () => {
     const { readText } = renderQuery(() => new Promise(() => {}), backendWith())
     expect(readText()).toBe('loading:')

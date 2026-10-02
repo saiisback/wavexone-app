@@ -23,7 +23,7 @@ export type Instrument = {
   iconTint?: string
   price: number
   /** Digits after the decimal point for this instrument. */
-  precision: 2 | 4
+  precision: number
   changePercent: number
   bid: number
   ask: number
@@ -38,7 +38,7 @@ export type Instrument = {
   contractSize: number
 }
 
-export type InstrumentCategory = 'Metals' | 'Forex' | 'Crypto' | 'Energy'
+export type InstrumentCategory = 'Metals' | 'Forex' | 'Crypto' | 'Energy' | 'Indices' | 'Stocks'
 
 /** The person, independent of which trading account is selected. */
 export type Profile = {

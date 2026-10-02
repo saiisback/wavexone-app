@@ -24,7 +24,16 @@ import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
-const FILTERS = ['Favorites', 'All', 'Forex', 'Metals', 'Crypto', 'Energy'] as const
+const FILTERS = [
+  'Favorites',
+  'All',
+  'Forex',
+  'Metals',
+  'Crypto',
+  'Energy',
+  'Indices',
+  'Stocks',
+] as const
 type Filter = (typeof FILTERS)[number]
 
 /**

@@ -16,10 +16,7 @@ const decimal2 = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 })
 
-const decimal4 = new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 4,
-  maximumFractionDigits: 4,
-})
+const priceFormatters = new Map<number, Intl.NumberFormat>([[2, decimal2]])
 
 /** "$24,860.40" */
 export function formatMoney(value: number) {
@@ -33,8 +30,16 @@ export function formatSignedMoney(value: number) {
 }
 
 /** Price precision follows the instrument: 2 digits for metals, 4 for FX. */
-export function formatPrice(value: number, precision: 2 | 4) {
-  return precision === 4 ? decimal4.format(value) : decimal2.format(value)
+export function formatPrice(value: number, precision: number) {
+  let formatter = priceFormatters.get(precision)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: precision,
+      maximumFractionDigits: precision,
+    })
+    priceFormatters.set(precision, formatter)
+  }
+  return formatter.format(value)
 }
 
 /** "+0.34%" / "-1.20%" */

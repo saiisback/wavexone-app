@@ -68,6 +68,11 @@ describe('formatPrice', () => {
     expect(formatPrice(1.08, 4)).toBe('1.0800')
   })
 
+  it('honors the precision supplied by symbolSpreadApp', () => {
+    expect(formatPrice(123.4, 3)).toBe('123.400')
+    expect(formatPrice(1.23456, 5)).toBe('1.23456')
+  })
+
   it('carries no currency symbol — the row supplies its own context', () => {
     expect(formatPrice(2043.5, 2)).not.toContain('$')
   })

@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { useBackendQuery } from '../backend/provider'
 import {
   CardPlusIcon,
   CircleAction,
@@ -21,6 +20,7 @@ import {
   useActionMenu,
 } from '../design-system'
 import { MarketRow } from '../features/markets/market-row'
+import { useMarketData } from '../features/markets/use-market-data'
 import { SectionHeader } from '../features/shared/section-header'
 import { formatMoney } from '../data/format'
 import { useSession, type MarketPeriod } from '../data/store'
@@ -38,7 +38,7 @@ const PERIODS: readonly MarketPeriod[] = ['Today', 'This week', 'This month', 'T
 export function BalanceScreen() {
   const { openInstrument } = useAppNavigation()
   const [query, setQuery] = useState('')
-  const markets = useBackendQuery('markets:catalogue', (backend) => backend.markets.catalogue())
+  const { catalogue: markets } = useMarketData()
 
   const needle = query.trim().toLowerCase()
   const catalogue = markets.status === 'ready' ? markets.data : []

@@ -184,7 +184,14 @@ export const ENDPOINTS = {
   /** `data` is a JSON string: {"symbol":"X:AXSUSD","watch":"1","type":"add"}. */
   toggleFavorite: trading('favourite', 'GET', true, 1, ['token', 'data']),
   updateFavorite: trading('updateFavorite', 'POST', true, 1, ['token', 'list', 'section'], 'form'),
-  currentDayData: trading('getCurrentDayData', 'POST', false, 1, ['data', 'timeline'], 'form'),
+  currentDayData: trading(
+    'getCurrentDayData',
+    'POST',
+    false,
+    1,
+    ['data', 'timeline'],
+    'multipart',
+  ),
   forexMargin: trading('forexmargin', 'GET', false, 2, ['symbol']),
 
   // §4.4 Charts
