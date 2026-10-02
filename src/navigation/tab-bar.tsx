@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     width: FAB_SIZE,
     height: FAB_SIZE,
     borderRadius: FAB_SIZE / 2,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: shadow.fab,

@@ -12,6 +12,8 @@ export const colors = {
   ink: '#1A1A1A',
   /** Slightly lifted dark, used for the chart tooltip. */
   inkRaised: '#2F2F2F',
+  /** Navy surface for the home portfolio card and the Trade FAB. */
+  navy: '#1E2A5E',
 
   /** Brand gold. Buy button, active segment, portfolio band, chart line. */
   gold: '#E6BE3F',
