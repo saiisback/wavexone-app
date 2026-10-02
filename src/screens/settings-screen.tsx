@@ -11,9 +11,9 @@ import {
   TAB_BAR_CLEARANCE,
   Text,
   colors,
-  useActionMenu,
 } from '../design-system'
 import { ScreenHeader } from '../features/shared/screen-header'
+import { useOpenClientPortal } from '../features/shared/use-client-portal'
 import { useSession, type SettingKey } from '../data/store'
 import type { MoreStackParamList } from '../navigation/types'
 
@@ -21,7 +21,7 @@ type Navigation = NativeStackNavigationProp<MoreStackParamList, 'Settings'>
 
 export function SettingsScreen() {
   const { navigate } = useNavigation<Navigation>()
-  const showMenu = useActionMenu()
+  const openPortal = useOpenClientPortal()
 
   return (
     <Screen>
@@ -60,11 +60,12 @@ export function SettingsScreen() {
               label="Change password"
               divider={false}
               onPress={() =>
-                showMenu({
+                // `sentotp`/`savepass` exist, but their `type`, `name` and
+                // `data` values are undocumented — not something to guess
+                // on a password route. The portal handles it meanwhile.
+                openPortal({
                   title: 'Change password',
-                  message:
-                    'Password changes go through the account endpoints, which are not connected yet.',
-                  options: [{ label: 'Got it' }],
+                  reason: 'Passwords are changed in the client portal.',
                 })
               }
             />

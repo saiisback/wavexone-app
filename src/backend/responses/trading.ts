@@ -104,13 +104,17 @@ const marketEntrySchema = z.object({
   market: z.string().min(1),
 })
 
-const marketCatalogueSchema = z.object({
-  fx: z.array(marketEntrySchema).default([]),
-  crypto: z.array(marketEntrySchema).default([]),
-})
+/** Groups are keyed by name (`fx`, `crypto`, …); every array-valued key is one. */
+const marketCatalogueSchema = z.record(z.string(), z.unknown())
 
-function marketCategory(market: string): InstrumentCategory {
-  switch (market.toLowerCase()) {
+/**
+ * The live labels are mapped exactly. Anything new falls back to a keyword,
+ * then to the ticker's prefix (`X:` crypto, `I:` index, `C:` currency/metal),
+ * so one unfamiliar label cannot empty the market list.
+ */
+function marketCategory(market: string, ticker: string): InstrumentCategory {
+  const label = market.toLowerCase()
+  switch (label) {
     case 'metals':
     case 'metal':
     case 'silver':
@@ -132,19 +136,40 @@ function marketCategory(market: string): InstrumentCategory {
     case 'stock':
     case 'stocks':
       return 'Stocks'
-    default:
-      throw new Error(`Unsupported market category: ${market}`)
   }
+  if (label.includes('crypto')) return 'Crypto'
+  if (/metal|gold|silver/.test(label)) return 'Metals'
+  if (/energ|oil|gas/.test(label)) return 'Energy'
+  if (/ind/.test(label)) return 'Indices'
+  if (/stock|share|equit/.test(label)) return 'Stocks'
+  if (/fx|forex|currenc/.test(label)) return 'Forex'
+  if (/^x:/i.test(ticker)) return 'Crypto'
+  if (/^i:/i.test(ticker)) return 'Indices'
+  if (/^c:/i.test(ticker)) return 'Forex'
+  return 'Stocks'
 }
 
 export function parseMarketCatalogue(input: unknown): MarketRecord[] {
-  const parsed = marketCatalogueSchema.parse(input)
-  return [...parsed.fx, ...parsed.crypto].map((entry) => ({
-    ticker: entry.ticker,
-    name: entry.name,
-    market: entry.market,
-    category: marketCategory(entry.market),
-  }))
+  const groups = marketCatalogueSchema.parse(input)
+  const records: MarketRecord[] = []
+  // `fx` then `crypto` first, as the watch screen lists them; then any other group.
+  const order = ['fx', 'crypto', ...Object.keys(groups).filter((key) => key !== 'fx' && key !== 'crypto')]
+  for (const key of order) {
+    const group = groups[key]
+    if (!Array.isArray(group)) continue
+    for (const candidate of group) {
+      // One malformed entry is skipped, not allowed to fail the whole list.
+      const entry = marketEntrySchema.safeParse(candidate)
+      if (!entry.success) continue
+      records.push({
+        ticker: entry.data.ticker,
+        name: entry.data.name,
+        market: entry.data.market,
+        category: marketCategory(entry.data.market, entry.data.ticker),
+      })
+    }
+  }
+  return records
 }
 
 export type SymbolMetadata = {
@@ -153,23 +178,26 @@ export type SymbolMetadata = {
   lot: number
 }
 
-const symbolMetadataSchema = z.record(
-  z.string(),
-  z.object({
-    spread: finiteNumber,
-    decimal: nonNegativeInteger.refine((value) => value <= 20, 'Expected at most 20 decimal places'),
-    lot: finiteNumber.refine((value) => value > 0, 'Expected lot size to be positive'),
-  }),
-)
+const symbolMetadataEntrySchema = z.object({
+  spread: finiteNumber,
+  decimal: nonNegativeInteger.refine((value) => value <= 20, 'Expected at most 20 decimal places'),
+  lot: finiteNumber.refine((value) => value > 0, 'Expected lot size to be positive'),
+})
 
+/** A symbol with unusable settings is left out; the rest still load. */
 export function parseSymbolMetadata(input: unknown): Map<string, SymbolMetadata> {
-  const parsed = symbolMetadataSchema.parse(input)
-  return new Map(
-    Object.entries(parsed).map(([symbol, metadata]) => [
-      symbol,
-      { spread: metadata.spread, precision: metadata.decimal, lot: metadata.lot },
-    ]),
-  )
+  const parsed = z.record(z.string(), z.unknown()).parse(input)
+  const result = new Map<string, SymbolMetadata>()
+  for (const [symbol, candidate] of Object.entries(parsed)) {
+    const metadata = symbolMetadataEntrySchema.safeParse(candidate)
+    if (!metadata.success) continue
+    result.set(symbol, {
+      spread: metadata.data.spread,
+      precision: metadata.data.decimal,
+      lot: metadata.data.lot,
+    })
+  }
+  return result
 }
 
 const dailySnapshotSchema = z.record(
@@ -267,6 +295,10 @@ export type TradingOrderRecord = {
   takeProfit?: number
   swap?: number
   commission?: number
+  /** `market`, `limit`, … as placed. */
+  type?: string
+  /** `transit`: a close or change is being executed. */
+  busy?: boolean
 }
 
 const orderSchema = z.object({
@@ -284,6 +316,7 @@ const orderSchema = z.object({
   pnl: finiteNumber.optional(),
   t_swap: finiteNumber.optional(),
   commission: finiteNumber.optional(),
+  type: z.string().optional(),
 })
 
 function orderSide(value: string): TradingOrderRecord['side'] {
@@ -292,27 +325,48 @@ function orderSide(value: string): TradingOrderRecord['side'] {
   throw new Error(`Unsupported order side: ${value}`)
 }
 
-function orderState(value: string): TradingOrderRecord['state'] {
+/**
+ * Reference, "Order states": `transit` is an open order being closed or
+ * changed; orders that never executed reach history as `rejected` or
+ * `cancelled`. Anything else is skipped rather than failing the whole list.
+ */
+function orderState(value: string): TradingOrderRecord['state'] | null {
   switch (value.toLowerCase()) {
     case 'open':
+    case 'transit':
       return 'Open'
     case 'pending':
       return 'Pending'
     case 'closed':
+    case 'rejected':
+    case 'cancelled':
+    case 'canceled':
       return 'Closed'
     default:
-      throw new Error(`Unsupported order state: ${value}`)
+      return null
   }
 }
 
-function mapOrder(input: z.infer<typeof orderSchema>): TradingOrderRecord {
+function mapOrders(inputs: readonly z.infer<typeof orderSchema>[]): TradingOrderRecord[] {
+  return inputs.flatMap((input) => {
+    const state = orderState(input.status)
+    return state ? [mapOrder(input, state)] : []
+  })
+}
+
+function mapOrder(
+  input: z.infer<typeof orderSchema>,
+  state: TradingOrderRecord['state'],
+): TradingOrderRecord {
   return {
     id: String(input.id),
     instrumentId: input.symbol.toLowerCase(),
     side: orderSide(input.bs),
     lots: input.lot,
     entry: input.avg,
-    state: orderState(input.status),
+    state,
+    ...(input.status.toLowerCase() === 'transit' ? { busy: true } : {}),
+    ...(input.type === undefined ? {} : { type: input.type.toLowerCase() }),
     ...(input.close === undefined ? {} : { current: input.close }),
     ...(input.pnl === undefined ? {} : { pnl: input.pnl }),
     ...(input.time === undefined ? {} : { time: input.time }),
@@ -334,7 +388,7 @@ const openPositionsSchema = z.union([
 ])
 
 export function parseOpenPositions(input: unknown): TradingOrderRecord[] {
-  return openPositionsSchema.parse(input).data.map(mapOrder)
+  return mapOrders(openPositionsSchema.parse(input).data)
 }
 
 const historyInfoSchema = z.object({
@@ -355,7 +409,7 @@ export type ClosedHistory = {
 
 export function parseClosedHistory(input: unknown): ClosedHistory {
   const parsed = closedHistorySchema.parse(input)
-  const orders = parsed.data.map(mapOrder)
+  const orders = mapOrders(parsed.data)
   if (orders.some((order) => order.state !== 'Closed')) {
     throw new Error('Closed history contained a non-closed order')
   }

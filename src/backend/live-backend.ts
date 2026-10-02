@@ -1,10 +1,21 @@
 import { ClientPortalAdapter } from './adapters/client-portal'
 import { TradingApiAdapter } from './adapters/trading-api'
 import type { WaveXBackend } from './contract'
+import { activityGroup } from '../data/activity-dates'
+import type { MarketPeriod } from '../data/store'
+import { CHART_REQUESTS, buildChartSeries } from '../data/chart-series'
 import type { Account, ActivityEntry, Instrument, Position, Profile } from '../data/types'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
 import { unwrapEnvelope } from './http'
+import {
+  createQuoteFeed,
+  createTradingEvents,
+  fetchCandles,
+  fetchDayBars,
+  fetchQuoteSnapshot,
+  fetchSparklines,
+} from './market-feed'
 import type { PortalBootstrap } from './responses/portal'
 import { parseTradingAccounts } from './responses/trading'
 import { createSessionStore, type SessionMaterial, type SessionStore } from './secure-session-store'
@@ -29,8 +40,12 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
   let material: SessionMaterial | null = null
   let bootstrap: PortalBootstrap | null = null
 
+  const quotes = createQuoteFeed()
+  const tradingEvents = createTradingEvents(() => material?.accountToken ?? null)
+
   function invalidateSessionData(): void {
     bootstrap = null
+    markets = null
     portal.reset()
   }
 
@@ -101,17 +116,56 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
     }
   }
 
-  async function readMarkets(): Promise<Instrument[]> {
-    const raw = await trading.marketData(requireSession())
+  /**
+   * One market load shared by every caller for a short while: the catalogue
+   * and positions both need it, and the prices inside are only a starting
+   * point — screens stream their own.
+   */
+  let markets: { accountToken: string; at: number; promise: Promise<Instrument[]> } | null = null
+
+  function readMarkets(): Promise<Instrument[]> {
+    const session = requireSession()
+    if (
+      markets &&
+      markets.accountToken === session.accountToken &&
+      Date.now() - markets.at < MARKETS_TTL_MS
+    ) {
+      return markets.promise
+    }
+    const promise = loadMarkets(session)
+    const entry = { accountToken: session.accountToken, at: Date.now(), promise }
+    markets = entry
+    promise.catch(() => {
+      if (markets === entry) markets = null
+    })
+    return promise
+  }
+
+  async function loadMarkets(session: SessionMaterial): Promise<Instrument[]> {
+    const raw = await trading.marketData(session)
     const metadataBySymbol = normalizeSymbolMap(raw.metadata)
-    const snapshotsBySymbol = normalizeSymbolMap(raw.snapshots)
-    return raw.catalogue.flatMap((entry) => {
+
+    // A market without precision and lot size cannot be priced or traded.
+    const listed = raw.catalogue.flatMap((entry) => {
       const plainTicker = apiSymbol(entry.ticker)
-      const normalizedTicker = plainTicker.toUpperCase()
-      const metadata = metadataBySymbol.get(normalizedTicker)
-      const snapshot = snapshotsBySymbol.get(normalizedTicker)
-      if (!metadata || !snapshot) return []
-      const price = (snapshot.bid + snapshot.ask) / 2
+      const metadata = metadataBySymbol.get(plainTicker.toUpperCase())
+      return metadata ? [{ entry, plainTicker, metadata }] : []
+    })
+    const symbols = [...new Set(listed.map(({ plainTicker }) => feedSymbol(plainTicker)))]
+    const [days, quotes] = await Promise.all([fetchDayBars(symbols), fetchQuoteSnapshot(symbols)])
+    if (symbols.length > 0 && days.size === 0 && quotes.size === 0) {
+      throw new BackendError('network', 'Could not reach the price feed.', { endpoint: 'ticks' })
+    }
+
+    return listed.flatMap(({ entry, plainTicker, metadata }) => {
+      const day = days.get(feedSymbol(plainTicker))
+      const quote = quotes.get(feedSymbol(plainTicker))
+      const bid = quote?.bid ?? day?.close
+      const ask = quote?.ask ?? day?.close
+      // The feeds do not carry every listed market; one with no price is left out.
+      if (bid === undefined || ask === undefined) return []
+      const price = quote?.price ?? (bid + ask) / 2
+      const open = day?.open
       return [{
         id: entry.ticker.toLowerCase(),
         symbol: formatSymbol(plainTicker),
@@ -121,13 +175,14 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         iconLabel: plainTicker.slice(0, 1),
         price,
         precision: metadata.precision,
-        changePercent: snapshot.open === 0 ? 0 : ((price - snapshot.open) / snapshot.open) * 100,
-        bid: snapshot.bid,
-        ask: snapshot.ask,
-        spark: [snapshot.open, snapshot.low, snapshot.high, price],
+        changePercent: open ? ((price - open) / open) * 100 : 0,
+        bid,
+        ask,
+        spark: day ? [day.open, day.low, day.high, price] : [price, price],
         category: entry.category,
         favorite: false,
         contractSize: metadata.lot,
+        ...(open ? { dayOpen: open } : {}),
       }]
     })
   }
@@ -140,14 +195,12 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
     const byId = new Map(markets.map((item) => [item.id, item]))
     return orders.map((order) => {
       const instrument = byId.get(order.instrumentId)
-      if (!instrument) {
-        throw new BackendError('malformed', `Missing quote for ${order.instrumentId}.`, {
-          endpoint: 'orders',
-        })
-      }
+      // A market the price feed does not carry keeps the server's own numbers.
       const current = order.state === 'Pending'
         ? order.trigger ?? order.entry
-        : order.side === 'Buy' ? instrument.bid : instrument.ask
+        : instrument
+          ? order.side === 'Buy' ? instrument.bid : instrument.ask
+          : order.current ?? order.entry
       const direction = order.side === 'Buy' ? 1 : -1
       return {
         id: order.id,
@@ -158,37 +211,48 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         current,
         pnl: order.state === 'Pending'
           ? 0
-          : (current - order.entry) * order.lots * instrument.contractSize * direction,
+          : instrument
+            ? (current - order.entry) * order.lots * instrument.contractSize * direction
+            : order.pnl ?? 0,
         state: order.state,
+        ...(order.stopLoss === undefined ? {} : { stopLoss: order.stopLoss }),
+        ...(order.takeProfit === undefined ? {} : { takeProfit: order.takeProfit }),
+        ...(order.trigger === undefined ? {} : { trigger: order.trigger }),
+        ...(order.time === undefined ? {} : { time: order.time }),
+        // Reference: a market order is listed as pending until it fills.
+        ...(order.state === 'Pending' && order.type === 'market' ? { executing: true } : {}),
+        ...(order.busy ? { busy: true } : {}),
       }
     })
   }
 
   async function readHistory(): Promise<Position[]> {
     const history = await trading.closedOrders(requireSession())
-    return history.orders.map((order) => {
-      if (order.current === undefined || order.pnl === undefined) {
-        throw new BackendError('malformed', 'Closed order is missing its close price or P&L.', {
-          endpoint: 'closedHistory',
-        })
-      }
-      return { ...order, current: order.current, pnl: order.pnl }
-    })
+    // Rejected and cancelled orders reach history without a fill, so they
+    // carry no close price or P&L.
+    return history.orders.map((order) => ({
+      ...order,
+      current: order.current ?? order.entry,
+      pnl: order.pnl ?? 0,
+    }))
   }
 
   async function readFundingHistory(): Promise<ActivityEntry[]> {
     const data = await readBootstrap()
-    return data.transactions.map((transaction) => ({
-      id: transaction.id,
-      kind: transaction.type.toLowerCase().includes('withdraw') ? 'withdrawal' : 'deposit',
-      title: transaction.type,
-      subtitle: transaction.status ?? transaction.method ?? '',
-      date: transaction.date ?? transaction.createdAt.slice(0, 10),
-      time: transaction.time ?? transaction.createdAt.slice(11, 16),
-      amount: transaction.amount,
-      group: 'Earlier',
-      tab: 'Funds',
-    }))
+    return data.transactions.map((transaction) => {
+      const date = transaction.date ?? transaction.createdAt.slice(0, 10)
+      return {
+        id: transaction.id,
+        kind: transaction.type.toLowerCase().includes('withdraw') ? 'withdrawal' : 'deposit',
+        title: transaction.type,
+        subtitle: transaction.status ?? transaction.method ?? '',
+        date,
+        time: transaction.time ?? transaction.createdAt.slice(11, 16),
+        amount: transaction.amount,
+        group: activityGroup(date),
+        tab: 'Funds',
+      }
+    })
   }
 
   async function orderFingerprint(): Promise<string> {
@@ -229,6 +293,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
           invalidateSessionData()
           throw error
         }
+        tradingEvents.reset()
         return { kind: 'authenticated' }
       },
 
@@ -242,12 +307,14 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         if (await trading.isSessionValid(stored)) {
           material = stored
           await readBootstrap()
+          tradingEvents.reset()
           return true
         }
 
         try {
           await this.refresh()
           await readBootstrap()
+          tradingEvents.reset()
           return true
         } catch {
           await this.signOut()
@@ -277,6 +344,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         // Guide §3.3: "Clear all stored session material on logout."
         material = null
         invalidateSessionData()
+        tradingEvents.reset()
         await store.clear()
       },
     },
@@ -309,8 +377,25 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         const switched = { ...session, accountToken: request.accountId, orderFingerprint: undefined }
         material = switched
         await store.write(switched)
+        tradingEvents.reset()
       },
       profile: readProfile,
+      async saveProfile(request) {
+        // The route also takes `name`. Resend the server's own value, never
+        // the "WaveXOne client" display fallback, so saving a phone number
+        // cannot rename the user.
+        const holder = (await readBootstrap()).user.holder
+        await portal.saveProfile(requireSession(), {
+          ...(holder === undefined ? {} : { name: holder }),
+          mobile: request.phone,
+          idempotencyKey: request.idempotencyKey,
+        })
+        invalidateAccountData()
+      },
+      async openAccount(request) {
+        await portal.openAccount(requireSession(), request)
+        invalidateAccountData()
+      },
     },
 
     markets: {
@@ -321,12 +406,23 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         const wanted = new Set(instrumentIds)
         return (await readMarkets()).filter((item) => wanted.has(item.id))
       },
-      async candles() {
-        throw new BackendError(
-          'blocked',
-          'Historical charts are unavailable until WaveXOne provides the supported mobile candle-feed contract.',
-          { endpoint: 'chartBars' },
-        )
+      async candles(instrumentId, timeframe) {
+        const request = CHART_REQUESTS[timeframe]
+        const candles = await fetchCandles(feedSymbol(instrumentId), request.timeframe, request.limit)
+        const series = buildChartSeries(candles, timeframe)
+        if (!series) {
+          throw new BackendError('rejected', 'There is no chart data for this period yet.', {
+            endpoint: 'ohlcV2',
+          })
+        }
+        return series
+      },
+      async sparklines(instrumentIds, period) {
+        const bySymbol = await fetchSparklines(instrumentIds.map(feedSymbol), SPARK_REQUESTS[period])
+        return new Map(instrumentIds.flatMap((id) => {
+          const closes = bySymbol.get(feedSymbol(id))
+          return closes ? [[id, closes] as const] : []
+        }))
       },
     },
 
@@ -341,21 +437,27 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       history: readHistory,
       // These four are phase 2 regardless of any capture: guide §7.3 requires
       // written authorization before a trading mutation runs anywhere.
+      // Each one drops the cached bootstrap once acknowledged, so the margin
+      // and equity read next reflect the trade rather than the moment before.
       async place(request) {
         const session = requireSession()
         await trading.placeOrder(session, request, await orderFingerprint())
+        invalidateAccountData()
       },
       async modify(request) {
         const session = requireSession()
         await trading.modifyOrder(session, request, await orderFingerprint())
+        invalidateAccountData()
       },
       async cancel(request) {
         const session = requireSession()
         await trading.cancelOrder(session, request, await orderFingerprint())
+        invalidateAccountData()
       },
       async close(request) {
         const session = requireSession()
         await trading.closeOrder(session, request, await orderFingerprint())
+        invalidateAccountData()
       },
     },
 
@@ -377,14 +479,38 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       async sendWithdrawalOtp(request) {
         return portal.sendWithdrawalOtp(requireSession(), request)
       },
+      // Bootstrap carries balances and the transaction list, so it is stale
+      // the moment one of these is acknowledged.
       async deposit(request) {
-        return portal.deposit(requireSession(), request)
+        const session = requireSession()
+        const target = (await readBootstrap()).accounts.find((account) =>
+          account.identifiers.includes(request.accountId),
+        )
+        if (target?.isDemo) {
+          // `submitDemoDeposit` credits whichever account the portal session
+          // has selected and takes no account parameter, so it is only safe
+          // for the account the session is on.
+          if (request.accountId !== session.accountToken) {
+            throw new BackendError('blocked', 'Switch to this demo account before adding funds to it.', {
+              endpoint: 'submitDemoDeposit',
+            })
+          }
+          await portal.demoDeposit(session, {
+            amount: request.amount,
+            idempotencyKey: request.idempotencyKey,
+          })
+        } else {
+          await portal.deposit(session, request)
+        }
+        invalidateAccountData()
       },
       async requestWithdrawal(request) {
-        return portal.withdraw(requireSession(), request)
+        await portal.withdraw(requireSession(), request)
+        invalidateAccountData()
       },
       async transfer(request) {
-        return portal.transfer(requireSession(), request)
+        await portal.transfer(requireSession(), request)
+        invalidateAccountData()
       },
       history: readFundingHistory,
     },
@@ -396,7 +522,37 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       markNotificationsRead: (request) =>
         portal.markNotificationsRead(requireSession(), request),
     },
+
+    prices: {
+      subscribe: (instrumentId, listener) => quotes.subscribe(feedSymbol(instrumentId), listener),
+      latest: (instrumentId) => quotes.latest(feedSymbol(instrumentId)),
+    },
+
+    events: {
+      // Balances live in the cached bootstrap, so it is stale once the
+      // server says something changed.
+      subscribe: (listener) => tradingEvents.subscribe((event) => {
+        invalidateAccountData()
+        listener(event)
+      }),
+    },
   }
+}
+
+/** Bars per Market Watch period: about a day, a week, a month and a year. */
+const SPARK_REQUESTS: Record<MarketPeriod, { timeframe: string; limit: number }> = {
+  Today: { timeframe: '15', limit: 96 },
+  'This week': { timeframe: '60', limit: 120 },
+  'This month': { timeframe: '240', limit: 132 },
+  'This year': { timeframe: '1D', limit: 260 },
+}
+
+/** Market prices are a starting point (rows stream their own), so a short reuse is safe. */
+const MARKETS_TTL_MS = 30_000
+
+/** `c:xauusd` → `XAUUSD`, the form both chart feeds accept for every market. */
+function feedSymbol(instrumentId: string): string {
+  return apiSymbol(instrumentId).toUpperCase()
 }
 
 function formatSymbol(ticker: string): string {

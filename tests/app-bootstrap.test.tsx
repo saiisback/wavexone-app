@@ -34,6 +34,7 @@ describe('signed-in data bootstrap', () => {
         profile: jest.fn(async () => ({ holder: 'Example User' })),
       },
       markets: { catalogue, favorites },
+      events: { subscribe: jest.fn(() => () => {}) },
     } as unknown as WaveXBackend
     jest.mocked(createBackend).mockReturnValue(backend)
 

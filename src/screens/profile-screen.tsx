@@ -17,16 +17,20 @@ import {
 import { ScreenHeader } from '../features/shared/screen-header'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { QueryStateView } from '../features/shared/query-state'
+import { useAppNavigation } from '../navigation/use-app-navigation'
 
 /** Account → Profile & verification. */
 export function ProfileScreen() {
   const showMenu = useActionMenu()
+  const { openEditPhone } = useAppNavigation()
   const accountData = useAccountData()
 
-  const editLater = (field: string) =>
+  // `apiSaveProfile` takes only a name and a mobile number, so these two
+  // cannot be changed from the app.
+  const changeThroughSupport = (field: string) =>
     showMenu({
       title: field,
-      message: 'Editing profile details needs the account endpoints. Available once the backend is connected.',
+      message: `Your ${field.toLowerCase()} is changed through WaveXOne support, not in the app.`,
       options: [{ label: 'Got it' }],
     })
 
@@ -67,13 +71,17 @@ export function ProfileScreen() {
 
         <Gutter>
           <ListGroup>
-            <ListRow label="Email" value={profile.email} onPress={() => editLater('Email')} />
-            <ListRow label="Phone" value={profile.phone} onPress={() => editLater('Phone')} />
+            <ListRow
+              label="Email"
+              value={profile.email}
+              onPress={() => changeThroughSupport('Email')}
+            />
+            <ListRow label="Phone" value={profile.phone} onPress={openEditPhone} />
             <ListRow
               label="Country"
               value={profile.country}
               divider={false}
-              onPress={() => editLater('Country')}
+              onPress={() => changeThroughSupport('Country')}
             />
           </ListGroup>
         </Gutter>

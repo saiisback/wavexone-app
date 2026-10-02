@@ -37,7 +37,17 @@ export type RootStackParamList = {
 
   /* Presented as native form sheets. */
   Funding: { mode: FundingMode }
-  OrderTicket: { instrumentId: string; side: 'Buy' | 'Sell' }
+  /** `lots` and `orderType` carry the Trade tab's draft; absent elsewhere. */
+  OrderTicket: {
+    instrumentId: string
+    side: 'Buy' | 'Sell'
+    lots?: number
+    orderType?: 'Market' | 'Limit'
+  }
+  /** SL/TP edit for an open position or pending order already on the account. */
+  ModifyOrder: { positionId: string }
+  /** The one profile field `apiSaveProfile` lets the user change. */
+  EditPhone: undefined
   AccountSwitcher: undefined
   InstrumentPicker: undefined
 }

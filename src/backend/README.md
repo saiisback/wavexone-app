@@ -14,6 +14,7 @@ shapes a failure arrives in.
 | `live-backend.ts` | The real implementation: session, accounts, markets, orders, funding, and notifications. |
 | `gate.ts` | Denylist, phase gating, parameter checking, duplicate-submission guard. |
 | `http.ts` | The one `fetch`. TLS, timeouts, body encoding, envelope normalisation. |
+| `market-feed.ts` | The only sockets: live prices, chart candles, sparklines and the trading event stream. |
 | `endpoints.ts` | Every allowed endpoint and its parameters, plus the twelve that are refused. |
 | `errors.ts` | One typed error model, plus the user-facing copy map. |
 | `decimal.ts` | Exact money. Guide §5 forbids floats in order calculations. |
@@ -23,23 +24,20 @@ shapes a failure arrives in.
 
 ## Which implementation runs
 
-`createBackend()` returns the **mock** unless three environment values are
-set:
+`createBackend()` returns the **live** backend against
+`https://trade.wavexone.com` — no environment file is needed. Signing in
+shows the signed-in user's own data.
 
-```
-EXPO_PUBLIC_WAVEX_TRADING_URL
-EXPO_PUBLIC_WAVEX_PORTAL_URL
-EXPO_PUBLIC_WAVEX_PORTAL_ORIGIN
-```
+The fixture backend runs only when asked for: `EXPO_PUBLIC_WAVEX_BACKEND=mock`.
+It used to be the silent default, which made a build without a `.env.local`
+accept any password and show fixture data as if it were the user's.
 
-That default is deliberate. Guide §2: "Production trading and real-money
-funding must remain disabled until mutation testing is authorized." A build
-that reaches the real API by accident is how that goes wrong.
+Optional overrides: `EXPO_PUBLIC_WAVEX_TRADING_URL`, `EXPO_PUBLIC_WAVEX_PORTAL_URL`,
+`EXPO_PUBLIC_WAVEX_PORTAL_ORIGIN`, `EXPO_PUBLIC_WAVEX_CHARTING_URL`, and:
 
-One more value gates behaviour rather than routing:
-
-- `EXPO_PUBLIC_WAVEX_PHASE` (default `1`) — guide §8. Phase 1 is read-only;
-  anything above the configured phase is refused before a request is made.
+- `EXPO_PUBLIC_WAVEX_PHASE` (default `2`) — guide §8. Phase 1 is read-only,
+  phase 2 adds trading, phase 3 adds funding mutations. Anything above the
+  configured phase is refused before a request is made.
 
 ## Where the endpoint contract comes from
 
@@ -70,14 +68,58 @@ favorites, open/closed orders, portal bootstrap, funding configuration, and
 notifications. Screens never fall back to fixture values after live mode is
 selected.
 
-There is still no working tick-stream contract. Prices are labelled and treated
-as REST snapshots. The supplied chart host (`charting.fxinvezt.com`) returned
-DNS `ENOTFOUND` during verification, so chart reads show the reviewed error
-state until `EXPO_PUBLIC_WAVEX_CHARTING_URL` points at a working host.
+Streaming follows the 2026-10-02 API reference
+(`trade.wavexone.com/platform-api-details/documentation/api`), and was
+checked against the live feeds:
+
+- **Prices** — `wss://cloud.wavexone.com/ws/ticks`. One shared socket; each
+  row subscribes to its own symbol (`c:xauusd` → `XAUUSD`) and re-renders
+  alone. Instrument detail, Trade, the order ticket, the SL/TP sheet and the
+  Positions P&L all read it. Reconnects with 1 s → 30 s back-off.
+- **Charts** — `wss://cloud.wavexone.com/ws/ohlcV2`, one request per
+  timeframe (`CHART_REQUESTS` in `src/data/chart-series.ts`), trimmed to the
+  window ending at the newest bar. The newest point follows the live price.
+  The old `watchlist_charting` route is not used.
+- **Sparklines and the Market Watch period** — the same candle feed, over the
+  chosen period.
+- **Order events** — `wss://cloud.wavexone.com/server/`, authenticated with
+  the account token. Fills, closes, rejections and balance changes re-read
+  the affected queries (`useTradingEvents`); events are never applied as
+  data. A market order shows "Executing…" until it fills, and a `transit`
+  order shows "Closing…".
 
 Phase 1 enables authentication and reads. Phase 2 enables trading mutations;
 Phase 3 enables portal/funding mutations. Raising the phase requires an
 explicitly authorized staging/test environment.
+
+Every existing trading and funding control is wired to its mutation:
+
+- Order ticket: market and limit (`placeorder` `type=market|limit`,
+  `clicked=yes`). The Trade
+  tab's Stop option explains itself instead — the API's `type=stop` is a
+  two-legged HFT order, not a stop entry.
+- Positions: close (`squareoff`), cancel pending (`bulkPendingPositionclose`),
+  and the SL/TP sheet (`mobileapp_modifyorder` for open positions,
+  `mobileapp_modifypendingorder` with the unchanged trigger for pending ones).
+  Emptying a level sends `0`, which those routes read as "remove".
+- Funding: deposit, transfer, and withdrawal with the configured destination
+  fields. The OTP request and the submission encode that destination
+  identically. A deposit to a demo account goes to `submitDemoDeposit`
+  (virtual funds), and only for the account the session is on, because that
+  route takes no account id.
+- Profile: the phone number, through `apiSaveProfile`, resending the
+  server-held name unchanged. Email and country have no update route.
+- Account switcher: "Open a new account" calls `apiCreateDemoAccount` or
+  `apiRequestAccountCreation`, both with the empty body the collection sends.
+
+An acknowledged mutation drops the cached bootstrap and re-reads the affected
+screens through `useInvalidateQueries`; a failed or unconfirmed one re-reads
+nothing. None of these response shapes has been captured yet (see
+`docs/RESPONSE-CAPTURES.md`, Phase 2 / 3), so success is still recognised only
+by the `status` envelope.
+
+Not wired, because no response shape exists to parse: `forexmargin`. The
+ticket's required margin remains a client-side estimate.
 
 ## Rules this module enforces
 

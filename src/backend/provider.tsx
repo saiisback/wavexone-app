@@ -16,6 +16,8 @@ type BackendContextValue = {
   backend: WaveXBackend
   /** One promise per semantic query key, shared by every mounted consumer. */
   queries: Map<string, { promise: Promise<unknown>; consumers: number }>
+  /** Mounted queries, told when `useInvalidateQueries` drops their key. */
+  listeners: Set<(prefixes: readonly string[]) => void>
 }
 
 const BackendContext = createContext<BackendContextValue | null>(null)
@@ -31,6 +33,7 @@ export function BackendProvider({
   const value = useMemo<BackendContextValue>(() => ({
     backend: backend ?? createBackend(),
     queries: new Map(),
+    listeners: new Set(),
   }), [backend])
   return <BackendContext value={value}>{children}</BackendContext>
 }
@@ -39,6 +42,24 @@ export function useBackend(): WaveXBackend {
   const context = use(BackendContext)
   if (!context) throw new Error('useBackend must be used inside <BackendProvider>')
   return context.backend
+}
+
+/**
+ * Re-reads every mounted query whose key starts with one of the prefixes.
+ *
+ * Call it after a mutation is acknowledged, never before and never on
+ * failure: an unconfirmed mutation leaves the server state unknown, and the
+ * user is told to check rather than shown a re-read that may predate it.
+ */
+export function useInvalidateQueries(): (...prefixes: string[]) => void {
+  const context = use(BackendContext)
+  if (!context) throw new Error('useInvalidateQueries must be used inside <BackendProvider>')
+  return (...prefixes) => {
+    for (const key of [...context.queries.keys()]) {
+      if (prefixes.some((prefix) => key.startsWith(prefix))) context.queries.delete(key)
+    }
+    context.listeners.forEach((listener) => listener(prefixes))
+  }
 }
 
 export type QueryState<T> =
@@ -74,6 +95,19 @@ export function useBackendQuery<T>(
   useEffect(() => {
     latestRead.current = read
   })
+
+  // Bumped when an acknowledged mutation invalidates this key. The previous
+  // data stays on screen until the re-read settles.
+  const [generation, setGeneration] = useState(0)
+  useEffect(() => {
+    const listener = (prefixes: readonly string[]) => {
+      if (prefixes.some((prefix) => key.startsWith(prefix))) setGeneration((value) => value + 1)
+    }
+    context.listeners.add(listener)
+    return () => {
+      context.listeners.delete(listener)
+    }
+  }, [key, context])
 
   useEffect(() => {
     let cancelled = false
@@ -120,7 +154,7 @@ export function useBackendQuery<T>(
       current.consumers -= 1
       if (current.consumers === 0) context.queries.delete(key)
     }
-  }, [key, context])
+  }, [key, context, generation])
 
   // A result from the previous key is another instrument's numbers. Report
   // loading rather than showing them under the new heading.

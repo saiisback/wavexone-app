@@ -3,7 +3,12 @@ import renderer, { act } from 'react-test-renderer'
 
 import type { WaveXBackend } from '../../src/backend/contract'
 import { BackendError } from '../../src/backend/errors'
-import { BackendProvider, useBackend, useBackendQuery } from '../../src/backend/provider'
+import {
+  BackendProvider,
+  useBackend,
+  useBackendQuery,
+  useInvalidateQueries,
+} from '../../src/backend/provider'
 
 /**
  * The read hook is what every screen will sit on once the fixtures are
@@ -255,5 +260,67 @@ describe('useBackendQuery', () => {
 
     expect(spy).not.toHaveBeenCalled()
     spy.mockRestore()
+  })
+})
+
+describe('useInvalidateQueries', () => {
+  /** Two reads under different keys, plus a handle on the invalidator. */
+  function renderPair(readPositions: () => Promise<string>, readMarkets: () => Promise<string>) {
+    let invalidate!: (...prefixes: string[]) => void
+
+    function Probe() {
+      invalidate = useInvalidateQueries()
+      const positions = useBackendQuery('positions:acct-1', readPositions)
+      const twin = useBackendQuery('positions:acct-1', readPositions)
+      const markets = useBackendQuery('markets:acct-1', readMarkets)
+      return <Text>{`${positions.status}:${positions.data ?? ''}|${twin.data ?? ''}|${markets.data ?? ''}`}</Text>
+    }
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => {
+      tree = renderer.create(
+        <BackendProvider backend={backendWith()}>
+          <Probe />
+        </BackendProvider>,
+      )
+    })
+    mounted.push(tree)
+    return {
+      invalidate: (...prefixes: string[]) => invalidate(...prefixes),
+      readText: () => tree.root.findByType(Text).props.children as string,
+    }
+  }
+
+  it('re-reads matching keys once, shared by every consumer, and leaves the rest', async () => {
+    let version = 0
+    const readPositions = jest.fn(async () => `v${++version}`)
+    const readMarkets = jest.fn(async () => 'm')
+    const { invalidate, readText } = renderPair(readPositions, readMarkets)
+    await flush()
+    expect(readText()).toBe('ready:v1|v1|m')
+
+    act(() => invalidate('positions:'))
+    await flush()
+
+    expect(readText()).toBe('ready:v2|v2|m')
+    expect(readPositions).toHaveBeenCalledTimes(2)
+    expect(readMarkets).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the previous data on screen while the re-read is in flight', async () => {
+    let resolveSecond!: (value: string) => void
+    const readPositions = jest
+      .fn<Promise<string>, []>()
+      .mockResolvedValueOnce('before')
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+    const { invalidate, readText } = renderPair(readPositions, async () => 'm')
+    await flush()
+
+    act(() => invalidate('positions:'))
+    await flush()
+    expect(readText()).toBe('ready:before|before|m')
+
+    await act(async () => resolveSecond('after'))
+    expect(readText()).toBe('ready:after|after|m')
   })
 })

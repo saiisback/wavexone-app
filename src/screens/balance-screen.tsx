@@ -19,6 +19,7 @@ import {
   fonts,
   useActionMenu,
 } from '../design-system'
+import { useBackendQuery } from '../backend/provider'
 import { MarketRow } from '../features/markets/market-row'
 import { useMarketData } from '../features/markets/use-market-data'
 import { SectionHeader } from '../features/shared/section-header'
@@ -39,6 +40,16 @@ export function BalanceScreen() {
   const { openInstrument } = useAppNavigation()
   const [query, setQuery] = useState('')
   const { catalogue: markets } = useMarketData()
+  const accountId = useSession((state) => state.accountId)
+  const period = useSession((state) => state.marketPeriod)
+  // Real closes over the chosen period; rows keep the snapshot until they land.
+  const sparks = useBackendQuery(
+    `sparks:${accountId ?? 'none'}:${period}:${markets.status}`,
+    (backend) => markets.status === 'ready'
+      ? backend.markets.sparklines(markets.data.map((item) => item.id), period)
+      : Promise.resolve(new Map<string, readonly number[]>()),
+  )
+  const sparkById = sparks.status === 'ready' ? sparks.data : undefined
 
   const needle = query.trim().toLowerCase()
   const catalogue = markets.status === 'ready' ? markets.data : []
@@ -49,22 +60,28 @@ export function BalanceScreen() {
       )
     : catalogue
 
-  const renderItem = ({ item }: { item: Instrument }) => (
-    <MarketRow
-      id={item.id}
-      symbol={item.symbol}
-      name={item.name}
-      price={item.price}
-      precision={item.precision}
-      changePercent={item.changePercent}
-      iconKind={item.icon}
-      iconLabel={item.iconLabel}
-      iconTint={item.iconTint}
-      spark={item.spark}
-      sparkTone={item.sparkTone}
-      onPress={openInstrument}
-    />
-  )
+  const renderItem = ({ item }: { item: Instrument }) => {
+    const spark = sparkById?.get(item.id)
+    // "Today" measures from the day's open; longer periods from their first close.
+    const changeBase = period === 'Today' || !spark ? item.dayOpen : spark[0]
+    return (
+      <MarketRow
+        id={item.id}
+        symbol={item.symbol}
+        name={item.name}
+        price={item.price}
+        precision={item.precision}
+        changePercent={item.changePercent}
+        changeBase={changeBase}
+        iconKind={item.icon}
+        iconLabel={item.iconLabel}
+        iconTint={item.iconTint}
+        spark={spark ?? item.spark}
+        sparkTone={spark ? undefined : item.sparkTone}
+        onPress={openInstrument}
+      />
+    )
+  }
 
   return (
     <Screen edges={[]}>
@@ -72,6 +89,7 @@ export function BalanceScreen() {
         data={rows}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        extraData={sparkById}
         ListHeaderComponent={<BalanceHeader query={query} onChangeQuery={setQuery} />}
         ItemSeparatorComponent={Separator}
         ListEmptyComponent={

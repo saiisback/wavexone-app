@@ -30,18 +30,18 @@ import {
 import { useAppSession } from '../backend/session-provider'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { QueryStateView } from '../features/shared/query-state'
+import { useOpenClientPortal } from '../features/shared/use-client-portal'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 import type { MoreStackParamList } from '../navigation/types'
 
 type Navigation = NativeStackNavigationProp<MoreStackParamList, 'Account'>
-
-const CLIENT_PORTAL_URL = 'https://portal.wavexone.com'
 
 /** More tab: identity card, the two menu groups, and the support banner. */
 export function AccountScreen() {
   const { navigate } = useNavigation<Navigation>()
   const { openAccountSwitcher, openHomeScreen } = useAppNavigation()
   const showMenu = useActionMenu()
+  const openPortal = useOpenClientPortal()
   const { signOut } = useAppSession()
   const accountData = useAccountData()
 
@@ -79,25 +79,7 @@ export function AccountScreen() {
       ],
     })
 
-  const openClientPortal = () =>
-    showMenu({
-      title: 'Open the client portal?',
-      message: `This leaves the app and opens ${CLIENT_PORTAL_URL} in your browser.`,
-      options: [
-        {
-          label: 'Open in browser',
-          onSelect: () => {
-            Linking.openURL(CLIENT_PORTAL_URL).catch(() => {
-              showMenu({
-                title: 'Could not open the portal',
-                message: 'No browser is available to handle that link.',
-                options: [{ label: 'Got it' }],
-              })
-            })
-          },
-        },
-      ],
-    })
+  const openClientPortal = () => openPortal({ title: 'Open the client portal?' })
 
   const confirmLogout = () =>
     showMenu({
@@ -188,10 +170,11 @@ export function AccountScreen() {
               icon={<CodeIcon size={24} color={colors.text} />}
               label="API access"
               onPress={() =>
-                notConnected(
-                  'API access',
-                  'Key issuance runs through the portal endpoints, which are not connected yet.',
-                )
+                // No API-key route exists in either collection; the portal issues them.
+                openPortal({
+                  title: 'API access',
+                  reason: 'Your API secret and API link are issued in the client portal.',
+                })
               }
             />
             <ListRow

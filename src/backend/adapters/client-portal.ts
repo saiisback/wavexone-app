@@ -113,13 +113,57 @@ export class ClientPortalAdapter {
     assertPortalAcknowledged(response.json, 'submitDeposit')
   }
 
+  /**
+   * Virtual funds for a demo account. The route takes only an amount and
+   * credits the account the portal session currently has selected, so the
+   * caller must have checked that the target is that account.
+   */
+  async demoDeposit(material: SessionMaterial, request: { amount: string; idempotencyKey: string }) {
+    await this.establish(material)
+    const response = await this.gate.call('submitDemoDeposit', {
+      body: { deposit_amount: request.amount },
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertPortalAcknowledged(response.json, 'submitDemoDeposit')
+  }
+
+  /** `name` is resent unchanged; the route has no way to update one field alone. */
+  async saveProfile(
+    material: SessionMaterial,
+    request: { name?: string; mobile: string; idempotencyKey: string },
+  ) {
+    await this.establish(material)
+    const response = await this.gate.call('saveProfile', {
+      body: {
+        ...(request.name === undefined ? {} : { name: request.name }),
+        mobile: request.mobile,
+      },
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertPortalAcknowledged(response.json, 'saveProfile')
+  }
+
+  /** The collection sends both routes with an empty body. */
+  async openAccount(
+    material: SessionMaterial,
+    request: { kind: 'demo' | 'live'; idempotencyKey: string },
+  ) {
+    await this.establish(material)
+    const endpoint = request.kind === 'demo' ? 'createDemoAccount' : 'requestAccountCreation'
+    const response = await this.gate.call(endpoint, {
+      body: {},
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertPortalAcknowledged(response.json, endpoint)
+  }
+
   async sendWithdrawalOtp(material: SessionMaterial, request: WithdrawalOtpRequest) {
     await this.establish(material)
     const response = await this.gate.call('sendWithdrawOtp', {
       body: {
         sourceId: request.accountId,
         amount: request.amount,
-        withdrawAddress: request.withdrawAddress,
+        withdrawAddress: withdrawAddressFor(request.details),
       },
       idempotencyKey: request.idempotencyKey,
     })
@@ -133,7 +177,7 @@ export class ClientPortalAdapter {
         sourceId: request.accountId,
         amount: request.amount,
         method: request.method,
-        withdrawAddress: JSON.stringify(request.details ?? {}),
+        withdrawAddress: withdrawAddressFor(request.details),
         otp: request.otp ?? '',
       },
       idempotencyKey: request.idempotencyKey,
@@ -167,6 +211,15 @@ export class ClientPortalAdapter {
   reset(): void {
     this.established = false
   }
+}
+
+/**
+ * One encoding for both withdrawal routes. If the OTP and the submission
+ * described the destination differently, the OTP would be for an address the
+ * withdrawal never names.
+ */
+function withdrawAddressFor(details: Readonly<Record<string, string>> | undefined): string {
+  return JSON.stringify(details ?? {})
 }
 
 function validateProof(proof: { mimeType: string; size: number }): void {

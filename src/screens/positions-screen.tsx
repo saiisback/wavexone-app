@@ -18,11 +18,15 @@ import {
   useActionMenu,
 } from '../design-system'
 import { PositionCard } from '../features/positions/position-card'
-import { useBackend, useBackendQuery } from '../backend/provider'
+import { mutationFailureMessage } from '../backend/errors'
+import { useBackend, useBackendQuery, useInvalidateQueries } from '../backend/provider'
 import { formatLots, formatSignedMoney } from '../data/format'
-import type { Position } from '../data/types'
+import { markPosition } from '../data/live-quote'
+import type { Instrument, Position } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { useLiveQuote, useLiveQuotesVersion } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
+import { AFTER_TRADE } from '../features/shared/query-keys'
 import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
@@ -40,7 +44,8 @@ export function PositionsScreen() {
   const [tab, setTab] = useState<Tab>('Open')
   const showMenu = useActionMenu()
   const backend = useBackend()
-  const { openInstrument, openAccountSwitcher, openOrderTicket } = useAppNavigation()
+  const invalidate = useInvalidateQueries()
+  const { openInstrument, openAccountSwitcher, openModifyOrder } = useAppNavigation()
 
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
@@ -63,16 +68,20 @@ export function PositionsScreen() {
   const instrumentsById = new Map(catalogue.data.map((item) => [item.id, item]))
   const positionsById = new Map(positions.map((item) => [item.id, item]))
 
+  // A market the price feed does not carry still lists its positions.
+  const instrumentOf = (position: Position) =>
+    instrumentsById.get(position.instrumentId) ?? unlistedInstrument(position)
+
   const rows = positions.filter((item) => item.state === tab)
   const openCount = positions.filter((item) => item.state === 'Open').length
 
   /**
-   * Closing, cancelling and bulk actions all need a confirmation step and a
-   * staging environment before they can run — see the integration guide §6.8.
+   * Closing and cancelling need a confirmation step, and run only in a build
+   * whose phase allows trading — see the integration guide §6.8 and §8.
    */
   const confirmAction = (id: string) => {
     const position = positionsById.get(id)
-    const instrument = position ? instrumentsById.get(position.instrumentId) : undefined
+    const instrument = position ? instrumentOf(position) : undefined
     if (!position || !instrument) return
 
     if (tab === 'Closed') {
@@ -80,9 +89,22 @@ export function PositionsScreen() {
       return
     }
 
+    // Reference, "Order states": nothing can be done to an order until the
+    // fill or close the server is executing has finished.
+    if (position.executing || position.busy) {
+      showMenu({
+        title: position.executing ? 'Order executing' : 'Order closing',
+        message: position.executing
+          ? 'This market order has been accepted and is being filled. It moves to Open as soon as it does.'
+          : 'A close or change of this order is being executed. It updates as soon as it finishes.',
+        options: [{ label: 'Got it' }],
+      })
+      return
+    }
+
     showMenu({
       title: `${ACTION_LABEL[tab]} — ${instrument.symbol}`,
-      message: `${position.side} ${formatLots(position.lots)} · ${formatSignedMoney(position.pnl)}. Trading mutations are disabled in this build.`,
+      message: `${position.side} ${formatLots(position.lots)} · ${formatSignedMoney(position.pnl)}. Sent once and not automatically retried.`,
       options: [
         {
           label: ACTION_LABEL[tab],
@@ -92,9 +114,9 @@ export function PositionsScreen() {
             const mutation = tab === 'Pending'
               ? backend.orders.cancel(request)
               : backend.orders.close(request)
-            void mutation.catch(() => showMenu({
+            void mutation.then(() => invalidate(...AFTER_TRADE)).catch((error: unknown) => showMenu({
               title: 'Action not confirmed',
-              message: 'Check the position before trying again.',
+              message: mutationFailureMessage(error),
               options: [{ label: 'Got it' }],
             }))
           },
@@ -106,7 +128,7 @@ export function PositionsScreen() {
 
   const openRowMenu = (id: string) => {
     const position = positionsById.get(id)
-    const instrument = position ? instrumentsById.get(position.instrumentId) : undefined
+    const instrument = position ? instrumentOf(position) : undefined
     if (!position || !instrument) return
 
     showMenu({
@@ -114,10 +136,11 @@ export function PositionsScreen() {
       message: `${position.side} ${formatLots(position.lots)}`,
       options: [
         { label: 'View chart', onSelect: () => openInstrument(position.instrumentId) },
-        {
+        // A closed trade has nothing left to modify, nor does one in flight.
+        ...(tab === 'Closed' || position.executing || position.busy ? [] : [{
           label: 'Modify stop loss / take profit',
-          onSelect: () => openOrderTicket(position.instrumentId, position.side),
-        },
+          onSelect: () => openModifyOrder(id),
+        }]),
         {
           label: ACTION_LABEL[tab],
           destructive: tab !== 'Closed',
@@ -128,30 +151,26 @@ export function PositionsScreen() {
   }
 
   const renderItem = ({ item }: { item: Position }) => {
-    const instrument = instrumentsById.get(item.instrumentId)
-    if (!instrument) return null
+    const instrument = instrumentOf(item)
 
     return (
-      <PositionCard
-        id={item.id}
-        symbol={instrument.symbol}
-        description={instrument.description}
-        iconKind={instrument.icon}
-        iconLabel={instrument.iconLabel}
-        iconTint={instrument.iconTint}
-        side={item.side}
-        lots={item.lots}
-        entry={item.entry}
-        current={item.current}
-        precision={instrument.precision}
-        pnl={item.pnl}
-        actionLabel={ACTION_LABEL[tab]}
+      <LivePositionCard
+        position={item}
+        instrument={instrument}
+        streamed={instrumentsById.has(item.instrumentId)}
+        actionLabel={
+          item.executing ? 'Executing…' : item.busy ? 'Closing…' : ACTION_LABEL[tab]
+        }
         onAction={confirmAction}
         onMenu={openRowMenu}
         onPress={() => openInstrument(item.instrumentId)}
       />
     )
   }
+
+  const liveOpen = openPositions.status === 'ready'
+    ? openPositions.data.filter((item) => item.state === 'Open')
+    : null
 
   return (
     <Screen>
@@ -176,15 +195,14 @@ export function PositionsScreen() {
           <Text variant="body" color={colors.onInk} style={styles.summaryLabel}>
             Floating P&amp;L
           </Text>
-          <Text
-            variant="display"
-            color={account.floatingPnl < 0 ? colors.red : colors.greenOnInk}
-            style={styles.summaryValue}
-          >
-            {formatSignedMoney(account.floatingPnl)}
-          </Text>
+          <FloatingPnl
+            positions={liveOpen}
+            instrumentsById={instrumentsById}
+            fallback={account.floatingPnl}
+          />
           <Text variant="body" color={colors.onInkMuted}>
-            {openCount} open {openCount === 1 ? 'position' : 'positions'}
+            {liveOpen ? liveOpen.length : openCount} open{' '}
+            {(liveOpen ? liveOpen.length : openCount) === 1 ? 'position' : 'positions'}
           </Text>
         </View>
       </Gutter>
@@ -211,6 +229,107 @@ export function PositionsScreen() {
         )}
       />
     </Screen>
+  )
+}
+
+/**
+ * Stand-in for a position whose market is not in the catalogue: named after
+ * its ticker, showing the server's own figures (no quote ever marks it).
+ */
+function unlistedInstrument(position: Position): Instrument {
+  const ticker = position.instrumentId.replace(/^[^:]+:/, '').toUpperCase()
+  const decimals = String(position.entry).split('.')[1]?.length ?? 2
+  return {
+    id: position.instrumentId,
+    symbol: ticker,
+    name: ticker,
+    description: ticker,
+    icon: 'generic',
+    iconLabel: ticker.slice(0, 1),
+    price: position.current,
+    precision: Math.min(Math.max(decimals, 2), 5),
+    changePercent: 0,
+    bid: position.current,
+    ask: position.current,
+    spark: [],
+    category: 'Stocks',
+    favorite: false,
+    contractSize: 1,
+  }
+}
+
+/** One card, marked to its own instrument's stream. */
+function LivePositionCard({
+  position,
+  instrument,
+  streamed,
+  actionLabel,
+  onAction,
+  onMenu,
+  onPress,
+}: {
+  position: Position
+  instrument: Instrument
+  /** False for a stand-in instrument, whose lot size is unknown. */
+  streamed: boolean
+  actionLabel: string
+  onAction: (id: string) => void
+  onMenu: (id: string) => void
+  onPress: () => void
+}) {
+  const quote = useLiveQuote(streamed && position.state === 'Open' ? position.instrumentId : undefined)
+  const marked = markPosition(position, instrument, quote)
+  return (
+    <PositionCard
+      id={marked.id}
+      symbol={instrument.symbol}
+      description={instrument.description}
+      iconKind={instrument.icon}
+      iconLabel={instrument.iconLabel}
+      iconTint={instrument.iconTint}
+      side={marked.side}
+      lots={marked.lots}
+      entry={marked.entry}
+      current={marked.current}
+      precision={instrument.precision}
+      pnl={marked.pnl}
+      actionLabel={actionLabel}
+      onAction={onAction}
+      onMenu={onMenu}
+      onPress={onPress}
+    />
+  )
+}
+
+/**
+ * Sum of the open positions marked to live prices. Its own component, so a
+ * tick re-renders the headline rather than the whole list.
+ */
+function FloatingPnl({
+  positions,
+  instrumentsById,
+  fallback,
+}: {
+  positions: readonly Position[] | null
+  instrumentsById: ReadonlyMap<string, Instrument>
+  fallback: number
+}) {
+  const backend = useBackend()
+  useLiveQuotesVersion(positions?.map((item) => item.instrumentId) ?? [])
+  const total = positions
+    ? positions.reduce((sum, item) => {
+        const quote = backend.prices.latest(item.instrumentId)
+        return sum + markPosition(item, instrumentsById.get(item.instrumentId), quote).pnl
+      }, 0)
+    : fallback
+  return (
+    <Text
+      variant="display"
+      color={total < 0 ? colors.red : colors.greenOnInk}
+      style={styles.summaryValue}
+    >
+      {formatSignedMoney(total)}
+    </Text>
   )
 }
 

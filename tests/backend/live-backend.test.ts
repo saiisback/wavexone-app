@@ -1,4 +1,5 @@
 import { createLiveBackend } from '../../src/backend/live-backend'
+import { FakeSocket } from './fixtures/fake-socket'
 import { BackendError } from '../../src/backend/errors'
 import type { BackendConfig } from '../../src/backend/gate'
 import {
@@ -390,45 +391,111 @@ describe('accounts', () => {
 })
 
 describe('markets', () => {
-  it('joins catalogue, metadata, and daily snapshots with normalized ids', async () => {
+  const sockets = globalThis as { WebSocket: unknown }
+  let original: unknown
+  beforeEach(() => {
+    original = sockets.WebSocket
+    sockets.WebSocket = FakeSocket
+    FakeSocket.instances = []
+  })
+  afterEach(() => {
+    sockets.WebSocket = original
+  })
+
+  /** Lets the REST reads settle until the feed sockets have been opened. */
+  async function feedSockets() {
+    for (let turn = 0; turn < 50 && FakeSocket.instances.length < 2; turn += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    const bars = FakeSocket.instances.find((socket) => socket.url.endsWith('/ohlcV2'))!
+    const ticks = FakeSocket.instances.find((socket) => socket.url.endsWith('/ticks'))!
+    bars.open()
+    ticks.open()
+    return { bars, ticks }
+  }
+
+  function answerDayBars(bars: FakeSocket, days: Record<string, { o: number; h: number; l: number; c: number }>) {
+    for (const request of bars.sent as { uid: string; symbol: string }[]) {
+      const day = days[request.symbol]
+      bars.receive(day
+        ? { action: 'ohlc_response', success: true, uid: request.uid, data: [{ t: '2026-10-02T00:00:00.000Z', v: 1, ...day }] }
+        : { action: 'ohlc_response', success: false, uid: request.uid, error: 'not entitled' })
+    }
+  }
+
+  it('joins catalogue and metadata with day bars and quotes from the feeds', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
     const marketFetch = scriptFetch(
       { body: JSON.stringify(marketCatalogueResponse) },
       { body: JSON.stringify(symbolMetadataResponse) },
-      { body: JSON.stringify(dailySnapshotResponse) },
     )
 
-    await expect(backend.markets.catalogue()).resolves.toEqual([
-      expect.objectContaining({ id: 'c:xauusd', symbol: 'XAU/USD', name: 'Gold', precision: 2, bid: 2400.1 }),
-      expect.objectContaining({ id: 'x:btcusd', symbol: 'BTC/USD', name: 'Bitcoin', precision: 2 }),
+    const pending = backend.markets.catalogue()
+    const { bars, ticks } = await feedSockets()
+    expect(ticks.sent).toEqual([{ action: 'subscribe', symbols: ['XAUUSD', 'BTCUSD'] }])
+    expect(bars.sent).toEqual([
+      expect.objectContaining({ action: 'ohlc', symbol: 'XAUUSD', timeframe: '1D', limit: 1 }),
+      expect.objectContaining({ action: 'ohlc', symbol: 'BTCUSD', timeframe: '1D', limit: 1 }),
     ])
+    answerDayBars(bars, {
+      XAUUSD: { o: 2390, h: 2410, l: 2380, c: 2400 },
+      BTCUSD: { o: 67500, h: 68500, l: 67000, c: 68000 },
+    })
+    ticks.receive({ status: 'subscribed', symbols: ['XAUUSD', 'BTCUSD'] })
+    ticks.receive({ XAUUSD: { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
 
-    const currentDayRequest = marketFetch.mock.calls[2][1]
-    expect(marketFetch.mock.calls[0][0]).toContain('collect=watch')
-    expect(currentDayRequest.body).toBeInstanceOf(FormData)
-    expect(Array.from((currentDayRequest.body as FormData).entries())).toEqual([
-      ['data', 'https://charts.example/consolidated/data?symbol=XAUUSD,BTCUSD'],
-      ['timeline', '1D'],
+    await expect(pending).resolves.toEqual([
+      expect.objectContaining({
+        id: 'c:xauusd',
+        symbol: 'XAU/USD',
+        name: 'Gold',
+        precision: 2,
+        bid: 2400.1,
+        ask: 2400.3,
+        price: 2400.2,
+        dayOpen: 2390,
+      }),
+      // No tick yet: priced from the day bar until the stream catches up.
+      expect.objectContaining({ id: 'x:btcusd', symbol: 'BTC/USD', bid: 68000, ask: 68000 }),
     ])
+    expect(marketFetch.mock.calls.map(([url]) => String(url))).not.toContainEqual(
+      expect.stringContaining('getCurrentDayData'),
+    )
   })
 
-  it('keeps instruments with available snapshots when one quote is missing', async () => {
+  it('leaves out a market the feeds do not carry and keeps the rest', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
     scriptFetch(
       { body: JSON.stringify(marketCatalogueResponse) },
       { body: JSON.stringify(symbolMetadataResponse) },
-      { body: JSON.stringify({ XAUUSD: dailySnapshotResponse.XAUUSD }) },
     )
-    await expect(backend.markets.catalogue()).resolves.toEqual([
-      expect.objectContaining({ id: 'c:xauusd' }),
-    ])
+    const pending = backend.markets.catalogue()
+    const { bars, ticks } = await feedSockets()
+    answerDayBars(bars, { XAUUSD: { o: 2390, h: 2410, l: 2380, c: 2400 } })
+    ticks.receive({ XAUUSD: { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
+    await expect(pending).resolves.toEqual([expect.objectContaining({ id: 'c:xauusd' })])
   })
 
-  it('parses stringified favorites and refuses the deprecated chart endpoint', async () => {
+  it('reports the price feed as unreachable rather than an empty market list', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify(marketCatalogueResponse) },
+      { body: JSON.stringify(symbolMetadataResponse) },
+    )
+    const pending = backend.markets.catalogue()
+    const { bars, ticks } = await feedSockets()
+    bars.drop()
+    ticks.drop()
+    await expect(pending).rejects.toMatchObject({ kind: 'network' })
+  })
+
+  it('parses stringified favorites and reads charts from the candle feed, not the old endpoint', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
@@ -437,9 +504,34 @@ describe('markets', () => {
     expect(favoritesFetch.mock.calls[0][0]).toContain('data=%5B%5D')
 
     const chartFetch = scriptFetch({ body: JSON.stringify(chartHistoryResponse) })
-    await expect(backend.markets.candles('xauusd', '1M')).rejects.toMatchObject({
-      kind: 'blocked',
-    })
+    const sockets = globalThis as { WebSocket: unknown }
+    const original = sockets.WebSocket
+    sockets.WebSocket = FakeSocket
+    try {
+      const pending = backend.markets.candles('c:xauusd', '1M')
+      const socket = FakeSocket.latest()
+      expect(socket.url).toBe('wss://cloud.wavexone.com/ws/ohlcV2')
+      socket.open()
+      const request = socket.sent[0] as { uid: string; symbol: string; timeframe: string }
+      expect(request).toMatchObject({ action: 'ohlc', symbol: 'XAUUSD', timeframe: '240' })
+      socket.receive({
+        action: 'ohlc_response',
+        success: true,
+        uid: request.uid,
+        data: [
+          { t: '2026-10-01T00:00:00.000Z', o: 2400, h: 2410, l: 2390, c: 2405, v: 1 },
+          { t: '2026-10-01T04:00:00.000Z', o: 2405, h: 2420, l: 2400, c: 2418, v: 1 },
+        ],
+      })
+      await expect(pending).resolves.toMatchObject({
+        points: [2405, 2418],
+        opens: [2400, 2405],
+        cursorIndex: 1,
+        cursorClose: 2418,
+      })
+    } finally {
+      sockets.WebSocket = original
+    }
     expect(chartFetch).not.toHaveBeenCalled()
   })
 })
@@ -471,7 +563,7 @@ describe('the methods that are not wired yet', () => {
 
   it.each([
     ['orders.place', () => backend().orders.place({ instrumentId: 'a', side: 'Buy' as const, lots: '1', idempotencyKey: 'k' })],
-    ['orders.modify', () => backend().orders.modify({ positionId: 'p', idempotencyKey: 'k' })],
+    ['orders.modify', () => backend().orders.modify({ positionId: 'p', state: 'Open', idempotencyKey: 'k' })],
     ['orders.cancel', () => backend().orders.cancel({ positionId: 'p', idempotencyKey: 'k' })],
     ['orders.close', () => backend().orders.close({ positionId: 'p', idempotencyKey: 'k' })],
   ])('%s stays blocked in a phase 1 build', async (_name, call) => {
@@ -484,5 +576,150 @@ describe('the methods that are not wired yet', () => {
     ['funds.transfer', () => backend().funds.transfer({ fromAccountId: 'a', toAccountId: 'b', amount: '100', idempotencyKey: 'k' })],
   ])('%s stays blocked or signed out in the default build', async (_name, call) => {
     await expect(call()).rejects.toThrow(/signed out|delivery phase 3/)
+  })
+})
+
+describe('acknowledged mutations', () => {
+  it('re-reads the portal bootstrap once a trade is acknowledged', async () => {
+    // Bootstrap carries equity and margin; serving the cached copy after a
+    // close would show the account as it was before the trade.
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend({ ...CONFIG, phase: 2 })
+    await backend.session.signIn('a@b.com', 'pw')
+
+    const fetchMock = scriptFetch(
+      { body: '0123456789abcdef0123456789abcdef_acct-1' },
+      { body: '{"status":"success"}' },
+    )
+    await backend.orders.close({ positionId: 'order-open', idempotencyKey: 'close-1' })
+    await backend.accounts.profile()
+
+    expect(fetchMock.mock.calls[1][0]).toContain('collect=squareoff')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('apiBootstrap'))).toBe(true)
+  })
+
+  it('keeps the cached bootstrap when the trade is refused', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend({ ...CONFIG, phase: 2 })
+    await backend.session.signIn('a@b.com', 'pw')
+
+    const fetchMock = scriptFetch(
+      { body: '0123456789abcdef0123456789abcdef_acct-1' },
+      { body: '{"status":"fail","message":"market closed"}' },
+    )
+    await expect(
+      backend.orders.close({ positionId: 'order-open', idempotencyKey: 'close-2' }),
+    ).rejects.toBeInstanceOf(BackendError)
+    await backend.accounts.profile()
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('apiBootstrap'))).toBe(false)
+  })
+})
+
+describe('phase 3 account and funding routes', () => {
+  /** Session token `acct-1` is a demo account; `acct-2` is a second, unselected one. */
+  const demoBootstrap = {
+    ...portalBootstrapResponse,
+    data: {
+      ...portalBootstrapResponse.data,
+      accounts: [
+        ...portalBootstrapResponse.data.accounts,
+        { ...portalBootstrapResponse.data.accounts[0], id: 'demo-1', token: 'acct-1', code: '20001', isDemo: true },
+        { ...portalBootstrapResponse.data.accounts[0], id: 'demo-2', token: 'acct-2', code: '20002', isDemo: true },
+      ],
+    },
+  }
+
+  /** Answers by route rather than by call order, so the test reads as intent. */
+  function routeFetch(bootstrap: unknown = demoBootstrap) {
+    const mock = jest.fn(async (url: string) => {
+      const body = url.includes('collect=check')
+        ? CHECK_OK.body
+        : url.includes('collect=bearer')
+          ? BEARER_OK.body
+          : url.includes('apiBootstrap')
+            ? JSON.stringify(bootstrap)
+            : '{"status":"success"}'
+      return { status: 200, text: async () => body }
+    })
+    globalThis.fetch = mock as unknown as typeof fetch
+    return mock
+  }
+
+  async function signedIn(bootstrap?: unknown) {
+    const fetchMock = routeFetch(bootstrap)
+    const backend = createLiveBackend({ ...CONFIG, phase: 3 })
+    await backend.session.signIn('a@b.com', 'pw')
+    fetchMock.mockClear()
+    return { backend, fetchMock }
+  }
+
+  const called = (fetchMock: jest.Mock, route: string) =>
+    fetchMock.mock.calls.filter(([url]) => String(url).includes(route))
+
+  it('credits the selected demo account through submitDemoDeposit, not a payment request', async () => {
+    const { backend, fetchMock } = await signedIn()
+    await backend.funds.deposit({ accountId: 'acct-1', amount: '500.00', method: 'Bank transfer', idempotencyKey: 'd-1' })
+
+    expect(called(fetchMock, 'submitDemoDeposit')).toHaveLength(1)
+    expect(called(fetchMock, 'apiSubmitDeposit')).toHaveLength(0)
+    const [, init] = called(fetchMock, 'submitDemoDeposit')[0]
+    expect(String(init.body)).toContain('deposit_amount=500.00')
+  })
+
+  it('refuses a demo deposit to an account the session is not on', async () => {
+    // The route takes no account id, so it would credit the wrong account.
+    const { backend, fetchMock } = await signedIn()
+    await expect(
+      backend.funds.deposit({ accountId: 'acct-2', amount: '500.00', method: 'Bank transfer', idempotencyKey: 'd-2' }),
+    ).rejects.toMatchObject({ kind: 'blocked' })
+    expect(called(fetchMock, 'submitDemoDeposit')).toHaveLength(0)
+  })
+
+  it('sends a live account deposit to apiSubmitDeposit', async () => {
+    const { backend, fetchMock } = await signedIn()
+    await backend.funds.deposit({ accountId: 'account-1', amount: '100.00', method: 'Bank transfer', idempotencyKey: 'd-3' })
+
+    expect(called(fetchMock, 'apiSubmitDeposit')).toHaveLength(1)
+    expect(called(fetchMock, 'submitDemoDeposit')).toHaveLength(0)
+  })
+
+  it('saves the phone and resends the server-held name unchanged', async () => {
+    const { backend, fetchMock } = await signedIn()
+    await backend.accounts.saveProfile({ phone: '+44 7700 900123', idempotencyKey: 'p-1' })
+
+    const [, init] = called(fetchMock, 'apiSaveProfile')[0]
+    expect(JSON.parse(String(init.body))).toEqual({ name: 'Example User', mobile: '+44 7700 900123' })
+  })
+
+  it('never sends the display fallback as a name when the server has none', async () => {
+    const { user, ...rest } = demoBootstrap.data
+    const { name: _name, ...userWithoutName } = user
+    const { backend, fetchMock } = await signedIn({ ...demoBootstrap, data: { ...rest, user: userWithoutName } })
+    await backend.accounts.saveProfile({ phone: '+44 7700 900123', idempotencyKey: 'p-2' })
+
+    const [, init] = called(fetchMock, 'apiSaveProfile')[0]
+    expect(JSON.parse(String(init.body))).toEqual({ mobile: '+44 7700 900123' })
+  })
+
+  it.each([
+    ['demo', 'apiCreateDemoAccount'],
+    ['live', 'apiRequestAccountCreation'],
+  ] as const)('opens a %s account through %s', async (kind, route) => {
+    const { backend, fetchMock } = await signedIn()
+    await backend.accounts.openAccount({ kind, idempotencyKey: `open-${kind}` })
+    expect(called(fetchMock, route)).toHaveLength(1)
+  })
+
+  it('keeps every phase 3 route closed in a phase 2 build', async () => {
+    routeFetch()
+    const backend = createLiveBackend({ ...CONFIG, phase: 2 })
+    await backend.session.signIn('a@b.com', 'pw')
+
+    await expect(backend.accounts.saveProfile({ phone: '+44 7700 900123', idempotencyKey: 'p-3' })).rejects.toThrow(/delivery phase 3/)
+    await expect(backend.accounts.openAccount({ kind: 'demo', idempotencyKey: 'o-3' })).rejects.toThrow(/delivery phase 3/)
+    await expect(
+      backend.funds.deposit({ accountId: 'acct-1', amount: '1.00', method: 'x', idempotencyKey: 'd-4' }),
+    ).rejects.toThrow(/delivery phase 3/)
   })
 })

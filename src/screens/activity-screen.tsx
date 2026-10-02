@@ -19,9 +19,10 @@ import {
 import { ActivityRow } from '../features/activity/activity-row'
 import { ScreenHeader } from '../features/shared/screen-header'
 import { useBackendQuery } from '../backend/provider'
-import { formatSignedMoney } from '../data/format'
+import { activityGroup, inPeriod } from '../data/activity-dates'
+import { formatLots, formatSignedMoney } from '../data/format'
 import { type MarketPeriod } from '../data/store'
-import type { ActivityEntry } from '../data/types'
+import type { ActivityEntry, Position } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
@@ -50,6 +51,10 @@ export function ActivityScreen() {
   const trades = useBackendQuery(`trade-history:${accountId ?? 'none'}`, (backend) =>
     accountId ? backend.orders.history(accountId) : Promise.resolve([]),
   )
+  // Same key as the Positions tab, so the Orders filter shares its read.
+  const orders = useBackendQuery(`positions:${accountId ?? 'none'}`, (backend) =>
+    accountId ? backend.orders.list(accountId) : Promise.resolve([]),
+  )
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
     const state = accountData.status !== 'ready' ? accountData : catalogue
@@ -57,23 +62,42 @@ export function ActivityScreen() {
   }
   const account = accountData.data.account
   const instrumentsById = new Map(catalogue.data.map((item) => [item.id, item]))
-  const tradeEntries: ActivityEntry[] = trades.status === 'ready'
-    ? trades.data.map((position) => ({
-        id: position.id,
-        kind: 'trade',
-        instrumentId: position.instrumentId,
-        title: instrumentsById.get(position.instrumentId)?.symbol ?? position.instrumentId,
-        subtitle: `${position.side} ${position.lots}`,
-        date: '',
-        time: '',
-        amount: position.pnl,
-        group: 'Earlier',
-        tab: 'Trades',
-      }))
-    : []
-  const activity = tab === 'Funds' ? (funds.status === 'ready' ? funds.data : []) : tradeEntries
+
+  const toEntry = (position: Position, entryTab: ActivityEntry['tab'], subtitle: string): ActivityEntry => ({
+    id: position.id,
+    kind: 'trade',
+    instrumentId: position.instrumentId,
+    title: instrumentsById.get(position.instrumentId)?.symbol ?? position.instrumentId,
+    subtitle,
+    date: position.time?.slice(0, 10) ?? '',
+    time: position.time?.slice(11, 16) ?? '',
+    // A pending order has not traded, so it has no result yet.
+    amount: entryTab === 'Orders' ? 0 : position.pnl,
+    group: position.time ? activityGroup(position.time) : 'Earlier',
+    tab: entryTab,
+  })
+
+  const source = tab === 'Funds' ? funds : tab === 'Orders' ? orders : trades
+  const activity: readonly ActivityEntry[] =
+    tab === 'Funds'
+      ? funds.status === 'ready' ? funds.data : []
+      : tab === 'Orders'
+        ? orders.status === 'ready'
+          ? orders.data
+              .filter((position) => position.state === 'Pending')
+              .map((position) =>
+                toEntry(position, 'Orders', `Pending • ${position.side} ${formatLots(position.lots)}`),
+              )
+          : []
+        : trades.status === 'ready'
+          ? trades.data.map((position) =>
+              toEntry(position, 'Trades', `${position.side} ${formatLots(position.lots)}`),
+            )
+          : []
   const activityById = new Map(activity.map((entry) => [entry.id, entry]))
-  const items = buildItems(activity.filter((entry) => entry.tab === tab))
+  const items = buildItems(
+    activity.filter((entry) => entry.tab === tab && inPeriod(entry.date, range)),
+  )
 
   const openFilter = () =>
     showMenu({
@@ -100,7 +124,18 @@ export function ActivityScreen() {
     showMenu({
       title: entry.title,
       message: `${entry.subtitle} · ${entry.date} ${entry.time}`,
-      options: [...options, { label: 'Download receipt' }],
+      options: [
+        ...options,
+        {
+          label: 'Download receipt',
+          onSelect: () =>
+            showMenu({
+              title: 'Receipts unavailable',
+              message: 'WaveXOne has not provided a receipt endpoint yet.',
+              options: [{ label: 'Got it' }],
+            }),
+        },
+      ],
     })
   }
 
@@ -210,24 +245,34 @@ export function ActivityScreen() {
         ItemSeparatorComponent={Separator}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
+        ListEmptyComponent={source.status !== 'ready' ? (
+          <QueryStateView state={source} render={() => null} />
+        ) : (
           <View style={styles.empty}>
             <Text variant="body" color={colors.textMuted}>
               No {tab.toLowerCase()} in this period.
             </Text>
           </View>
-        }
+        )}
       />
     </Screen>
   )
 }
+
+const GROUP_ORDER: readonly ActivityEntry['group'][] = ['Today', 'Yesterday', 'Earlier']
 
 /** Flattens the grouped history into header / entry rows for the virtualizer. */
 function buildItems(entries: readonly ActivityEntry[]): ListItem[] {
   const items: ListItem[] = []
   let currentGroup: string | undefined
 
-  for (const entry of entries) {
+  // Grouped in display order (stable within a group), so a header is never
+  // repeated when the server's order interleaves days.
+  const ordered = [...entries].sort(
+    (a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group),
+  )
+
+  for (const entry of ordered) {
     if (entry.group !== currentGroup) {
       currentGroup = entry.group
       items.push({ type: 'header', id: `header-${entry.group}`, title: entry.group })

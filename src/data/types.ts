@@ -36,6 +36,8 @@ export type Instrument = {
   favorite: boolean
   /** Units per lot, used for the margin preview. */
   contractSize: number
+  /** Today's open, so a live price can recompute `changePercent`. */
+  dayOpen?: number
 }
 
 export type InstrumentCategory = 'Metals' | 'Forex' | 'Crypto' | 'Energy' | 'Indices' | 'Stocks'
@@ -80,6 +82,17 @@ export type Position = {
   current: number
   pnl: number
   state: 'Open' | 'Pending' | 'Closed'
+  /** Absent when the order carries none. */
+  stopLoss?: number
+  takeProfit?: number
+  /** Pending orders: the price the order is waiting for. */
+  trigger?: number
+  /** Server timestamp, `YYYY-MM-DD HH:MM:SS`, zone unstated. */
+  time?: string
+  /** A market order accepted but not yet filled — shown as "Executing…". */
+  executing?: boolean
+  /** A close or change of this order is in progress (`transit`). */
+  busy?: boolean
 }
 
 export type ActivityEntry = {
@@ -123,6 +136,10 @@ export type ChartSeries = {
   min: number
   max: number
   step: number
+  /** Per-point opens, so touching the chart can read any bar. */
+  opens?: readonly number[]
+  /** Digits on the price axis; whole numbers when absent. */
+  axisDecimals?: number
 }
 
 export type Timeframe = '1D' | '5D' | '1W' | '1M' | '3M' | '6M'

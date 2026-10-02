@@ -6,9 +6,11 @@ import {
 
 import { colors, fonts } from '../design-system'
 import { AccountSwitcherScreen } from '../screens/account-switcher-screen'
+import { EditPhoneScreen } from '../screens/edit-phone-screen'
 import { FundingScreen } from '../screens/funding-screen'
 import { InstrumentPickerScreen } from '../screens/instrument-picker-screen'
 import { InstrumentScreen } from '../screens/instrument-screen'
+import { ModifyOrderScreen } from '../screens/modify-order-screen'
 import { OrderTicketScreen } from '../screens/order-ticket-screen'
 import { TabNavigator } from './tab-navigator'
 import type { RootStackParamList } from './types'
@@ -19,7 +21,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
  * Native stack throughout. Every screen draws its own header, so the native
  * one is disabled rather than replaced with a JS `header` component.
  *
- * The four sheet routes use the platform's form-sheet presentation, so
+ * The sheet routes use the platform's form-sheet presentation, so
  * swipe-to-dismiss, the dimmed backdrop and keyboard avoidance are native
  * rather than reimplemented in JS.
  */
@@ -34,6 +36,8 @@ export function RootNavigator() {
         <Stack.Group screenOptions={SHEET_OPTIONS}>
           <Stack.Screen name="Funding" component={FundingScreen} />
           <Stack.Screen name="OrderTicket" component={OrderTicketScreen} />
+          <Stack.Screen name="ModifyOrder" component={ModifyOrderScreen} />
+          <Stack.Screen name="EditPhone" component={EditPhoneScreen} />
           <Stack.Screen name="AccountSwitcher" component={AccountSwitcherScreen} />
           <Stack.Screen name="InstrumentPicker" component={InstrumentPickerScreen} />
         </Stack.Group>

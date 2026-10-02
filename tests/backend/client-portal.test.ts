@@ -148,3 +148,42 @@ describe('reset', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('withdrawal', () => {
+  function phase3Adapter() {
+    return new ClientPortalAdapter(new Gate({ ...CONFIG, phase: 3 }))
+  }
+
+  function bodyOf(call: unknown[]) {
+    return JSON.parse((call[1] as { body: string }).body) as Record<string, string>
+  }
+
+  it('describes the destination identically for the OTP and the submission', async () => {
+    // An OTP issued for one address and a withdrawal naming another is the
+    // failure this pins.
+    const portal = phase3Adapter()
+    const details = { account: '12345678' }
+
+    await portal.sendWithdrawalOtp(MATERIAL, {
+      accountId: 'account-1',
+      amount: '50.00',
+      details,
+      idempotencyKey: 'otp-1',
+    })
+    await portal.withdraw(MATERIAL, {
+      accountId: 'account-1',
+      amount: '50.00',
+      method: 'Bank transfer',
+      details,
+      otp: '123456',
+      idempotencyKey: 'withdraw-1',
+    })
+
+    const otpCall = fetchMock.mock.calls.find(([url]) => String(url).includes('apiSendWithdrawOtp'))
+    const submitCall = fetchMock.mock.calls.find(([url]) => String(url).includes('apiSubmitWithdraw'))
+    expect(otpCall).toBeDefined()
+    expect(submitCall).toBeDefined()
+    expect(bodyOf(otpCall!).withdrawAddress).toBe(JSON.stringify(details))
+    expect(bodyOf(submitCall!).withdrawAddress).toBe(bodyOf(otpCall!).withdrawAddress)
+  })
+})

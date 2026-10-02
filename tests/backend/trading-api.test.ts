@@ -234,42 +234,30 @@ describe('isSessionValid', () => {
 })
 
 describe('headers', () => {
-  it('sends both credentials required by guide §3.1 step 5', () => {
-    expect(adapter().headers(MATERIAL)).toEqual({ Secretkey: 'sk-1', Bearer: 'bearer-1' })
+  it('sends the documented Authorization header plus the legacy credentials', () => {
+    expect(adapter().headers(MATERIAL)).toEqual({
+      Authorization: 'Bearer bearer-1',
+      Secretkey: 'sk-1',
+      Bearer: 'bearer-1',
+    })
   })
 })
 
 describe('marketData', () => {
-  it('batches unprefixed symbols for the documented current-day endpoint', async () => {
-    const entries = Array.from({ length: 21 }, (_, index) => ({
-      name: `Symbol ${index}`,
-      ticker: `C:SYM${String(index).padStart(2, '0')}`,
-      market: 'forex',
-    }))
-    const spreads = Object.fromEntries(
-      entries.map(({ ticker }) => [ticker, { spread: 1, decimal: 2, lot: 1 }]),
-    )
-    const snapshot = (items: typeof entries) => Object.fromEntries(
-      items.map(({ ticker }) => [
-        ticker.replace(/^[^:]+:/, ''),
-        { broker: 1, feed: 2, open: 1, high: 2, low: 1, volume: 1 },
-      ]),
-    )
+  it('reads the catalogue and symbol settings, and not the dead current-day route', async () => {
     const fetchMock = scriptFetch(
-      { body: JSON.stringify({ fx: entries, crypto: [] }) },
-      { body: JSON.stringify(spreads) },
-      { body: JSON.stringify(snapshot(entries.slice(0, 20))) },
-      { body: JSON.stringify(snapshot(entries.slice(20))) },
+      { body: JSON.stringify({ fx: [{ name: 'Gold', ticker: 'C:XAUUSD', market: 'metals' }], crypto: [] }) },
+      { body: JSON.stringify({ XAUUSD: { spread: 1, decimal: 2, lot: 100 } }) },
     )
 
     const result = await adapter().marketData(MATERIAL)
 
-    expect(result.snapshots.size).toBe(21)
-    const dayCalls = fetchMock.mock.calls.filter(([url]) =>
-      String(url).includes('collect=getCurrentDayData'),
+    expect(result.catalogue).toHaveLength(1)
+    expect(result.metadata.get('XAUUSD')).toEqual({ spread: 1, precision: 2, lot: 100 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContainEqual(
+      expect.stringContaining('getCurrentDayData'),
     )
-    expect(dayCalls).toHaveLength(2)
-    expect(Array.from((dayCalls[0][1].body as FormData).entries())[0][1]).not.toContain('C%3A')
   })
 })
 
@@ -363,5 +351,96 @@ describe('order fingerprint', () => {
     await subject.issueOrderFingerprint(MATERIAL, '8')
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('order mutations', () => {
+  function phase2Adapter() {
+    return new TradingApiAdapter(new Gate({ ...CONFIG, phase: 2 }))
+  }
+
+  const FINGERPRINT = '0123456789abcdef0123456789abcdef_acct-1'
+  const ACK = { body: '{"status":"success"}' }
+
+  it('edits an open position through mobileapp_modifyorder', async () => {
+    const fetchMock = scriptFetch(ACK)
+    await phase2Adapter().modifyOrder(
+      MATERIAL,
+      { positionId: '8612', state: 'Open', stopLoss: '2300.00', takeProfit: '2500.00', idempotencyKey: 'm-1' },
+      FINGERPRINT,
+    )
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('collect=mobileapp_modifyorder')
+    expect(url).toContain('orderID=8612')
+    expect(url).toContain('stoploss=2300.00')
+    expect(url).toContain('target=2500.00')
+    expect(url).not.toContain('trigger=')
+  })
+
+  it('edits a pending order through its own route and resends the trigger', async () => {
+    // The open-position route would leave a pending order untouched while
+    // the API still answers success.
+    const fetchMock = scriptFetch(ACK)
+    await phase2Adapter().modifyOrder(
+      MATERIAL,
+      { positionId: '8613', state: 'Pending', trigger: '1.08500', stopLoss: '1.09000', idempotencyKey: 'm-2' },
+      FINGERPRINT,
+    )
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('collect=mobileapp_modifypendingorder')
+    expect(url).toContain('trigger=1.08500')
+    expect(url).toContain('stoploss=1.09000')
+  })
+
+  it('rejects a modify the server answers with a failure envelope', async () => {
+    scriptFetch({ body: '{"status":"fail","message":"invalid stop loss"}' })
+    await expect(
+      phase2Adapter().modifyOrder(
+        MATERIAL,
+        { positionId: '8612', state: 'Open', stopLoss: '1', idempotencyKey: 'm-3' },
+        FINGERPRINT,
+      ),
+    ).rejects.toBeInstanceOf(BackendError)
+  })
+
+  it('stays unreachable from a phase 1 build', async () => {
+    await expect(
+      adapter().modifyOrder(
+        MATERIAL,
+        { positionId: '8612', state: 'Open', idempotencyKey: 'm-4' },
+        FINGERPRINT,
+      ),
+    ).rejects.toThrow(/delivery phase 2/)
+  })
+
+  it('places a limit order with its price as the trigger', async () => {
+    const fetchMock = scriptFetch(ACK)
+    await phase2Adapter().placeOrder(
+      MATERIAL,
+      { instrumentId: 'eurusd', side: 'Sell', lots: '1.00', limitPrice: '1.08500', idempotencyKey: 'p-1' },
+      FINGERPRINT,
+    )
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('type=limit')
+    expect(url).toContain('bs=sell')
+    expect(url).toContain('trigger=1.08500')
+  })
+
+  it('places a market order with an empty trigger', async () => {
+    const fetchMock = scriptFetch(ACK)
+    await phase2Adapter().placeOrder(
+      MATERIAL,
+      { instrumentId: 'eurusd', side: 'Buy', lots: '0.50', idempotencyKey: 'p-2' },
+      FINGERPRINT,
+    )
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('type=market')
+    // API reference §2.4: the order button flag is `clicked=yes`.
+    expect(url).toContain('clicked=yes')
+    expect(url).toMatch(/trigger=(&|$)/)
   })
 })
