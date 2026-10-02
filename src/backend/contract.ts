@@ -53,12 +53,23 @@ export type PlaceOrderRequest = {
   idempotencyKey: string
 }
 
+/**
+ * Open positions and pending orders are edited through different routes, and
+ * the pending one wants the order's trigger price sent back with the SL/TP.
+ */
 export type ModifyOrderRequest = {
   positionId: string
   stopLoss?: string
   takeProfit?: string
   idempotencyKey: string
-}
+} & (
+  | { state: 'Open' }
+  | {
+      state: 'Pending'
+      /** Decimal string. The order's current trigger; this edit does not move it. */
+      trigger: string
+    }
+)
 
 export type CloseOrderRequest = {
   positionId: string
@@ -92,7 +103,21 @@ export type FundingRequest = {
 export type WithdrawalOtpRequest = {
   accountId: string
   amount: string
-  withdrawAddress: string
+  /**
+   * The destination, keyed by `FundingConfiguration.withdrawalFields[].name`.
+   * Encoded exactly as `requestWithdrawal` encodes it, so the OTP is issued
+   * for the destination the withdrawal is then submitted to.
+   */
+  details: Readonly<Record<string, string>>
+  idempotencyKey: string
+}
+
+/** `apiSaveProfile` accepts a name and a mobile number; only the number is editable here. */
+export type SaveProfileRequest = { phone: string; idempotencyKey: string }
+
+export type OpenAccountRequest = {
+  /** `demo` opens one immediately; `live` asks the broker to open one. */
+  kind: 'demo' | 'live'
   idempotencyKey: string
 }
 
@@ -118,6 +143,8 @@ export interface WaveXBackend {
     list(): Promise<readonly Account[]>
     switchAccount(request: SwitchAccountRequest): Promise<void>
     profile(): Promise<Profile>
+    saveProfile(request: SaveProfileRequest): Promise<void>
+    openAccount(request: OpenAccountRequest): Promise<void>
   }
 
   markets: {
@@ -141,6 +168,7 @@ export interface WaveXBackend {
   funds: {
     configuration(accountId: string): Promise<FundingConfiguration>
     sendWithdrawalOtp(request: WithdrawalOtpRequest): Promise<void>
+    /** On a demo account this adds virtual funds instead of a payment request. */
     deposit(request: FundingRequest): Promise<void>
     requestWithdrawal(request: FundingRequest): Promise<void>
     transfer(request: TransferRequest): Promise<void>

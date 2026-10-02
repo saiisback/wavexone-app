@@ -1,6 +1,7 @@
 import { ClientPortalAdapter } from './adapters/client-portal'
 import { TradingApiAdapter } from './adapters/trading-api'
 import type { WaveXBackend } from './contract'
+import { activityGroup } from '../data/activity-dates'
 import type { Account, ActivityEntry, Instrument, Position, Profile } from '../data/types'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
@@ -160,6 +161,10 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
           ? 0
           : (current - order.entry) * order.lots * instrument.contractSize * direction,
         state: order.state,
+        ...(order.stopLoss === undefined ? {} : { stopLoss: order.stopLoss }),
+        ...(order.takeProfit === undefined ? {} : { takeProfit: order.takeProfit }),
+        ...(order.trigger === undefined ? {} : { trigger: order.trigger }),
+        ...(order.time === undefined ? {} : { time: order.time }),
       }
     })
   }
@@ -178,17 +183,20 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
 
   async function readFundingHistory(): Promise<ActivityEntry[]> {
     const data = await readBootstrap()
-    return data.transactions.map((transaction) => ({
-      id: transaction.id,
-      kind: transaction.type.toLowerCase().includes('withdraw') ? 'withdrawal' : 'deposit',
-      title: transaction.type,
-      subtitle: transaction.status ?? transaction.method ?? '',
-      date: transaction.date ?? transaction.createdAt.slice(0, 10),
-      time: transaction.time ?? transaction.createdAt.slice(11, 16),
-      amount: transaction.amount,
-      group: 'Earlier',
-      tab: 'Funds',
-    }))
+    return data.transactions.map((transaction) => {
+      const date = transaction.date ?? transaction.createdAt.slice(0, 10)
+      return {
+        id: transaction.id,
+        kind: transaction.type.toLowerCase().includes('withdraw') ? 'withdrawal' : 'deposit',
+        title: transaction.type,
+        subtitle: transaction.status ?? transaction.method ?? '',
+        date,
+        time: transaction.time ?? transaction.createdAt.slice(11, 16),
+        amount: transaction.amount,
+        group: activityGroup(date),
+        tab: 'Funds',
+      }
+    })
   }
 
   async function orderFingerprint(): Promise<string> {
@@ -311,6 +319,22 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         await store.write(switched)
       },
       profile: readProfile,
+      async saveProfile(request) {
+        // The route also takes `name`. Resend the server's own value, never
+        // the "WaveXOne client" display fallback, so saving a phone number
+        // cannot rename the user.
+        const holder = (await readBootstrap()).user.holder
+        await portal.saveProfile(requireSession(), {
+          ...(holder === undefined ? {} : { name: holder }),
+          mobile: request.phone,
+          idempotencyKey: request.idempotencyKey,
+        })
+        invalidateAccountData()
+      },
+      async openAccount(request) {
+        await portal.openAccount(requireSession(), request)
+        invalidateAccountData()
+      },
     },
 
     markets: {
@@ -341,21 +365,27 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       history: readHistory,
       // These four are phase 2 regardless of any capture: guide §7.3 requires
       // written authorization before a trading mutation runs anywhere.
+      // Each one drops the cached bootstrap once acknowledged, so the margin
+      // and equity read next reflect the trade rather than the moment before.
       async place(request) {
         const session = requireSession()
         await trading.placeOrder(session, request, await orderFingerprint())
+        invalidateAccountData()
       },
       async modify(request) {
         const session = requireSession()
         await trading.modifyOrder(session, request, await orderFingerprint())
+        invalidateAccountData()
       },
       async cancel(request) {
         const session = requireSession()
         await trading.cancelOrder(session, request, await orderFingerprint())
+        invalidateAccountData()
       },
       async close(request) {
         const session = requireSession()
         await trading.closeOrder(session, request, await orderFingerprint())
+        invalidateAccountData()
       },
     },
 
@@ -377,14 +407,38 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       async sendWithdrawalOtp(request) {
         return portal.sendWithdrawalOtp(requireSession(), request)
       },
+      // Bootstrap carries balances and the transaction list, so it is stale
+      // the moment one of these is acknowledged.
       async deposit(request) {
-        return portal.deposit(requireSession(), request)
+        const session = requireSession()
+        const target = (await readBootstrap()).accounts.find((account) =>
+          account.identifiers.includes(request.accountId),
+        )
+        if (target?.isDemo) {
+          // `submitDemoDeposit` credits whichever account the portal session
+          // has selected and takes no account parameter, so it is only safe
+          // for the account the session is on.
+          if (request.accountId !== session.accountToken) {
+            throw new BackendError('blocked', 'Switch to this demo account before adding funds to it.', {
+              endpoint: 'submitDemoDeposit',
+            })
+          }
+          await portal.demoDeposit(session, {
+            amount: request.amount,
+            idempotencyKey: request.idempotencyKey,
+          })
+        } else {
+          await portal.deposit(session, request)
+        }
+        invalidateAccountData()
       },
       async requestWithdrawal(request) {
-        return portal.withdraw(requireSession(), request)
+        await portal.withdraw(requireSession(), request)
+        invalidateAccountData()
       },
       async transfer(request) {
-        return portal.transfer(requireSession(), request)
+        await portal.transfer(requireSession(), request)
+        invalidateAccountData()
       },
       history: readFundingHistory,
     },

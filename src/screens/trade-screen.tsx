@@ -19,6 +19,7 @@ import {
   Text,
   colors,
   radius,
+  useActionMenu,
 } from '../design-system'
 import { directionOf, formatLots, formatMoney, formatPercent, formatPrice } from '../data/format'
 import { useTradeDraft, type OrderType } from '../data/trade-draft'
@@ -37,6 +38,7 @@ const LOT_STEP = 0.01
 export function TradeScreen() {
   const { openAccountSwitcher, openInstrumentPicker, openOrderTicket, openInstrument } =
     useAppNavigation()
+  const showMenu = useActionMenu()
 
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
@@ -64,6 +66,18 @@ export function TradeScreen() {
   }
   const margin = (instrument.price * instrument.contractSize * lots) / account.leverage
   const spread = instrument.ask - instrument.bid
+
+  // The API's `type=stop` is a two-legged HFT order, not a stop entry, so
+  // there is nothing honest to send for Stop yet.
+  const openTicket = (side: 'Buy' | 'Sell') =>
+    orderType === 'Stop'
+      ? showMenu({
+          title: 'Stop orders unavailable',
+          message:
+            'The trading API has no confirmed single stop-entry order yet. Use Market or Limit for now.',
+          options: [{ label: 'Got it' }],
+        })
+      : openOrderTicket(instrument.id, side, { lots, orderType })
 
   return (
     <Screen>
@@ -176,7 +190,7 @@ export function TradeScreen() {
         <Button
           tone="ink"
           style={styles.action}
-          onPress={() => openOrderTicket(instrument.id, 'Sell')}
+          onPress={() => openTicket('Sell')}
         >
           <ButtonText tone="ink">Sell</ButtonText>
           <ButtonSubText tone="ink">
@@ -186,7 +200,7 @@ export function TradeScreen() {
         <Button
           tone="gold"
           style={styles.action}
-          onPress={() => openOrderTicket(instrument.id, 'Buy')}
+          onPress={() => openTicket('Buy')}
         >
           <ButtonText tone="gold">Buy</ButtonText>
           <ButtonSubText tone="gold">

@@ -17,11 +17,13 @@ import {
   colors,
   useActionMenu,
 } from '../design-system'
-import { useBackend, useBackendQuery } from '../backend/provider'
+import { mutationFailureMessage } from '../backend/errors'
+import { useBackend, useBackendQuery, useInvalidateQueries } from '../backend/provider'
 import { formatMoney } from '../data/format'
 import { useSession } from '../data/store'
 import type { FundingMode } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AFTER_FUNDING } from '../features/shared/query-keys'
 import { QueryStateView } from '../features/shared/query-state'
 import type { RootStackParamList } from '../navigation/types'
 
@@ -50,9 +52,8 @@ const COPY: Record<FundingMode, { title: string; subtitle: string; cta: string }
  * inputs with different copy, mirroring `apiSubmitDeposit`,
  * `apiSubmitWithdraw` and `apiTransfer`.
  *
- * Nothing is submitted. The guide requires a confirmation step and a staging
- * environment before any funding mutation is wired up, so the primary action
- * explains where the flow stops.
+ * Every submission goes through a confirmation step, and runs only in a build
+ * whose phase allows funding (guide §8). A refusal is explained in a menu.
  */
 export function FundingScreen() {
   const { params } = useRoute<FundingRoute>()
@@ -73,6 +74,9 @@ export function FundingScreen() {
   const [method, setMethod] = useState('')
   const [destinationId, setDestinationId] = useState('')
   const [otp, setOtp] = useState('')
+  /** Withdrawal destination, keyed by the configured field's `name`. */
+  const [details, setDetails] = useState<Record<string, string>>({})
+  const invalidate = useInvalidateQueries()
 
   if (!account || accountData.status !== 'ready' || configuration.status !== 'ready') {
     const state = accountData.status !== 'ready' ? accountData : configuration
@@ -99,7 +103,12 @@ export function FundingScreen() {
   const parsed = Number(amount.replace(/[^0-9.]/g, ''))
   const value = Number.isFinite(parsed) ? parsed : 0
   const exceedsBalance = mode !== 'deposit' && value > configuration.data.availableFund
-  const canSubmit = value > 0 && !exceedsBalance
+  const withdrawalFields = mode === 'withdraw' ? configuration.data.withdrawalFields : []
+  const destinationDetails = Object.fromEntries(
+    withdrawalFields.map((field) => [field.name, (details[field.name] ?? '').trim()]),
+  )
+  const destinationComplete = withdrawalFields.every((field) => destinationDetails[field.name] !== '')
+  const canSubmit = value > 0 && !exceedsBalance && destinationComplete
 
   const destination = accounts.find((item) => item.id === selectedDestinationId) ?? account
 
@@ -137,15 +146,18 @@ export function FundingScreen() {
             : mode === 'transfer'
               ? backend.funds.transfer({ fromAccountId: account.id, toAccountId: selectedDestinationId, amount: amountValue, idempotencyKey })
               : otp
-                ? backend.funds.requestWithdrawal({ accountId: account.id, amount: amountValue, method: selectedMethod, otp, idempotencyKey })
-                : backend.funds.sendWithdrawalOtp({ accountId: account.id, amount: amountValue, withdrawAddress: selectedMethod, idempotencyKey })
+                ? backend.funds.requestWithdrawal({ accountId: account.id, amount: amountValue, method: selectedMethod, details: destinationDetails, otp, idempotencyKey })
+                : backend.funds.sendWithdrawalOtp({ accountId: account.id, amount: amountValue, details: destinationDetails, idempotencyKey })
           void action.then(() => {
             if (mode === 'withdraw' && !otp) {
               showMenu({ title: 'OTP sent', message: 'Enter the OTP, then submit again.', options: [{ label: 'Got it' }] })
-            } else goBack()
-          }).catch(() => showMenu({
-            title: 'Request not submitted',
-            message: 'This build may not be authorized for money-moving actions, or the portal did not confirm the request.',
+            } else {
+              invalidate(...AFTER_FUNDING)
+              goBack()
+            }
+          }).catch((error: unknown) => showMenu({
+            title: 'Request not confirmed',
+            message: mutationFailureMessage(error),
             options: [{ label: 'Got it' }],
           }))
         },
@@ -224,6 +236,17 @@ export function FundingScreen() {
               )}`
         }
       />
+
+      {withdrawalFields.map((field) => (
+        <Field
+          key={field.id}
+          label={field.label}
+          value={details[field.name] ?? ''}
+          onChangeText={(text) => setDetails((previous) => ({ ...previous, [field.name]: text }))}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      ))}
 
       {mode === 'withdraw' ? (
         <Field

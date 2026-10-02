@@ -21,13 +21,16 @@ import { formatLots, formatMoney, formatPrice } from '../data/format'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
-import { useBackend } from '../backend/provider'
+import { mutationFailureMessage } from '../backend/errors'
+import { useBackend, useInvalidateQueries } from '../backend/provider'
+import { AFTER_TRADE } from '../features/shared/query-keys'
 import type { RootStackParamList } from '../navigation/types'
 
 type OrderRoute = RouteProp<RootStackParamList, 'OrderTicket'>
 
 const LOT_STEP = 0.01
 const MIN_LOTS = 0.01
+const DECIMAL = /^\d+(\.\d+)?$/
 
 /**
  * Order confirmation. The guide requires a confirmation step in front of
@@ -40,11 +43,15 @@ export function OrderTicketScreen() {
   const showMenu = useActionMenu()
   const backend = useBackend()
 
+  const invalidate = useInvalidateQueries()
+
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
   const side = params.side
+  const isLimit = params.orderType === 'Limit'
 
-  const [lots, setLots] = useState(0.5)
+  const [lots, setLots] = useState(params.lots ?? 0.5)
+  const [limitPrice, setLimitPrice] = useState('')
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
 
@@ -63,9 +70,15 @@ export function OrderTicketScreen() {
     return <Sheet title={`${side} order`}><Text>Instrument unavailable.</Text></Sheet>
   }
 
-  const price = side === 'Buy' ? instrument.ask : instrument.bid
+  const marketPrice = side === 'Buy' ? instrument.ask : instrument.bid
+  const limitValid = DECIMAL.test(limitPrice.trim()) && Number(limitPrice) > 0
+  const price = isLimit && limitValid ? Number(limitPrice) : marketPrice
   const margin = (price * instrument.contractSize * lots) / account.leverage
   const exceedsMargin = margin > account.freeMargin
+  const protectionValid = [stopLoss, takeProfit].every(
+    (value) => value.trim() === '' || DECIMAL.test(value.trim()),
+  )
+  const canPlace = !exceedsMargin && protectionValid && (!isLimit || limitValid)
 
   const step = (direction: 1 | -1) =>
     setLots((previous) => Math.max(MIN_LOTS, round(previous + direction * LOT_STEP)))
@@ -73,7 +86,9 @@ export function OrderTicketScreen() {
   const place = () =>
     showMenu({
       title: `${side} ${formatLots(lots)} ${instrument.symbol}`,
-      message: `Confirm this ${side.toLowerCase()} order. It will be submitted once and is not automatically retried.`,
+      message: isLimit
+        ? `Confirm this ${side.toLowerCase()} limit order at ${limitPrice.trim()}. It will be submitted once and is not automatically retried.`
+        : `Confirm this ${side.toLowerCase()} order. It will be submitted once and is not automatically retried.`,
       options: [{
         label: `Confirm ${side}`,
         destructive: true,
@@ -82,12 +97,16 @@ export function OrderTicketScreen() {
             instrumentId: instrument.id,
             side,
             lots: lots.toFixed(2),
-            stopLoss: stopLoss || undefined,
-            takeProfit: takeProfit || undefined,
+            ...(isLimit ? { limitPrice: limitPrice.trim() } : {}),
+            stopLoss: stopLoss.trim() || undefined,
+            takeProfit: takeProfit.trim() || undefined,
             idempotencyKey: Crypto.randomUUID(),
-          }).then(goBack).catch(() => showMenu({
-            title: 'Order not submitted',
-            message: 'This build is not authorized for trading, or the server did not confirm the order.',
+          }).then(() => {
+            invalidate(...AFTER_TRADE)
+            goBack()
+          }).catch((error: unknown) => showMenu({
+            title: 'Order not confirmed',
+            message: mutationFailureMessage(error),
             options: [{ label: 'Got it' }],
           }))
         },
@@ -96,12 +115,14 @@ export function OrderTicketScreen() {
 
   return (
     <Sheet
-      title={`${side} ${instrument.symbol}`}
+      title={`${side}${isLimit ? ' limit' : ''} ${instrument.symbol}`}
       subtitle={instrument.description}
       footer={
-        <Button tone={side === 'Buy' ? 'gold' : 'ink'} disabled={exceedsMargin} onPress={place}>
+        <Button tone={side === 'Buy' ? 'gold' : 'ink'} disabled={!canPlace} onPress={place}>
           <ButtonText tone={side === 'Buy' ? 'gold' : 'ink'}>
-            {`${side} at ${formatPrice(price, instrument.precision)}`}
+            {isLimit
+              ? limitValid ? `${side} limit at ${limitPrice.trim()}` : `${side} limit`
+              : `${side} at ${formatPrice(price, instrument.precision)}`}
           </ButtonText>
         </Button>
       }
@@ -135,6 +156,19 @@ export function OrderTicketScreen() {
           <Stepper label="+" onPress={() => step(1)} />
         </View>
       </Card>
+
+      {isLimit ? (
+        <Field
+          label="Limit price"
+          value={limitPrice}
+          onChangeText={setLimitPrice}
+          placeholder={formatPrice(marketPrice, instrument.precision)}
+          keyboardType="decimal-pad"
+          inputMode="decimal"
+          invalid={limitPrice.trim() !== '' && !limitValid}
+          hint="The order waits on the account until this price is reached."
+        />
+      ) : null}
 
       <View style={styles.protection}>
         <View style={styles.protectionField}>

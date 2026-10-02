@@ -18,11 +18,13 @@ import {
   useActionMenu,
 } from '../design-system'
 import { PositionCard } from '../features/positions/position-card'
-import { useBackend, useBackendQuery } from '../backend/provider'
+import { mutationFailureMessage } from '../backend/errors'
+import { useBackend, useBackendQuery, useInvalidateQueries } from '../backend/provider'
 import { formatLots, formatSignedMoney } from '../data/format'
 import type { Position } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { useMarketData } from '../features/markets/use-market-data'
+import { AFTER_TRADE } from '../features/shared/query-keys'
 import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
@@ -40,7 +42,8 @@ export function PositionsScreen() {
   const [tab, setTab] = useState<Tab>('Open')
   const showMenu = useActionMenu()
   const backend = useBackend()
-  const { openInstrument, openAccountSwitcher, openOrderTicket } = useAppNavigation()
+  const invalidate = useInvalidateQueries()
+  const { openInstrument, openAccountSwitcher, openModifyOrder } = useAppNavigation()
 
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
@@ -67,8 +70,8 @@ export function PositionsScreen() {
   const openCount = positions.filter((item) => item.state === 'Open').length
 
   /**
-   * Closing, cancelling and bulk actions all need a confirmation step and a
-   * staging environment before they can run — see the integration guide §6.8.
+   * Closing and cancelling need a confirmation step, and run only in a build
+   * whose phase allows trading — see the integration guide §6.8 and §8.
    */
   const confirmAction = (id: string) => {
     const position = positionsById.get(id)
@@ -82,7 +85,7 @@ export function PositionsScreen() {
 
     showMenu({
       title: `${ACTION_LABEL[tab]} — ${instrument.symbol}`,
-      message: `${position.side} ${formatLots(position.lots)} · ${formatSignedMoney(position.pnl)}. Trading mutations are disabled in this build.`,
+      message: `${position.side} ${formatLots(position.lots)} · ${formatSignedMoney(position.pnl)}. Sent once and not automatically retried.`,
       options: [
         {
           label: ACTION_LABEL[tab],
@@ -92,9 +95,9 @@ export function PositionsScreen() {
             const mutation = tab === 'Pending'
               ? backend.orders.cancel(request)
               : backend.orders.close(request)
-            void mutation.catch(() => showMenu({
+            void mutation.then(() => invalidate(...AFTER_TRADE)).catch((error: unknown) => showMenu({
               title: 'Action not confirmed',
-              message: 'Check the position before trying again.',
+              message: mutationFailureMessage(error),
               options: [{ label: 'Got it' }],
             }))
           },
@@ -114,10 +117,11 @@ export function PositionsScreen() {
       message: `${position.side} ${formatLots(position.lots)}`,
       options: [
         { label: 'View chart', onSelect: () => openInstrument(position.instrumentId) },
-        {
+        // A closed trade has nothing left to modify.
+        ...(tab === 'Closed' ? [] : [{
           label: 'Modify stop loss / take profit',
-          onSelect: () => openOrderTicket(position.instrumentId, position.side),
-        },
+          onSelect: () => openModifyOrder(id),
+        }]),
         {
           label: ACTION_LABEL[tab],
           destructive: tab !== 'Closed',

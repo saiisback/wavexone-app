@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native'
 
 import type { FundingMode } from '../data/types'
-import type { HomeStackParamList, TabParamList } from './types'
+import type { HomeStackParamList, RootStackParamList, TabParamList } from './types'
 
 type LooseNavigation = {
   navigate: (name: string, params?: object) => void
@@ -27,8 +27,15 @@ export function useAppNavigation() {
 
     openFunding: (mode: FundingMode) => navigation.navigate('Funding', { mode }),
 
-    openOrderTicket: (instrumentId: string, side: 'Buy' | 'Sell') =>
-      navigation.navigate('OrderTicket', { instrumentId, side }),
+    openOrderTicket: (
+      instrumentId: string,
+      side: 'Buy' | 'Sell',
+      draft?: Pick<RootStackParamList['OrderTicket'], 'lots' | 'orderType'>,
+    ) => navigation.navigate('OrderTicket', { instrumentId, side, ...draft }),
+
+    openModifyOrder: (positionId: string) => navigation.navigate('ModifyOrder', { positionId }),
+
+    openEditPhone: () => navigation.navigate('EditPhone'),
 
     openAccountSwitcher: () => navigation.navigate('AccountSwitcher'),
 

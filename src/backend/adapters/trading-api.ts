@@ -286,18 +286,20 @@ export class TradingApiAdapter {
   }
 
   async modifyOrder(material: SessionMaterial, request: ModifyOrderRequest, fingerprint: string) {
-    const response = await this.gate.call('modifyOrder', {
-      query: {
-        token: material.accountToken,
-        orderID: request.positionId,
-        stoploss: request.stopLoss ?? '',
-        target: request.takeProfit ?? '',
-        fingerprint,
-      },
+    const query = {
+      token: material.accountToken,
+      orderID: request.positionId,
+      stoploss: request.stopLoss ?? '',
+      target: request.takeProfit ?? '',
+      fingerprint,
+    }
+    const endpoint = request.state === 'Pending' ? 'modifyPendingOrder' : 'modifyOrder'
+    const response = await this.gate.call(endpoint, {
+      query: request.state === 'Pending' ? { ...query, trigger: request.trigger } : query,
       headers: this.headers(material),
       idempotencyKey: request.idempotencyKey,
     })
-    assertAcknowledged(response.json, 'modifyOrder')
+    assertAcknowledged(response.json, endpoint)
   }
 
   async closeOrder(material: SessionMaterial, request: CloseOrderRequest, fingerprint: string) {

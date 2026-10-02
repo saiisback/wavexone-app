@@ -101,13 +101,25 @@ function FallbackSheet({
       <Pressable style={styles.scrim} onPress={onDismiss} accessibilityLabel="Dismiss menu" />
 
       <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {request?.title ? (
-          <Text variant="caption" color={colors.textMuted} style={styles.heading}>
-            {request.title}
-          </Text>
-        ) : null}
-
         <View style={styles.group}>
+          {/* On the card rather than the scrim, as in the iOS sheet: the
+              message is often the point — "could not confirm, check before
+              retrying" — and has to stay readable over any screen. */}
+          {request?.title || request?.message ? (
+            <View style={styles.header}>
+              {request.title ? (
+                <Text variant="caption" color={colors.textMuted} style={styles.headerText}>
+                  {request.title}
+                </Text>
+              ) : null}
+              {request.message ? (
+                <Text variant="caption" color={colors.textMuted} style={styles.headerText}>
+                  {request.message}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
           {request?.options
             .filter((option) => !option.disabled)
             .map((option, index) => (
@@ -115,7 +127,10 @@ function FallbackSheet({
                 key={option.label}
                 accessibilityRole="button"
                 onPress={() => onSelect(option)}
-                style={[styles.option, index > 0 ? styles.optionDivided : null]}
+                style={[
+                  styles.option,
+                  index > 0 || request.title || request.message ? styles.optionDivided : null,
+                ]}
               >
                 <Text
                   style={[styles.optionLabel, option.destructive ? styles.destructive : null]}
@@ -150,9 +165,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     gap: 10,
   },
-  heading: {
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 4,
+  },
+  headerText: {
     textAlign: 'center',
-    paddingBottom: 4,
   },
   group: {
     backgroundColor: colors.surface,

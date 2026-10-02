@@ -79,6 +79,33 @@ Phase 1 enables authentication and reads. Phase 2 enables trading mutations;
 Phase 3 enables portal/funding mutations. Raising the phase requires an
 explicitly authorized staging/test environment.
 
+Every existing trading and funding control is wired to its mutation:
+
+- Order ticket: market and limit (`placeorder` `type=market|limit`). The Trade
+  tab's Stop option explains itself instead — the API's `type=stop` is a
+  two-legged HFT order, not a stop entry.
+- Positions: close (`squareoff`), cancel pending (`bulkPendingPositionclose`),
+  and the SL/TP sheet (`mobileapp_modifyorder` for open positions,
+  `mobileapp_modifypendingorder` with the unchanged trigger for pending ones).
+- Funding: deposit, transfer, and withdrawal with the configured destination
+  fields. The OTP request and the submission encode that destination
+  identically. A deposit to a demo account goes to `submitDemoDeposit`
+  (virtual funds), and only for the account the session is on, because that
+  route takes no account id.
+- Profile: the phone number, through `apiSaveProfile`, resending the
+  server-held name unchanged. Email and country have no update route.
+- Account switcher: "Open a new account" calls `apiCreateDemoAccount` or
+  `apiRequestAccountCreation`, both with the empty body the collection sends.
+
+An acknowledged mutation drops the cached bootstrap and re-reads the affected
+screens through `useInvalidateQueries`; a failed or unconfirmed one re-reads
+nothing. None of these response shapes has been captured yet (see
+`docs/RESPONSE-CAPTURES.md`, Phase 2 / 3), so success is still recognised only
+by the `status` envelope.
+
+Not wired, because no response shape exists to parse: `forexmargin`. The
+ticket's required margin remains a client-side estimate.
+
 ## Rules this module enforces
 
 These are guide §6 requirements, in code rather than in a checklist:

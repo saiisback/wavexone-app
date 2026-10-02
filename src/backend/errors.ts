@@ -87,6 +87,18 @@ export function userMessageFor(error: BackendError): string {
 }
 
 /**
+ * Copy for a failed mutation, from whatever its promise rejected with.
+ *
+ * Deliberately never says "try again" for an unknown failure: a mutation that
+ * died somewhere unexpected may still have reached the server.
+ */
+export function mutationFailureMessage(error: unknown): string {
+  return error instanceof BackendError
+    ? userMessageFor(error)
+    : 'Something went wrong. Check your account before trying again.'
+}
+
+/**
  * `rejected` is the one kind whose server text reaches the user, because it
  * is the only kind where the server knows something we do not — which field
  * was wrong, which market is closed. Callers pass copy they have reviewed.

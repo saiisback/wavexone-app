@@ -80,6 +80,13 @@ export type Position = {
   current: number
   pnl: number
   state: 'Open' | 'Pending' | 'Closed'
+  /** Absent when the order carries none. */
+  stopLoss?: number
+  takeProfit?: number
+  /** Pending orders: the price the order is waiting for. */
+  trigger?: number
+  /** Server timestamp, `YYYY-MM-DD HH:MM:SS`, zone unstated. */
+  time?: string
 }
 
 export type ActivityEntry = {

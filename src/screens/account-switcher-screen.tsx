@@ -2,7 +2,8 @@ import { useNavigation } from '@react-navigation/native'
 import * as Crypto from 'expo-crypto'
 import { StyleSheet, View } from 'react-native'
 
-import { useBackend } from '../backend/provider'
+import { mutationFailureMessage } from '../backend/errors'
+import { useBackend, useInvalidateQueries } from '../backend/provider'
 import {
   Badge,
   Card,
@@ -24,6 +25,7 @@ export function AccountSwitcherScreen() {
   const { goBack } = useNavigation()
   const showMenu = useActionMenu()
   const backend = useBackend()
+  const invalidate = useInvalidateQueries()
   const accountData = useAccountData()
 
   const activeId = useSession((state) => state.accountId)
@@ -44,6 +46,29 @@ export function AccountSwitcherScreen() {
         options: [{ label: 'Got it' }],
       })
     }
+  }
+
+  const openAccount = (kind: 'demo' | 'live') => {
+    void backend.accounts
+      .openAccount({ kind, idempotencyKey: Crypto.randomUUID() })
+      .then(() => {
+        invalidate('accounts:', 'profile:')
+        showMenu({
+          title: kind === 'demo' ? 'Demo account opened' : 'Request sent',
+          message:
+            kind === 'demo'
+              ? 'It appears in this list once the account data refreshes.'
+              : 'WaveXOne reviews live account requests. The account appears here once it is opened.',
+          options: [{ label: 'Got it' }],
+        })
+      })
+      .catch((error: unknown) =>
+        showMenu({
+          title: kind === 'demo' ? 'Demo account not opened' : 'Request not sent',
+          message: mutationFailureMessage(error),
+          options: [{ label: 'Got it' }],
+        }),
+      )
   }
 
   return (
@@ -71,9 +96,10 @@ export function AccountSwitcherScreen() {
         onPress={() =>
           showMenu({
             title: 'Open a new account',
-            message:
-              'Account creation runs through the portal endpoints, which are not connected yet.',
-            options: [{ label: 'Got it' }],
+            options: [
+              { label: 'Open a demo account', onSelect: () => openAccount('demo') },
+              { label: 'Request a live account', onSelect: () => openAccount('live') },
+            ],
           })
         }
       >

@@ -11,15 +11,22 @@ export type {
   FundingRequest,
   ModifyOrderRequest,
   OrderCounts,
+  OpenAccountRequest,
   OrderSide,
   PlaceOrderRequest,
+  SaveProfileRequest,
   SignInResult,
   SetFavoriteRequest,
   SwitchAccountRequest,
   TransferRequest,
   WithdrawalOtpRequest,
 } from './contract'
-export { BackendError, userMessageFor, type BackendErrorKind } from './errors'
+export {
+  BackendError,
+  mutationFailureMessage,
+  userMessageFor,
+  type BackendErrorKind,
+} from './errors'
 export { DENIED_ENDPOINTS, type Phase } from './endpoints'
 export type { BackendConfig } from './gate'
 export { createMockBackend } from './mock-backend'

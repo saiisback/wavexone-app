@@ -67,6 +67,8 @@ export function createMockBackend(): WaveXBackend {
       list: () => settle(accounts),
       switchAccount: () => settle(undefined),
       profile: () => settle(profile),
+      saveProfile: async () => unavailable('Saving the profile'),
+      openAccount: async () => unavailable('Opening an account'),
     },
 
     markets: {
