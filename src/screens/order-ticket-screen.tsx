@@ -18,7 +18,9 @@ import {
   useActionMenu,
 } from '../design-system'
 import { formatLots, formatMoney, formatPrice } from '../data/format'
+import { applyQuote } from '../data/live-quote'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
 import { mutationFailureMessage } from '../backend/errors'
@@ -54,6 +56,7 @@ export function OrderTicketScreen() {
   const [limitPrice, setLimitPrice] = useState('')
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
+  const quote = useLiveQuote(params.instrumentId)
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
     const state = accountData.status !== 'ready' ? accountData : catalogue
@@ -65,7 +68,8 @@ export function OrderTicketScreen() {
   }
 
   const account = accountData.data.account
-  const instrument = catalogue.data.find((item) => item.id === params.instrumentId)
+  const listed = catalogue.data.find((item) => item.id === params.instrumentId)
+  const instrument = listed ? applyQuote(listed, quote) : undefined
   if (!instrument) {
     return <Sheet title={`${side} order`}><Text>Instrument unavailable.</Text></Sheet>
   }

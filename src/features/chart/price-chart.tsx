@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native'
+import { StyleSheet, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native'
 import Svg, { Circle, Defs, LinearGradient, Line, Path, Rect, Stop } from 'react-native-svg'
 
 import { Card, DeltaTriangle, Text, colors, fonts } from '../../design-system'
@@ -7,6 +7,8 @@ import { formatPrice } from '../../data/format'
 
 export type PriceChartProps = {
   series: readonly number[]
+  /** Per-point opens; when present, touching the plot reads any point. */
+  opens?: readonly number[]
   /** Column labels; the plot is divided into this many equal sections. */
   months: readonly string[]
   /** Index in `series` the crosshair reads. */
@@ -17,35 +19,55 @@ export type PriceChartProps = {
   min: number
   max: number
   step: number
+  /** Digits on the price axis. */
+  axisDecimals?: number
+  /** Digits in the open / close read-out. */
+  precision?: number
 }
 
 type Size = { width: number; height: number }
 
-const AXIS_GUTTER = 50
 const MONTH_ROW = 34
 
 /**
- * The XAU/USD chart.
+ * The instrument chart.
  *
  * Drawn by hand with react-native-svg: a charting library cannot reproduce
  * the dashed crosshair, the gold cursor dot and the floating open/close
- * tooltip exactly as specified, and the series is static here anyway.
+ * tooltip exactly as specified. The crosshair rests on the newest point and
+ * follows a finger dragged across the plot.
  *
  * The plot fills whatever space the parent gives it, so the card reaches the
  * Sell / Buy pair on every screen height.
  */
 export function PriceChart({
   series,
+  opens,
   months,
-  cursorIndex,
-  cursorOpen,
-  cursorClose,
+  cursorIndex: restingIndex,
+  cursorOpen: restingOpen,
+  cursorClose: restingClose,
   min,
   max,
   step,
+  axisDecimals = 0,
+  precision = 2,
 }: PriceChartProps) {
   // undefined until the first layout pass; nothing is drawn before then.
   const [size, setSize] = useState<Size | undefined>(undefined)
+  // The point under the finger while the plot is being touched.
+  const [touchIndex, setTouchIndex] = useState<number | null>(null)
+
+  const inspecting = touchIndex !== null && opens !== undefined
+  const cursorIndex = inspecting ? touchIndex : restingIndex
+  const cursorOpen = inspecting ? (opens[touchIndex] ?? restingOpen) : restingOpen
+  const cursorClose = inspecting ? (series[touchIndex] ?? restingClose) : restingClose
+
+  const track = (event: GestureResponderEvent) => {
+    if (!size || series.length < 2) return
+    const index = Math.round((event.nativeEvent.locationX / size.width) * (series.length - 1))
+    setTouchIndex(Math.max(0, Math.min(series.length - 1, index)))
+  }
 
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
@@ -56,11 +78,23 @@ export function PriceChart({
   }
 
   const ticks = buildTicks(min, max, step)
+  const tickLabels = ticks.map((tick) => tick.toFixed(axisDecimals))
+  const gutter = 14 + Math.max(...tickLabels.map((label) => label.length)) * 8.6
 
   return (
     <Card style={styles.card}>
       <View style={styles.plotRow}>
-        <View style={styles.plot} onLayout={onLayout}>
+        <View
+          style={styles.plot}
+          onLayout={onLayout}
+          onStartShouldSetResponder={() => opens !== undefined}
+          onMoveShouldSetResponder={() => opens !== undefined}
+          onResponderTerminationRequest={() => false}
+          onResponderGrant={track}
+          onResponderMove={track}
+          onResponderRelease={() => setTouchIndex(null)}
+          onResponderTerminate={() => setTouchIndex(null)}
+        >
           {size === undefined ? null : (
             <Plot
               size={size}
@@ -74,10 +108,10 @@ export function PriceChart({
           )}
         </View>
 
-        <View style={styles.axis}>
-          {ticks.map((tick, index) => (
+        <View style={{ width: gutter }}>
+          {tickLabels.map((label, index) => (
             <Text
-              key={tick}
+              key={label}
               variant="caption"
               color={colors.textMuted}
               style={[
@@ -85,13 +119,13 @@ export function PriceChart({
                 { top: (index / (ticks.length - 1)) * (size?.height ?? 0) - 9 },
               ]}
             >
-              {tick}
+              {label}
             </Text>
           ))}
         </View>
       </View>
 
-      <View style={styles.months}>
+      <View style={[styles.months, { paddingRight: gutter }]}>
         {months.map((month) => (
           <Text key={month} variant="caption" color={colors.textMuted} style={styles.month}>
             {month}
@@ -103,8 +137,10 @@ export function PriceChart({
         <Tooltip
           open={cursorOpen}
           close={cursorClose}
-          left={cursorX(size.width, series.length, cursorIndex)}
-          top={cursorY(size.height, min, max, series[cursorIndex] ?? min)}
+          precision={precision}
+          size={size}
+          x={cursorX(size.width, series.length, cursorIndex)}
+          y={cursorY(size.height, min, max, series[cursorIndex] ?? min)}
         />
       )}
     </Card>
@@ -205,22 +241,35 @@ function Plot({
   )
 }
 
-/** Dark read-out pinned to the lower-left of the crosshair intersection. */
+/**
+ * Dark read-out beside the crosshair intersection: lower-left by default,
+ * flipped to stay inside the plot near its edges.
+ */
 function Tooltip({
   open,
   close,
-  left,
-  top,
+  precision,
+  size,
+  x,
+  y,
 }: {
   open: number
   close: number
-  left: number
-  top: number
+  precision: number
+  size: Size
+  x: number
+  y: number
 }) {
+  const left = x - TOOLTIP_WIDTH - 12 >= 0 ? x - TOOLTIP_WIDTH - 12 : x + 12
+  const below = y + 16 + TOOLTIP_HEIGHT <= size.height
+  const top = below ? y + 16 : Math.max(0, y - 16 - TOOLTIP_HEIGHT)
   return (
-    <View style={[styles.tooltip, { left: left - TOOLTIP_WIDTH - 8, top: top + 108 }]}>
-      <TooltipRow label="Open" value={open} direction="up" />
-      <TooltipRow label="Close" value={close} direction="down" />
+    <View
+      pointerEvents="none"
+      style={[styles.tooltip, { left: Math.min(left, size.width - TOOLTIP_WIDTH), top }]}
+    >
+      <TooltipRow label="Open" value={open} precision={precision} direction="up" />
+      <TooltipRow label="Close" value={close} precision={precision} direction="down" />
     </View>
   )
 }
@@ -228,22 +277,25 @@ function Tooltip({
 function TooltipRow({
   label,
   value,
+  precision,
   direction,
 }: {
   label: string
   value: number
+  precision: number
   direction: 'up' | 'down'
 }) {
   return (
     <View style={styles.tooltipRow}>
       <Text style={styles.tooltipLabel}>{label}</Text>
       <DeltaTriangle direction={direction} color={colors.onInk} size={12} />
-      <Text style={styles.tooltipValue}>{formatPrice(value, 2)}</Text>
+      <Text style={styles.tooltipValue}>{formatPrice(value, precision)}</Text>
     </View>
   )
 }
 
 const TOOLTIP_WIDTH = 158
+const TOOLTIP_HEIGHT = 72
 
 function cursorX(width: number, length: number, index: number) {
   return (width / (length - 1)) * index
@@ -253,10 +305,10 @@ function cursorY(height: number, min: number, max: number, value: number) {
   return ((max - value) / (max - min)) * height
 }
 
+/** Counted rather than accumulated, so 1.1 - 0.001 steps do not drift. */
 function buildTicks(min: number, max: number, step: number) {
-  const ticks: number[] = []
-  for (let value = max; value >= min; value -= step) ticks.push(value)
-  return ticks
+  const count = Math.max(1, Math.round((max - min) / step))
+  return Array.from({ length: count + 1 }, (_, index) => max - index * step)
 }
 
 function range(count: number) {
@@ -276,9 +328,6 @@ const styles = StyleSheet.create({
   plot: {
     flex: 1,
   },
-  axis: {
-    width: AXIS_GUTTER,
-  },
   axisLabel: {
     position: 'absolute',
     left: 12,
@@ -288,7 +337,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: MONTH_ROW,
     alignItems: 'center',
-    paddingRight: AXIS_GUTTER,
   },
   month: {
     flex: 1,

@@ -13,6 +13,7 @@ import {
 } from '../../design-system'
 import { directionOf, formatPercent, formatPrice } from '../../data/format'
 import { useSession } from '../../data/store'
+import { useLiveQuote } from './use-live-quote'
 
 export type MarketRowProps = {
   id: string
@@ -21,6 +22,11 @@ export type MarketRowProps = {
   price: number
   precision: number
   changePercent: number
+  /**
+   * The price the change is measured from (today's open, or the first close
+   * of the chosen period); lets the live price recompute it.
+   */
+  changeBase?: number
   iconKind: AssetIconKind
   iconLabel?: string
   iconTint?: string
@@ -44,9 +50,10 @@ export function MarketRow({
   id,
   symbol,
   name,
-  price,
+  price: snapshotPrice,
   precision,
-  changePercent,
+  changePercent: snapshotChange,
+  changeBase,
   iconKind,
   iconLabel,
   iconTint,
@@ -56,6 +63,10 @@ export function MarketRow({
   onLongPress,
   showFavorite = false,
 }: MarketRowProps) {
+  // Streamed inside the row, so a tick re-renders this row alone.
+  const quote = useLiveQuote(id)
+  const price = quote?.price ?? snapshotPrice
+  const changePercent = changeBase ? ((price - changeBase) / changeBase) * 100 : snapshotChange
   const direction = directionOf(changePercent)
   const sparkColor =
     (sparkTone ?? (direction === 'up' ? 'positive' : 'negative')) === 'positive'

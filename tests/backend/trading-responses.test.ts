@@ -86,6 +86,32 @@ describe('trading response parsers', () => {
     ).toBe(category)
   })
 
+  it.each([
+    ['commodities-gold', 'C:XAUEUR', 'Metals'],
+    ['us indices', 'I:SPX', 'Indices'],
+    ['something new', 'X:SOLUSD', 'Crypto'],
+    ['something new', 'C:EURNOK', 'Forex'],
+    ['something new', 'AAPL.OQ', 'Stocks'],
+  ] as const)('places an unfamiliar %s label (%s) instead of failing the list', (market, ticker, category) => {
+    expect(parseMarketCatalogue({ fx: [{ name: 'Test', ticker, market }] })[0].category).toBe(category)
+  })
+
+  it('reads every market group and skips a malformed entry', () => {
+    expect(
+      parseMarketCatalogue({
+        fx: [{ name: 'Gold', ticker: 'C:XAUUSD', market: 'metals' }, { ticker: 'C:BROKEN' }],
+        crypto: [],
+        indices: [{ name: 'Dow', ticker: 'I:DJI', market: 'index' }],
+      }).map((entry) => entry.ticker),
+    ).toEqual(['C:XAUUSD', 'I:DJI'])
+  })
+
+  it('skips a symbol with unusable settings and keeps the rest', () => {
+    const metadata = parseSymbolMetadata({ ...symbolMetadataResponse, BROKEN: { spread: 1, decimal: 2, lot: 0 } })
+    expect(metadata.has('BROKEN')).toBe(false)
+    expect(metadata.get('XAUUSD')).toEqual({ spread: 0.25, precision: 2, lot: 100 })
+  })
+
   it('parses daily quote snapshots and chart arrays without inventing fields', () => {
     expect(parseDailySnapshots(dailySnapshotResponse).get('XAUUSD')).toMatchObject({
       bid: 2400.1,
@@ -140,12 +166,20 @@ describe('trading response parsers', () => {
     expect(orders[0]).toMatchObject({ id: 'order-open', side: 'Buy', lots: 0.5, entry: 2400.25 })
   })
 
-  it('rejects unknown order states instead of guessing', () => {
-    const invalid = {
+  it('skips unknown order states instead of failing the whole list', () => {
+    const mixed = {
       ...openPositionsResponse,
-      data: [{ ...openPositionsResponse.data[0], status: 'mystery' }],
+      data: [{ ...openPositionsResponse.data[0], status: 'mystery' }, openPositionsResponse.data[1]],
     }
-    expect(() => parseOpenPositions(invalid)).toThrow()
+    expect(parseOpenPositions(mixed).map((order) => order.state)).toEqual(['Pending'])
+  })
+
+  it('lists a transit order as open and busy, and keeps the order type', () => {
+    const transit = {
+      ...openPositionsResponse,
+      data: [{ ...openPositionsResponse.data[0], status: 'transit', type: 'Market' }],
+    }
+    expect(parseOpenPositions(transit)[0]).toMatchObject({ state: 'Open', busy: true, type: 'market' })
   })
 
   it('parses a closed history page and accepts an empty page', () => {

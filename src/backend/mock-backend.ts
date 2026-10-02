@@ -44,6 +44,8 @@ function unavailable(what: string): never {
   )
 }
 
+const noop = () => {}
+
 const favorites = instruments.filter((item) => item.favorite).map((item) => item.id)
 
 export function createMockBackend(): WaveXBackend {
@@ -83,6 +85,8 @@ export function createMockBackend(): WaveXBackend {
         if (instrumentId !== 'xauusd') unavailable(`Chart data for ${instrumentId}`)
         return settle(xauChart[timeframe])
       },
+      // The fixtures carry their own sparklines.
+      sparklines: () => settle(new Map()),
     },
 
     orders: {
@@ -122,6 +126,15 @@ export function createMockBackend(): WaveXBackend {
     engagement: {
       notifications: () => settle(notifications),
       markNotificationsRead: () => settle(undefined),
+    },
+
+    // Fixtures do not move.
+    prices: {
+      subscribe: () => noop,
+      latest: () => undefined,
+    },
+    events: {
+      subscribe: () => noop,
     },
   }
 }

@@ -17,6 +17,7 @@ import {
   radius,
   useActionMenu,
 } from '../design-system'
+import { useBackendQuery } from '../backend/provider'
 import { MarketRow } from '../features/markets/market-row'
 import { useSession } from '../data/store'
 import type { Instrument } from '../data/types'
@@ -47,6 +48,16 @@ export function MarketsScreen() {
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('All')
+
+  const accountId = useSession((state) => state.accountId)
+  // The day's closes for the row sparklines; rows keep the snapshot until they land.
+  const sparks = useBackendQuery(
+    `sparks:${accountId ?? 'none'}:Today:${catalogue.status}`,
+    (backend) => catalogue.status === 'ready'
+      ? backend.markets.sparklines(catalogue.data.map((item) => item.id), 'Today')
+      : Promise.resolve(new Map<string, readonly number[]>()),
+  )
+  const sparkById = sparks.status === 'ready' ? sparks.data : undefined
 
   const favorites = useSession((state) => state.favorites)
   const toggleFavorite = useSession((state) => state.toggleFavorite)
@@ -99,11 +110,12 @@ export function MarketsScreen() {
       price={item.price}
       precision={item.precision}
       changePercent={item.changePercent}
+      changeBase={item.dayOpen}
       iconKind={item.icon}
       iconLabel={item.iconLabel}
       iconTint={item.iconTint}
-      spark={item.spark}
-      sparkTone={item.sparkTone}
+      spark={sparkById?.get(item.id) ?? item.spark}
+      sparkTone={sparkById?.has(item.id) ? undefined : item.sparkTone}
       onPress={openInstrument}
       onLongPress={openRowMenu}
       showFavorite
@@ -172,6 +184,7 @@ export function MarketsScreen() {
         data={rows}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        extraData={sparkById}
         ItemSeparatorComponent={Separator}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"

@@ -1,4 +1,5 @@
 import { createLiveBackend } from '../../src/backend/live-backend'
+import { FakeSocket } from './fixtures/fake-socket'
 import { BackendError } from '../../src/backend/errors'
 import type { BackendConfig } from '../../src/backend/gate'
 import {
@@ -390,45 +391,111 @@ describe('accounts', () => {
 })
 
 describe('markets', () => {
-  it('joins catalogue, metadata, and daily snapshots with normalized ids', async () => {
+  const sockets = globalThis as { WebSocket: unknown }
+  let original: unknown
+  beforeEach(() => {
+    original = sockets.WebSocket
+    sockets.WebSocket = FakeSocket
+    FakeSocket.instances = []
+  })
+  afterEach(() => {
+    sockets.WebSocket = original
+  })
+
+  /** Lets the REST reads settle until the feed sockets have been opened. */
+  async function feedSockets() {
+    for (let turn = 0; turn < 50 && FakeSocket.instances.length < 2; turn += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    const bars = FakeSocket.instances.find((socket) => socket.url.endsWith('/ohlcV2'))!
+    const ticks = FakeSocket.instances.find((socket) => socket.url.endsWith('/ticks'))!
+    bars.open()
+    ticks.open()
+    return { bars, ticks }
+  }
+
+  function answerDayBars(bars: FakeSocket, days: Record<string, { o: number; h: number; l: number; c: number }>) {
+    for (const request of bars.sent as { uid: string; symbol: string }[]) {
+      const day = days[request.symbol]
+      bars.receive(day
+        ? { action: 'ohlc_response', success: true, uid: request.uid, data: [{ t: '2026-10-02T00:00:00.000Z', v: 1, ...day }] }
+        : { action: 'ohlc_response', success: false, uid: request.uid, error: 'not entitled' })
+    }
+  }
+
+  it('joins catalogue and metadata with day bars and quotes from the feeds', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
     const marketFetch = scriptFetch(
       { body: JSON.stringify(marketCatalogueResponse) },
       { body: JSON.stringify(symbolMetadataResponse) },
-      { body: JSON.stringify(dailySnapshotResponse) },
     )
 
-    await expect(backend.markets.catalogue()).resolves.toEqual([
-      expect.objectContaining({ id: 'c:xauusd', symbol: 'XAU/USD', name: 'Gold', precision: 2, bid: 2400.1 }),
-      expect.objectContaining({ id: 'x:btcusd', symbol: 'BTC/USD', name: 'Bitcoin', precision: 2 }),
+    const pending = backend.markets.catalogue()
+    const { bars, ticks } = await feedSockets()
+    expect(ticks.sent).toEqual([{ action: 'subscribe', symbols: ['XAUUSD', 'BTCUSD'] }])
+    expect(bars.sent).toEqual([
+      expect.objectContaining({ action: 'ohlc', symbol: 'XAUUSD', timeframe: '1D', limit: 1 }),
+      expect.objectContaining({ action: 'ohlc', symbol: 'BTCUSD', timeframe: '1D', limit: 1 }),
     ])
+    answerDayBars(bars, {
+      XAUUSD: { o: 2390, h: 2410, l: 2380, c: 2400 },
+      BTCUSD: { o: 67500, h: 68500, l: 67000, c: 68000 },
+    })
+    ticks.receive({ status: 'subscribed', symbols: ['XAUUSD', 'BTCUSD'] })
+    ticks.receive({ XAUUSD: { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
 
-    const currentDayRequest = marketFetch.mock.calls[2][1]
-    expect(marketFetch.mock.calls[0][0]).toContain('collect=watch')
-    expect(currentDayRequest.body).toBeInstanceOf(FormData)
-    expect(Array.from((currentDayRequest.body as FormData).entries())).toEqual([
-      ['data', 'https://charts.example/consolidated/data?symbol=XAUUSD,BTCUSD'],
-      ['timeline', '1D'],
+    await expect(pending).resolves.toEqual([
+      expect.objectContaining({
+        id: 'c:xauusd',
+        symbol: 'XAU/USD',
+        name: 'Gold',
+        precision: 2,
+        bid: 2400.1,
+        ask: 2400.3,
+        price: 2400.2,
+        dayOpen: 2390,
+      }),
+      // No tick yet: priced from the day bar until the stream catches up.
+      expect.objectContaining({ id: 'x:btcusd', symbol: 'BTC/USD', bid: 68000, ask: 68000 }),
     ])
+    expect(marketFetch.mock.calls.map(([url]) => String(url))).not.toContainEqual(
+      expect.stringContaining('getCurrentDayData'),
+    )
   })
 
-  it('keeps instruments with available snapshots when one quote is missing', async () => {
+  it('leaves out a market the feeds do not carry and keeps the rest', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
     scriptFetch(
       { body: JSON.stringify(marketCatalogueResponse) },
       { body: JSON.stringify(symbolMetadataResponse) },
-      { body: JSON.stringify({ XAUUSD: dailySnapshotResponse.XAUUSD }) },
     )
-    await expect(backend.markets.catalogue()).resolves.toEqual([
-      expect.objectContaining({ id: 'c:xauusd' }),
-    ])
+    const pending = backend.markets.catalogue()
+    const { bars, ticks } = await feedSockets()
+    answerDayBars(bars, { XAUUSD: { o: 2390, h: 2410, l: 2380, c: 2400 } })
+    ticks.receive({ XAUUSD: { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
+    await expect(pending).resolves.toEqual([expect.objectContaining({ id: 'c:xauusd' })])
   })
 
-  it('parses stringified favorites and refuses the deprecated chart endpoint', async () => {
+  it('reports the price feed as unreachable rather than an empty market list', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify(marketCatalogueResponse) },
+      { body: JSON.stringify(symbolMetadataResponse) },
+    )
+    const pending = backend.markets.catalogue()
+    const { bars, ticks } = await feedSockets()
+    bars.drop()
+    ticks.drop()
+    await expect(pending).rejects.toMatchObject({ kind: 'network' })
+  })
+
+  it('parses stringified favorites and reads charts from the candle feed, not the old endpoint', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
@@ -437,9 +504,34 @@ describe('markets', () => {
     expect(favoritesFetch.mock.calls[0][0]).toContain('data=%5B%5D')
 
     const chartFetch = scriptFetch({ body: JSON.stringify(chartHistoryResponse) })
-    await expect(backend.markets.candles('xauusd', '1M')).rejects.toMatchObject({
-      kind: 'blocked',
-    })
+    const sockets = globalThis as { WebSocket: unknown }
+    const original = sockets.WebSocket
+    sockets.WebSocket = FakeSocket
+    try {
+      const pending = backend.markets.candles('c:xauusd', '1M')
+      const socket = FakeSocket.latest()
+      expect(socket.url).toBe('wss://cloud.wavexone.com/ws/ohlcV2')
+      socket.open()
+      const request = socket.sent[0] as { uid: string; symbol: string; timeframe: string }
+      expect(request).toMatchObject({ action: 'ohlc', symbol: 'XAUUSD', timeframe: '240' })
+      socket.receive({
+        action: 'ohlc_response',
+        success: true,
+        uid: request.uid,
+        data: [
+          { t: '2026-10-01T00:00:00.000Z', o: 2400, h: 2410, l: 2390, c: 2405, v: 1 },
+          { t: '2026-10-01T04:00:00.000Z', o: 2405, h: 2420, l: 2400, c: 2418, v: 1 },
+        ],
+      })
+      await expect(pending).resolves.toMatchObject({
+        points: [2405, 2418],
+        opens: [2400, 2405],
+        cursorIndex: 1,
+        cursorClose: 2418,
+      })
+    } finally {
+      sockets.WebSocket = original
+    }
     expect(chartFetch).not.toHaveBeenCalled()
   })
 })

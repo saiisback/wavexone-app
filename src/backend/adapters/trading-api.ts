@@ -3,17 +3,16 @@ import { z } from 'zod'
 import { BackendError } from '../errors'
 import type { Gate } from '../gate'
 import { unwrapEnvelope } from '../http'
+import { logBackendEvent } from '../redact'
 import {
   parseChartHistory,
   parseCheckedSession,
-  parseDailySnapshots,
   parseFavoriteIds,
   parseMarketCatalogue,
   parseOpenPositions,
   parseClosedHistory,
   parseOrderCounts,
   parseSymbolMetadata,
-  type DailySnapshot,
 } from '../responses/trading'
 import type { SessionMaterial } from '../secure-session-store'
 import type { CloseOrderRequest, ModifyOrderRequest, PlaceOrderRequest } from '../contract'
@@ -160,14 +159,27 @@ export class TradingApiAdapter {
     }
   }
 
-  /** Guide §3.1 step 5. */
+  /**
+   * Guide §3.1 step 5. The API reference names `Authorization: Bearer <jwt>`
+   * as the header and still accepts the legacy `Bearer: <jwt>`; both go out
+   * so either server behaviour authenticates.
+   */
   headers(material: SessionMaterial): Record<string, string> {
     return {
+      Authorization: `Bearer ${material.bearerToken}`,
       Secretkey: material.secretKey,
       Bearer: material.bearerToken,
     }
   }
 
+  /**
+   * The account's market list and per-symbol precision and lot size.
+   *
+   * Prices are not read here. `getCurrentDayData` wants a `data` URL on the
+   * charting host, and the one every collection uses (`charting.fxinvezt.com`)
+   * no longer resolves, so it answers with an error page. The day's open and
+   * the quotes come from the chart feeds instead (`market-feed.ts`).
+   */
   async marketData(material: SessionMaterial) {
     const headers = this.headers(material)
     const catalogue = parseResponse(
@@ -180,20 +192,7 @@ export class TradingApiAdapter {
       await this.gate.callJson('symbolSpread', { headers }),
       parseSymbolMetadata,
     )
-    const symbols = catalogue.map((item) => apiSymbol(item.ticker))
-    const snapshots = new Map<string, DailySnapshot>()
-    for (const batch of chunks(symbols, 20)) {
-      const parsed = parseResponse(
-        'currentDayData',
-        await this.gate.callJson('currentDayData', {
-          body: { data: this.gate.currentDayDataSource(batch), timeline: '1D' },
-          headers,
-        }),
-        parseDailySnapshots,
-      )
-      for (const [symbol, snapshot] of parsed) snapshots.set(symbol, snapshot)
-    }
-    return { catalogue, metadata, snapshots }
+    return { catalogue, metadata }
   }
 
   async favoriteIds(material: SessionMaterial): Promise<string[]> {
@@ -276,7 +275,8 @@ export class TradingApiAdapter {
         sl: request.stopLoss ?? '',
         target: request.takeProfit ?? '',
         trigger: request.limitPrice ?? '',
-        clicked: '1',
+        // API reference §2.4: `clicked=yes`.
+        clicked: 'yes',
         fingerprint,
       },
       headers: this.headers(material),
@@ -378,23 +378,13 @@ function parseResponse<T>(
   try {
     return parser(input)
   } catch (cause) {
+    // Endpoint key only: which read broke, never what it contained.
+    logBackendEvent('response.malformed', { endpoint })
     throw new BackendError('malformed', 'The service returned an unexpected response.', {
       endpoint,
       cause,
     })
   }
-}
-
-function apiSymbol(symbol: string): string {
-  return symbol.replace(/^[^:]+:/, '')
-}
-
-function chunks<T>(items: readonly T[], size: number): T[][] {
-  const result: T[][] = []
-  for (let index = 0; index < items.length; index += size) {
-    result.push(items.slice(index, index + size))
-  }
-  return result
 }
 
 function assertAcknowledged(input: unknown, endpoint: string): void {

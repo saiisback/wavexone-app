@@ -22,8 +22,10 @@ import {
   useActionMenu,
 } from '../design-system'
 import { directionOf, formatLots, formatMoney, formatPercent, formatPrice } from '../data/format'
+import { applyQuote } from '../data/live-quote'
 import { useTradeDraft, type OrderType } from '../data/trade-draft'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
@@ -48,6 +50,11 @@ export function TradeScreen() {
   const setOrderType = useTradeDraft((state) => state.setOrderType)
   const setLots = useTradeDraft((state) => state.setLots)
 
+  const listed = catalogue.status === 'ready'
+    ? catalogue.data.find((item) => item.id === instrumentId) ?? catalogue.data[0]
+    : undefined
+  const quote = useLiveQuote(listed?.id)
+
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return (
@@ -60,7 +67,7 @@ export function TradeScreen() {
   }
 
   const account = accountData.data.account
-  const instrument = catalogue.data.find((item) => item.id === instrumentId) ?? catalogue.data[0]
+  const instrument = listed ? applyQuote(listed, quote) : undefined
   if (!instrument) {
     return <Screen><Gutter style={styles.state}><Text>No markets available.</Text></Gutter></Screen>
   }

@@ -8,7 +8,7 @@ import { useActionMenu } from '../../design-system'
  * where the Postman environment puts it.
  */
 export const CLIENT_PORTAL_URL =
-  process.env.EXPO_PUBLIC_WAVEX_PORTAL_URL ?? 'https://trade.wavexone.com/client-portal'
+  process.env.EXPO_PUBLIC_WAVEX_PORTAL_URL || 'https://trade.wavexone.com/client-portal'
 
 /**
  * Hands a task the app has no endpoint for — API keys, password changes — to

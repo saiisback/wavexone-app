@@ -21,9 +21,12 @@ import {
 } from '../design-system'
 import { PriceChart } from '../features/chart/price-chart'
 import { useBackendQuery } from '../backend/provider'
+import { withLivePrice } from '../data/chart-series'
 import { directionOf, formatPercent, formatPrice } from '../data/format'
+import { applyQuote } from '../data/live-quote'
 import { useSession } from '../data/store'
 import type { Timeframe } from '../data/types'
+import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
@@ -44,10 +47,12 @@ export function InstrumentScreen() {
     backend.markets.candles(params.instrumentId, timeframe),
   )
 
-  const instrument =
+  const quote = useLiveQuote(params.instrumentId)
+  const listed =
     catalogue.status === 'ready'
       ? catalogue.data.find((item) => item.id === params.instrumentId)
       : undefined
+  const instrument = listed ? applyQuote(listed, quote) : undefined
 
   const isFavorite = useSession((state) => state.favorites.has(params.instrumentId))
   const toggleFavorite = useSession((state) => state.toggleFavorite)
@@ -143,19 +148,26 @@ export function InstrumentScreen() {
         <Gutter style={styles.chart}>
           <QueryStateView
             state={chart}
-            render={(series) => <PriceChart
-            // Remounting per timeframe keeps the plot's measured size honest
-            // when the axis gutter width changes with longer labels.
-            key={timeframe}
-            series={series.points}
-            months={series.labels}
-            cursorIndex={series.cursorIndex}
-            cursorOpen={series.cursorOpen}
-            cursorClose={series.cursorClose}
-            min={series.min}
-            max={series.max}
-            step={series.step}
-          />}
+            render={(loaded) => {
+              // The newest point follows the streamed price.
+              const series = withLivePrice(loaded, quote?.price)
+              return <PriceChart
+                // Remounting per timeframe keeps the plot's measured size honest
+                // when the axis gutter width changes with longer labels.
+                key={timeframe}
+                series={series.points}
+                opens={series.opens}
+                months={series.labels}
+                cursorIndex={series.cursorIndex}
+                cursorOpen={series.cursorOpen}
+                cursorClose={series.cursorClose}
+                min={series.min}
+                max={series.max}
+                step={series.step}
+                axisDecimals={series.axisDecimals}
+                precision={instrument.precision}
+              />
+            }}
           />
         </Gutter>
       </View>

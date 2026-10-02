@@ -20,7 +20,9 @@ import type { ModifyOrderRequest } from '../backend/contract'
 import { mutationFailureMessage } from '../backend/errors'
 import { useBackend, useBackendQuery, useInvalidateQueries } from '../backend/provider'
 import { formatLots, formatPrice } from '../data/format'
+import { applyQuote, markPosition } from '../data/live-quote'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { AFTER_TRADE } from '../features/shared/query-keys'
 import { QueryStateView } from '../features/shared/query-state'
@@ -52,9 +54,11 @@ export function ModifyOrderScreen() {
   const position = positions.status === 'ready'
     ? positions.data.find((item) => item.id === params.positionId)
     : undefined
-  const instrument = catalogue.status === 'ready' && position
+  const quote = useLiveQuote(position?.instrumentId)
+  const listed = catalogue.status === 'ready' && position
     ? catalogue.data.find((item) => item.id === position.instrumentId)
     : undefined
+  const instrument = listed ? applyQuote(listed, quote) : undefined
 
   // `undefined` until the user edits, so the fields can show the order's
   // current values without copying them into state during render.
@@ -83,11 +87,10 @@ export function ModifyOrderScreen() {
   const stopLoss = (stopLossInput ?? initialStopLoss).trim()
   const takeProfit = (takeProfitInput ?? initialTakeProfit).trim()
 
-  // A blank field is sent as "no value", which this route has never been seen
-  // to treat as "remove". Removing a level stays out of this sheet until a
-  // capture shows what the server does with it.
-  const stopLossError = fieldError(stopLoss, initialStopLoss)
-  const takeProfitError = fieldError(takeProfit, initialTakeProfit)
+  // Emptying a field that had a level removes it: the mobile modify routes
+  // read `0` as "none" (API reference §2.4).
+  const stopLossError = fieldError(stopLoss)
+  const takeProfitError = fieldError(takeProfit)
   const changed = stopLoss !== initialStopLoss || takeProfit !== initialTakeProfit
   // The pending route needs the trigger resent; without one it cannot be called.
   const trigger = position.state === 'Pending' && position.trigger
@@ -105,8 +108,8 @@ export function ModifyOrderScreen() {
         onSelect: () => {
           const base = {
             positionId: position.id,
-            stopLoss: stopLoss || undefined,
-            takeProfit: takeProfit || undefined,
+            stopLoss: levelValue(stopLoss, initialStopLoss),
+            takeProfit: levelValue(takeProfit, initialTakeProfit),
             idempotencyKey: Crypto.randomUUID(),
           }
           const request: ModifyOrderRequest = trigger === undefined
@@ -181,7 +184,7 @@ export function ModifyOrderScreen() {
       <Card style={styles.summary}>
         <SummaryRow
           label="Current price"
-          value={formatPrice(position.current, instrument.precision)}
+          value={formatPrice(markPosition(position, instrument, quote).current, instrument.precision)}
         />
         <Divider />
         <SummaryRow
@@ -204,9 +207,15 @@ function priceText(value: number | undefined, precision: number): string {
   return value === undefined || value === 0 ? '' : value.toFixed(precision)
 }
 
-function fieldError(value: string, initial: string): string | undefined {
-  if (value === '') return initial === '' ? undefined : 'Removing a level is not supported here.'
+function fieldError(value: string): string | undefined {
+  if (value === '') return undefined
   return DECIMAL.test(value) ? undefined : 'Enter a price, e.g. 1.0850'
+}
+
+/** A cleared level is sent as `0`; one that never existed is left out. */
+function levelValue(value: string, initial: string): string | undefined {
+  if (value !== '') return value
+  return initial === '' ? undefined : '0'
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {

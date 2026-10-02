@@ -1,3 +1,5 @@
+import type { LiveQuote, TradingEvent } from './market-feed'
+import type { MarketPeriod } from '../data/store'
 import type {
   Account,
   ActivityEntry,
@@ -128,6 +130,8 @@ export type TransferRequest = {
   idempotencyKey: string
 }
 
+export type { LiveQuote, TradingEvent } from './market-feed'
+
 export interface WaveXBackend {
   session: {
     signIn(email: string, password: string): Promise<SignInResult>
@@ -153,6 +157,11 @@ export interface WaveXBackend {
     setFavorite(request: SetFavoriteRequest): Promise<void>
     quoteSnapshot(instrumentIds: readonly string[]): Promise<readonly Instrument[]>
     candles(instrumentId: string, timeframe: Timeframe): Promise<ChartSeries>
+    /** Closes over `period` per instrument, for row sparklines; missing ids are absent. */
+    sparklines(
+      instrumentIds: readonly string[],
+      period: MarketPeriod,
+    ): Promise<ReadonlyMap<string, readonly number[]>>
   }
 
   orders: {
@@ -178,5 +187,16 @@ export interface WaveXBackend {
   engagement: {
     notifications(): Promise<readonly Notification[]>
     markNotificationsRead(request: MarkNotificationsReadRequest): Promise<void>
+  }
+
+  /** Streaming prices. Synchronous so a row can read one inside render. */
+  prices: {
+    subscribe(instrumentId: string, listener: () => void): () => void
+    latest(instrumentId: string): LiveQuote | undefined
+  }
+
+  /** Order and balance changes pushed by the server: a cue to re-read. */
+  events: {
+    subscribe(listener: (event: TradingEvent) => void): () => void
   }
 }

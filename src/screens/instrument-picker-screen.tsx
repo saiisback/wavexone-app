@@ -16,7 +16,10 @@ import {
   radius,
 } from '../design-system'
 import { directionOf, formatPercent, formatPrice } from '../data/format'
+import { applyQuote } from '../data/live-quote'
 import { useTradeDraft } from '../data/trade-draft'
+import type { Instrument } from '../data/types'
+import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
 
@@ -82,19 +85,27 @@ export function InstrumentPickerScreen() {
                 {item.name}
               </Text>
             </View>
-            <View style={styles.quote}>
-              <Text variant="strong">{formatPrice(item.price, item.precision)}</Text>
-              <Delta
-                label={formatPercent(item.changePercent)}
-                direction={directionOf(item.changePercent)}
-                size={14}
-              />
-            </View>
+            <PickerQuote instrument={item} />
           </Pressable>
           {index < rows.length - 1 ? <Divider /> : null}
         </View>
       ))}
     </Sheet>
+  )
+}
+
+/** Price and change, streamed per row. */
+function PickerQuote({ instrument }: { instrument: Instrument }) {
+  const live = applyQuote(instrument, useLiveQuote(instrument.id))
+  return (
+    <View style={styles.quote}>
+      <Text variant="strong">{formatPrice(live.price, live.precision)}</Text>
+      <Delta
+        label={formatPercent(live.changePercent)}
+        direction={directionOf(live.changePercent)}
+        size={14}
+      />
+    </View>
   )
 }
 

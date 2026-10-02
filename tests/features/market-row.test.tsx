@@ -1,6 +1,8 @@
 import { Text as RNText } from 'react-native'
 import renderer, { act, type ReactTestInstance } from 'react-test-renderer'
 
+import { createMockBackend } from '../../src/backend/mock-backend'
+import { BackendProvider } from '../../src/backend/provider'
 import { MarketRow } from '../../src/features/markets/market-row'
 import { instruments } from '../../src/data/mock'
 import { useSession } from '../../src/data/store'
@@ -14,6 +16,7 @@ import { colors } from '../../src/design-system/colors'
  */
 
 const GOLD = instruments.find((item) => item.symbol === 'XAU/USD')!
+const BACKEND = createMockBackend()
 
 function renderRow(overrides: Partial<React.ComponentProps<typeof MarketRow>> = {}) {
   const onPress = jest.fn()
@@ -22,19 +25,22 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof MarketRow>> = 
   let tree!: renderer.ReactTestRenderer
   act(() => {
     tree = renderer.create(
-      <MarketRow
-        id={GOLD.id}
-        symbol={GOLD.symbol}
-        name={GOLD.name}
-        price={GOLD.price}
-        precision={GOLD.precision}
-        changePercent={GOLD.changePercent}
-        iconKind={GOLD.icon}
-        spark={GOLD.spark}
-        onPress={onPress}
-        onLongPress={onLongPress}
-        {...overrides}
-      />,
+      // Rows stream their own price; the fixture backend never ticks.
+      <BackendProvider backend={BACKEND}>
+        <MarketRow
+          id={GOLD.id}
+          symbol={GOLD.symbol}
+          name={GOLD.name}
+          price={GOLD.price}
+          precision={GOLD.precision}
+          changePercent={GOLD.changePercent}
+          iconKind={GOLD.icon}
+          spark={GOLD.spark}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          {...overrides}
+        />
+      </BackendProvider>,
     )
   })
 

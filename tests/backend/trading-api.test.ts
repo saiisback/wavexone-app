@@ -234,42 +234,30 @@ describe('isSessionValid', () => {
 })
 
 describe('headers', () => {
-  it('sends both credentials required by guide §3.1 step 5', () => {
-    expect(adapter().headers(MATERIAL)).toEqual({ Secretkey: 'sk-1', Bearer: 'bearer-1' })
+  it('sends the documented Authorization header plus the legacy credentials', () => {
+    expect(adapter().headers(MATERIAL)).toEqual({
+      Authorization: 'Bearer bearer-1',
+      Secretkey: 'sk-1',
+      Bearer: 'bearer-1',
+    })
   })
 })
 
 describe('marketData', () => {
-  it('batches unprefixed symbols for the documented current-day endpoint', async () => {
-    const entries = Array.from({ length: 21 }, (_, index) => ({
-      name: `Symbol ${index}`,
-      ticker: `C:SYM${String(index).padStart(2, '0')}`,
-      market: 'forex',
-    }))
-    const spreads = Object.fromEntries(
-      entries.map(({ ticker }) => [ticker, { spread: 1, decimal: 2, lot: 1 }]),
-    )
-    const snapshot = (items: typeof entries) => Object.fromEntries(
-      items.map(({ ticker }) => [
-        ticker.replace(/^[^:]+:/, ''),
-        { broker: 1, feed: 2, open: 1, high: 2, low: 1, volume: 1 },
-      ]),
-    )
+  it('reads the catalogue and symbol settings, and not the dead current-day route', async () => {
     const fetchMock = scriptFetch(
-      { body: JSON.stringify({ fx: entries, crypto: [] }) },
-      { body: JSON.stringify(spreads) },
-      { body: JSON.stringify(snapshot(entries.slice(0, 20))) },
-      { body: JSON.stringify(snapshot(entries.slice(20))) },
+      { body: JSON.stringify({ fx: [{ name: 'Gold', ticker: 'C:XAUUSD', market: 'metals' }], crypto: [] }) },
+      { body: JSON.stringify({ XAUUSD: { spread: 1, decimal: 2, lot: 100 } }) },
     )
 
     const result = await adapter().marketData(MATERIAL)
 
-    expect(result.snapshots.size).toBe(21)
-    const dayCalls = fetchMock.mock.calls.filter(([url]) =>
-      String(url).includes('collect=getCurrentDayData'),
+    expect(result.catalogue).toHaveLength(1)
+    expect(result.metadata.get('XAUUSD')).toEqual({ spread: 1, precision: 2, lot: 100 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContainEqual(
+      expect.stringContaining('getCurrentDayData'),
     )
-    expect(dayCalls).toHaveLength(2)
-    expect(Array.from((dayCalls[0][1].body as FormData).entries())[0][1]).not.toContain('C%3A')
   })
 })
 
@@ -451,6 +439,8 @@ describe('order mutations', () => {
 
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('type=market')
+    // API reference §2.4: the order button flag is `clicked=yes`.
+    expect(url).toContain('clicked=yes')
     expect(url).toMatch(/trigger=(&|$)/)
   })
 })
