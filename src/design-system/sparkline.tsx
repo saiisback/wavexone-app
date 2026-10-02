@@ -1,4 +1,6 @@
-import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg'
+import { StyleSheet, View } from 'react-native'
+import { Stop } from 'react-native-svg'
+import { LineChart } from 'react-native-wagmi-charts'
 
 import { colors } from './colors'
 
@@ -8,62 +10,59 @@ export type SparklineProps = {
   width?: number
   height?: number
   color?: string
-  /** Unique per instance — SVG gradient ids are document-global. */
-  gradientId: string
+  /** Line weight. */
+  strokeWidth?: number
 }
 
 /**
- * The little trend line on each Market Watch row: a stroked path plus a
- * soft area wash that fades out before it reaches the baseline.
+ * wagmi-charts reserves this strip under every line chart for the cursor's
+ * time label. A sparkline has no cursor, so the strip is drawn and clipped.
+ */
+const LABEL_STRIP = 40
+
+/**
+ * The little trend line on each market row: a smooth stroked path over a
+ * soft wash that fades out before it reaches the baseline.
+ *
+ * Drawn by react-native-wagmi-charts, which animates the path when the
+ * points change. Inside a recycling list, key the sparkline by instrument:
+ * otherwise a recycled row morphs from the previous instrument's shape.
  */
 export function Sparkline({
   points,
   width = 108,
   height = 44,
   color = colors.green,
-  gradientId,
+  strokeWidth = 2,
 }: SparklineProps) {
-  const { line, area } = buildPaths(points, width, height)
+  const box = { width, height }
+  if (points.length < 2) return <View style={box} />
+
+  const data = points.map((value, index) => ({ timestamp: index, value }))
 
   return (
-    <Svg width={width} height={height}>
-      <Defs>
-        <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={color} stopOpacity={0.22} />
-          <Stop offset="1" stopColor={color} stopOpacity={0} />
-        </LinearGradient>
-      </Defs>
-      <Path d={area} fill={`url(#${gradientId})`} />
-      <Path
-        d={line}
-        fill="none"
-        stroke={color}
-        strokeWidth={2.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
+    <View style={[styles.clip, box]} pointerEvents="none">
+      <LineChart.Provider data={data}>
+        <LineChart width={width} height={height + LABEL_STRIP} yGutter={3}>
+          <LineChart.Path
+            color={color}
+            width={strokeWidth}
+            showInactivePath={false}
+            pathProps={{ strokeLinecap: 'round', strokeLinejoin: 'round' }}
+          >
+            <LineChart.Gradient color={color}>
+              <Stop offset="0%" stopColor={color} stopOpacity={0.24} />
+              <Stop offset="100%" stopColor={color} stopOpacity={0} />
+            </LineChart.Gradient>
+          </LineChart.Path>
+        </LineChart>
+      </LineChart.Provider>
+    </View>
   )
 }
 
-const PADDING = 4
-
-function buildPaths(points: readonly number[], width: number, height: number) {
-  if (points.length < 2) return { line: '', area: '' }
-
-  const min = Math.min(...points)
-  const max = Math.max(...points)
-  const span = max - min || 1
-  const usable = height - PADDING * 2
-  const step = width / (points.length - 1)
-
-  const coords = points.map((value, index) => {
-    const x = index * step
-    const y = PADDING + (1 - (value - min) / span) * usable
-    return `${x.toFixed(2)} ${y.toFixed(2)}`
-  })
-
-  const line = `M${coords.join(' L')}`
-  const area = `${line} L${width} ${height} L0 ${height} Z`
-  return { line, area }
-}
+const styles = StyleSheet.create({
+  clip: {
+    overflow: 'hidden',
+  },
+})

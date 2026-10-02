@@ -25,6 +25,9 @@ export type ActivityRowProps = {
   iconKind?: AssetIconKind
   iconLabel?: string
   iconTint?: string
+  /** The traded instrument's ticker and category, for its logo. */
+  iconSymbol?: string
+  iconCategory?: string
   onMenu: (id: string) => void
 }
 
@@ -40,6 +43,8 @@ export function ActivityRow({
   iconKind,
   iconLabel,
   iconTint,
+  iconSymbol,
+  iconCategory,
   onMenu,
 }: ActivityRowProps) {
   return (
@@ -49,7 +54,14 @@ export function ActivityRow({
           {kind === 'deposit' ? <DepositIcon size={26} color={colors.text} /> : null}
           {kind === 'withdrawal' ? <WithdrawIcon size={26} color={colors.text} /> : null}
           {kind === 'trade' && iconKind ? (
-            <AssetIcon kind={iconKind} label={iconLabel} tint={iconTint} size={30} />
+            <AssetIcon
+              kind={iconKind}
+              label={iconLabel}
+              tint={iconTint}
+              symbol={iconSymbol}
+              category={iconCategory}
+              size={30}
+            />
           ) : null}
         </View>
 

@@ -23,6 +23,8 @@ export type PositionCardProps = {
   iconKind: AssetIconKind
   iconLabel?: string
   iconTint?: string
+  /** "Stocks", "Forex", … — narrows the logo lookup. */
+  category?: string
   side: 'Buy' | 'Sell'
   lots: number
   entry: number
@@ -45,6 +47,7 @@ export function PositionCard({
   iconKind,
   iconLabel,
   iconTint,
+  category,
   side,
   lots,
   entry,
@@ -60,7 +63,14 @@ export function PositionCard({
     <Card style={styles.card}>
       <PressableScale onPress={onPress} onLongPress={() => onMenu(id)} scaleTo={0.995}>
         <View style={styles.header}>
-          <AssetIcon kind={iconKind} label={iconLabel} tint={iconTint} size={42} />
+          <AssetIcon
+            kind={iconKind}
+            label={iconLabel}
+            tint={iconTint}
+            symbol={symbol}
+            category={category}
+            size={42}
+          />
           <View style={styles.identity}>
             <Text variant="strong">{symbol}</Text>
             <Text variant="caption" color={colors.textMuted}>

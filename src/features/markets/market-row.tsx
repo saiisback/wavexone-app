@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import {
   AssetIcon,
   Card,
-  Delta,
+  DeltaPill,
   PressableScale,
   Sparkline,
   StarIcon,
@@ -30,6 +30,8 @@ export type MarketRowProps = {
   iconKind: AssetIconKind
   iconLabel?: string
   iconTint?: string
+  /** "Stocks", "Forex", … — narrows the logo lookup. */
+  category?: string
   spark: readonly number[]
   sparkTone?: 'positive' | 'negative'
   onPress: (id: string) => void
@@ -57,6 +59,7 @@ export function MarketRow({
   iconKind,
   iconLabel,
   iconTint,
+  category,
   spark,
   sparkTone,
   onPress,
@@ -80,65 +83,86 @@ export function MarketRow({
       scaleTo={0.985}
     >
       <Card style={styles.card}>
-        <AssetIcon kind={iconKind} label={iconLabel} tint={iconTint} size={40} />
+        <View>
+          <AssetIcon
+            kind={iconKind}
+            label={iconLabel}
+            tint={iconTint}
+            symbol={symbol}
+            category={category}
+            size={42}
+          />
+          {showFavorite ? <FavoriteMark id={id} /> : null}
+        </View>
 
         <View style={styles.identity}>
-          <View style={styles.symbolRow}>
-            <Text variant="strong" numberOfLines={1}>
-              {symbol}
-            </Text>
-            {showFavorite ? <FavoriteMark id={id} /> : null}
-          </View>
+          <Text variant="strong" numberOfLines={1}>
+            {symbol}
+          </Text>
           <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
             {name}
           </Text>
         </View>
 
-        <Sparkline
-          points={spark}
-          color={sparkColor}
-          gradientId={`spark-${id}`}
-          width={68}
-          height={40}
-        />
+        {/* Keyed so a recycled row remounts rather than morphing from another market. */}
+        <Sparkline key={id} points={spark} color={sparkColor} width={56} height={32} />
 
         <View style={styles.quote}>
-          <Text variant="strong">{formatPrice(price, precision)}</Text>
-          <Delta label={formatPercent(changePercent)} direction={direction} size={15} />
+          <Text variant="strong" numberOfLines={1} style={styles.price}>
+            {formatPrice(price, precision)}
+          </Text>
+          <DeltaPill label={formatPercent(changePercent)} direction={direction} size={12} />
         </View>
       </Card>
     </PressableScale>
   )
 }
 
-/** Subscribes to a single id rather than the whole favourites set. */
+/**
+ * A star pinned to the badge's corner, so it costs the symbol no width.
+ * Subscribes to a single id rather than the whole favourites set.
+ */
 function FavoriteMark({ id }: { id: string }) {
   const isFavorite = useSession((state) => state.favorites.has(id))
   if (!isFavorite) return null
-  return <StarIcon size={13} color={colors.gold} filled />
+  return (
+    <View style={styles.favorite}>
+      <StarIcon size={10} color={colors.gold} filled />
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingVertical: 14,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: 20,
   },
   identity: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
-  symbolRow: {
-    flexDirection: 'row',
+  favorite: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    boxShadow: '0px 1px 3px rgba(16, 24, 40, 0.18)',
   },
   quote: {
-    width: 88,
+    minWidth: 84,
     alignItems: 'flex-end',
-    gap: 5,
+    gap: 6,
+  },
+  price: {
+    fontVariant: ['tabular-nums'],
   },
 })

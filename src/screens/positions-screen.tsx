@@ -287,6 +287,7 @@ function LivePositionCard({
       iconKind={instrument.icon}
       iconLabel={instrument.iconLabel}
       iconTint={instrument.iconTint}
+      category={instrument.category}
       side={marked.side}
       lots={marked.lots}
       entry={marked.entry}

@@ -1,0 +1,13 @@
+/*
+ * Web only — Metro turns CSS imports into no-ops on iOS and Android.
+ *
+ * wagmi-charts draws the gradient wash, the dashed baseline and the resting
+ * dot in an <svg> positioned to fill its box but given no size. Browsers size
+ * an unsized <svg> at 300 × 150 regardless of its insets, which cut the wash
+ * off a third of the way down the plot. Native lays the same view out to
+ * fill its parent, so this only restores parity.
+ */
+#wavex-price-chart svg {
+  width: 100%;
+  height: 100%;
+}

@@ -39,3 +39,32 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
   },
 })
+
+/**
+ * The same pairing on a tinted chip — for dense lists, where a bare coloured
+ * number gets lost next to the price.
+ */
+export function DeltaPill({ label, direction, size = 13 }: Omit<DeltaProps, 'onInk'>) {
+  const up = direction === 'up'
+  const tint = up ? colors.green : colors.red
+  return (
+    <View style={[pill.base, { backgroundColor: up ? colors.greenSoft : colors.redSoft }]}>
+      <DeltaTriangle direction={direction} color={tint} size={size * 0.62} />
+      <Text style={[styles.label, { color: tint, fontSize: size, lineHeight: size * 1.3 }]}>
+        {label}
+      </Text>
+    </View>
+  )
+}
+
+const pill = StyleSheet.create({
+  base: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderCurve: 'continuous',
+  },
+})

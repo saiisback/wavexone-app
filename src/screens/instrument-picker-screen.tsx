@@ -76,7 +76,14 @@ export function InstrumentPickerScreen() {
             onPress={() => choose(item.id)}
             style={styles.row}
           >
-            <AssetIcon kind={item.icon} label={item.iconLabel} tint={item.iconTint} size={38} />
+            <AssetIcon
+              kind={item.icon}
+              label={item.iconLabel}
+              tint={item.iconTint}
+              symbol={item.symbol}
+              category={item.category}
+              size={38}
+            />
             <View style={styles.identity}>
               <Text variant="strong" numberOfLines={1}>
                 {item.symbol}

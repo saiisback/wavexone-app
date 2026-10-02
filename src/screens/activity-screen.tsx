@@ -164,6 +164,8 @@ export function ActivityScreen() {
         iconKind={instrument?.icon}
         iconLabel={instrument?.iconLabel}
         iconTint={instrument?.iconTint}
+        iconSymbol={instrument?.symbol}
+        iconCategory={instrument?.category}
         onMenu={openRowMenu}
       />
     )

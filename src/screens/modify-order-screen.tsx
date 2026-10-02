@@ -142,6 +142,8 @@ export function ModifyOrderScreen() {
           kind={instrument.icon}
           label={instrument.iconLabel}
           tint={instrument.iconTint}
+          symbol={instrument.symbol}
+          category={instrument.category}
           size={42}
         />
         <View style={styles.identity}>

@@ -15,10 +15,12 @@ import {
   colors,
   fonts,
   radius,
+  shadow,
   useActionMenu,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
 import { MarketRow } from '../features/markets/market-row'
+import { MoverCard } from '../features/markets/mover-card'
 import { useSession } from '../data/store'
 import type { Instrument } from '../data/types'
 import { useMarketData } from '../features/markets/use-market-data'
@@ -37,9 +39,15 @@ const FILTERS = [
 ] as const
 type Filter = (typeof FILTERS)[number]
 
+/** How many instruments the "Top movers" strip shows. */
+const MOVER_COUNT = 6
+
 /**
  * Markets tab. Not in the supplied mockups — built from the same primitives
  * so it sits alongside Market Watch without introducing new visual rules.
+ *
+ * Search and the category chips stay pinned; the "Top movers" strip and the
+ * section heading scroll with the list.
  */
 export function MarketsScreen() {
   const { openInstrument, openOrderTicket } = useAppNavigation()
@@ -71,6 +79,12 @@ export function MarketsScreen() {
     if (!needle) return true
     return item.symbol.toLowerCase().includes(needle) || item.name.toLowerCase().includes(needle)
   })
+
+  // Biggest moves either way, from the catalogue snapshot.
+  const movers = [...instruments]
+    .sort((left, right) => Math.abs(right.changePercent) - Math.abs(left.changePercent))
+    .slice(0, MOVER_COUNT)
+  const showMovers = filter === 'All' && !needle && movers.length > 1
 
   const openRowMenu = (instrumentId: string) => {
     const instrument = instruments.find((item) => item.id === instrumentId)
@@ -114,6 +128,7 @@ export function MarketsScreen() {
       iconKind={item.icon}
       iconLabel={item.iconLabel}
       iconTint={item.iconTint}
+      category={item.category}
       spark={sparkById?.get(item.id) ?? item.spark}
       sparkTone={sparkById?.has(item.id) ? undefined : item.sparkTone}
       onPress={openInstrument}
@@ -125,7 +140,17 @@ export function MarketsScreen() {
   return (
     <Screen>
       <Gutter style={styles.titleRow}>
-        <Text variant="title">Markets</Text>
+        <View>
+          <Text variant="title">Markets</Text>
+          {instruments.length > 0 ? (
+            <View style={styles.subtitle}>
+              <View style={styles.liveDot} />
+              <Text variant="caption" color={colors.textMuted}>
+                {instruments.length} instruments · live prices
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={filter === 'Favorites' ? 'Show all markets' : 'Show favourites'}
@@ -196,6 +221,52 @@ export function MarketsScreen() {
             <QueryStateView state={catalogue} render={() => null} />
           )
         }
+        ListHeaderComponent={
+          rows.length > 0 ? (
+            <View>
+              {showMovers ? (
+                <View style={styles.movers}>
+                  <Text variant="strong" style={styles.sectionTitle}>
+                    Top movers
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.moverStrip}
+                    style={styles.moverScroller}
+                  >
+                    {movers.map((item) => (
+                      <MoverCard
+                        key={item.id}
+                        id={item.id}
+                        symbol={item.symbol}
+                        name={item.name}
+                        price={item.price}
+                        precision={item.precision}
+                        changePercent={item.changePercent}
+                        changeBase={item.dayOpen}
+                        iconKind={item.icon}
+                        iconLabel={item.iconLabel}
+                        iconTint={item.iconTint}
+                        category={item.category}
+                        spark={sparkById?.get(item.id) ?? item.spark}
+                        onPress={openInstrument}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+              <View style={styles.sectionRow}>
+                <Text variant="strong" style={styles.sectionTitle}>
+                  {needle ? 'Results' : filter === 'All' ? 'All markets' : filter}
+                </Text>
+                <Text variant="caption" color={colors.textMuted}>
+                  {rows.length}
+                </Text>
+              </View>
+            </View>
+          ) : null
+        }
         ListFooterComponent={rows.length > 0 ? Hint : null}
       />
     </Screen>
@@ -234,18 +305,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 12,
   },
+  subtitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.green,
+  },
   search: {
-    marginTop: 18,
+    marginTop: 16,
   },
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    height: 56,
-    borderRadius: 28,
+    height: 52,
+    borderRadius: 26,
     borderCurve: 'continuous',
     backgroundColor: colors.surface,
-    paddingHorizontal: 20,
+    boxShadow: shadow.card,
+    paddingHorizontal: 18,
   },
   searchInput: {
     flex: 1,
@@ -264,32 +348,59 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    height: 40,
+    height: 38,
     justifyContent: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
-    backgroundColor: colors.track,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   chipSelected: {
-    backgroundColor: colors.gold,
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
   },
   chipLabel: {
-    fontFamily: fonts.regular,
-    fontSize: 15,
+    fontFamily: fonts.medium,
+    fontSize: 14,
     color: colors.text,
   },
   chipLabelSelected: {
     fontFamily: fonts.bold,
+    color: colors.onInk,
+  },
+
+  movers: {
+    gap: 12,
+    paddingBottom: 18,
+  },
+  moverScroller: {
+    // Bleeds to the screen edges; the list itself sits inside the gutter.
+    marginHorizontal: -SCREEN_PADDING,
+  },
+  moverStrip: {
+    paddingHorizontal: SCREEN_PADDING,
+    paddingBottom: 4,
+    gap: 12,
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    paddingBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
   },
 
   list: {
     paddingHorizontal: SCREEN_PADDING,
-    paddingTop: 16,
+    paddingTop: 18,
     paddingBottom: TAB_BAR_CLEARANCE,
   },
   separator: {
-    height: 14,
+    height: 10,
   },
   empty: {
     paddingTop: 48,

@@ -8,6 +8,7 @@ import {
   Button,
   ButtonSubText,
   ButtonText,
+  Card,
   CircleButton,
   Delta,
   Gutter,
@@ -19,13 +20,18 @@ import {
   fonts,
   radius,
 } from '../design-system'
-import { PriceChart } from '../features/chart/price-chart'
+import {
+  ChartReadout,
+  PriceChart,
+  PriceChartProvider,
+  readoutFonts,
+} from '../features/chart/price-chart'
 import { useBackendQuery } from '../backend/provider'
 import { withLivePrice } from '../data/chart-series'
 import { directionOf, formatPercent, formatPrice } from '../data/format'
 import { applyQuote } from '../data/live-quote'
 import { useSession } from '../data/store'
-import type { Timeframe } from '../data/types'
+import type { ChartSeries, Instrument, Timeframe } from '../data/types'
 import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
@@ -35,7 +41,23 @@ import type { RootStackParamList } from '../navigation/types'
 type InstrumentRoute = RouteProp<RootStackParamList, 'Instrument'>
 const TIMEFRAMES: readonly Timeframe[] = ['1D', '5D', '1W', '1M', '3M', '6M']
 
-/** Instrument detail: quote, timeframe switch, chart and the Sell / Buy pair. */
+/** How the idle caption names each timeframe's window. */
+const PERIOD_NAMES: Record<Timeframe, string> = {
+  '1D': 'today',
+  '5D': 'past 5 days',
+  '1W': 'past week',
+  '1M': 'past month',
+  '3M': 'past 3 months',
+  '6M': 'past 6 months',
+}
+
+/** Bars short enough that a scrubbed point should read as a time of day. */
+const INTRADAY: ReadonlySet<Timeframe> = new Set(['1D', '5D', '1W'])
+
+/**
+ * Instrument detail: quote card, timeframe switch, chart, period range and
+ * the Sell / Buy pair. Touching the chart scrubs the quote card.
+ */
 export function InstrumentScreen() {
   const { goBack } = useNavigation()
   const { params } = useRoute<InstrumentRoute>()
@@ -67,13 +89,54 @@ export function InstrumentScreen() {
     )
   }
 
-  const direction = directionOf(instrument.changePercent)
-
   const favorite = () => {
     const next = !isFavorite
     toggleFavorite(instrument.id)
     void setFavorite(instrument.id, next).catch(() => toggleFavorite(instrument.id))
   }
+
+  // The newest point follows the streamed price.
+  const series = chart.status === 'ready' ? withLivePrice(chart.data, quote?.price) : undefined
+
+  const content = (
+    <>
+      <Gutter>
+        <QuoteCard instrument={instrument} series={series} timeframe={timeframe} />
+      </Gutter>
+
+      <Gutter style={styles.timeframes}>
+        {TIMEFRAMES.map((option) => {
+          const selected = option === timeframe
+          return (
+            <Pressable
+              key={option}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              onPress={() => setTimeframe(option)}
+              style={[styles.timeframe, selected ? styles.timeframeSelected : null]}
+            >
+              <Text style={[styles.timeframeLabel, selected ? styles.timeframeLabelSelected : null]}>
+                {option}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </Gutter>
+
+      <Gutter style={styles.chart}>
+        <QueryStateView
+          state={chart}
+          render={() => (series ? <PriceChart series={series} /> : null)}
+        />
+      </Gutter>
+
+      {series ? (
+        <Gutter>
+          <RangeStrip series={series} instrument={instrument} />
+        </Gutter>
+      ) : null}
+    </>
+  )
 
   return (
     <Screen>
@@ -83,10 +146,20 @@ export function InstrumentScreen() {
         </CircleButton>
 
         <View style={styles.headerTitle}>
-          <Text variant="heading" style={styles.symbol}>
-            {instrument.symbol}
-          </Text>
-          <Text variant="body" color={colors.textMuted}>
+          <View style={styles.headerSymbol}>
+            <AssetIcon
+              kind={instrument.icon}
+              label={instrument.iconLabel}
+              tint={instrument.iconTint}
+              symbol={instrument.symbol}
+              category={instrument.category}
+              size={24}
+            />
+            <Text variant="heading" style={styles.symbol}>
+              {instrument.symbol}
+            </Text>
+          </View>
+          <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
             {instrument.description}
           </Text>
         </View>
@@ -100,76 +173,8 @@ export function InstrumentScreen() {
       </Gutter>
 
       <View style={styles.content}>
-        <Gutter>
-          <View style={styles.quote}>
-            <View style={styles.quoteMark} pointerEvents="none">
-              <AssetIcon
-                kind={instrument.icon}
-                tint={QUOTE_MARK_TINT}
-                size={96}
-                label={instrument.iconLabel}
-              />
-            </View>
-
-            <View style={styles.quoteIdentity}>
-              <Text variant="displaySm" color={colors.onInk}>
-                {formatPrice(instrument.price, instrument.precision)}
-              </Text>
-              <Text variant="body" color={colors.onInkMuted}>
-                {instrument.description}
-              </Text>
-            </View>
-
-            <Delta label={formatPercent(instrument.changePercent)} direction={direction} onInk />
-          </View>
-        </Gutter>
-
-        <Gutter style={styles.timeframes}>
-          {TIMEFRAMES.map((option) => {
-            const selected = option === timeframe
-            return (
-              <Pressable
-                key={option}
-                accessibilityRole="tab"
-                accessibilityState={{ selected }}
-                onPress={() => setTimeframe(option)}
-                style={[styles.timeframe, selected ? styles.timeframeSelected : null]}
-              >
-                <Text
-                  style={[styles.timeframeLabel, selected ? styles.timeframeLabelSelected : null]}
-                >
-                  {option}
-                </Text>
-              </Pressable>
-            )
-          })}
-        </Gutter>
-
-        <Gutter style={styles.chart}>
-          <QueryStateView
-            state={chart}
-            render={(loaded) => {
-              // The newest point follows the streamed price.
-              const series = withLivePrice(loaded, quote?.price)
-              return <PriceChart
-                // Remounting per timeframe keeps the plot's measured size honest
-                // when the axis gutter width changes with longer labels.
-                key={timeframe}
-                series={series.points}
-                opens={series.opens}
-                months={series.labels}
-                cursorIndex={series.cursorIndex}
-                cursorOpen={series.cursorOpen}
-                cursorClose={series.cursorClose}
-                min={series.min}
-                max={series.max}
-                step={series.step}
-                axisDecimals={series.axisDecimals}
-                precision={instrument.precision}
-              />
-            }}
-          />
-        </Gutter>
+        {/* The provider spans the quote card and the plot so one cursor drives both. */}
+        {series ? <PriceChartProvider series={series}>{content}</PriceChartProvider> : content}
       </View>
 
       <Gutter style={styles.actions}>
@@ -190,8 +195,95 @@ export function InstrumentScreen() {
   )
 }
 
-/** The instrument mark printed faintly inside the dark quote card. */
-const QUOTE_MARK_TINT = 'rgba(255, 255, 255, 0.08)'
+/**
+ * Dark quote card. With a chart loaded the price and caption follow the
+ * crosshair; without one they show the live quote and the long name.
+ */
+function QuoteCard({
+  instrument,
+  series,
+  timeframe,
+}: {
+  instrument: Instrument
+  series: ChartSeries | undefined
+  timeframe: Timeframe
+}) {
+  const direction = directionOf(instrument.changePercent)
+  const first = series?.points[0]
+  const periodChange = first ? ((instrument.price - first) / first) * 100 : undefined
+
+  return (
+    <View style={styles.quote}>
+      <View style={styles.quoteTop}>
+        <AssetIcon
+          kind={instrument.icon}
+          label={instrument.iconLabel}
+          tint={instrument.iconTint}
+          symbol={instrument.symbol}
+          category={instrument.category}
+          size={36}
+        />
+        <Text variant="caption" color={colors.onInkMuted} style={styles.quoteName} numberOfLines={1}>
+          {instrument.description}
+        </Text>
+        <View style={styles.today}>
+          <Delta label={formatPercent(instrument.changePercent)} direction={direction} onInk size={15} />
+          <Text variant="micro" color={colors.onInkMuted}>
+            Today
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.quoteBody}>
+        {series ? (
+          <ChartReadout
+            price={instrument.price}
+            precision={instrument.precision}
+            caption={
+              periodChange === undefined
+                ? instrument.description
+                : `${formatPercent(periodChange)} ${PERIOD_NAMES[timeframe]}`
+            }
+            intraday={INTRADAY.has(timeframe)}
+            hasTimes={series.times !== undefined}
+            priceStyle={readoutFonts.price}
+            captionStyle={readoutFonts.caption}
+          />
+        ) : (
+          <>
+            <Text style={readoutFonts.price}>{formatPrice(instrument.price, instrument.precision)}</Text>
+            <Text style={readoutFonts.caption}>{instrument.description}</Text>
+          </>
+        )}
+      </View>
+    </View>
+  )
+}
+
+/** The period's open, high and low, plus the current spread. */
+function RangeStrip({ series, instrument }: { series: ChartSeries; instrument: Instrument }) {
+  const { precision } = instrument
+  const cells = [
+    { label: 'Open', value: formatPrice(series.points[0], precision) },
+    { label: 'High', value: formatPrice(Math.max(...series.points), precision) },
+    { label: 'Low', value: formatPrice(Math.min(...series.points), precision) },
+    { label: 'Spread', value: formatPrice(Math.max(0, instrument.ask - instrument.bid), precision) },
+  ]
+  return (
+    <Card padded={false} style={styles.range}>
+      {cells.map((cell, index) => (
+        <View key={cell.label} style={[styles.rangeCell, index > 0 ? styles.rangeDivider : null]}>
+          <Text variant="micro" color={colors.textMuted}>
+            {cell.label}
+          </Text>
+          <Text style={styles.rangeValue} numberOfLines={1} adjustsFontSizeToFit>
+            {cell.value}
+          </Text>
+        </View>
+      ))}
+    </Card>
+  )
+}
 
 const styles = StyleSheet.create({
   state: { paddingTop: 32 },
@@ -199,42 +291,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 8,
-    paddingBottom: 18,
+    paddingBottom: 14,
   },
   headerTitle: {
     flex: 1,
     alignItems: 'center',
     gap: 2,
+    paddingHorizontal: 8,
+  },
+  headerSymbol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   symbol: {
-    fontSize: 21,
+    fontSize: 20,
   },
   content: {
     flex: 1,
-    paddingBottom: 18,
-    gap: 16,
+    paddingBottom: 14,
+    gap: 14,
   },
   chart: {
     flex: 1,
   },
 
   quote: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.ink,
     borderRadius: 24,
     borderCurve: 'continuous',
-    paddingHorizontal: 20,
-    paddingVertical: 22,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
+    gap: 12,
     overflow: 'hidden',
   },
-  quoteMark: {
-    position: 'absolute',
-    left: '46%',
-    bottom: -14,
+  quoteTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  quoteIdentity: {
+  quoteName: {
     flex: 1,
+  },
+  today: {
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  quoteBody: {
     gap: 4,
   },
 
@@ -244,8 +348,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   timeframe: {
-    paddingHorizontal: 18,
-    paddingVertical: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
   },
@@ -253,13 +357,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
   },
   timeframeLabel: {
-    fontFamily: fonts.regular,
-    fontSize: 16,
-    color: colors.text,
+    fontFamily: fonts.medium,
+    fontSize: 15,
+    color: colors.textMuted,
   },
   timeframeLabelSelected: {
     fontFamily: fonts.bold,
     color: colors.onInk,
+  },
+
+  range: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    paddingVertical: 12,
+  },
+  rangeCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 4,
+  },
+  rangeDivider: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.divider,
+  },
+  rangeValue: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
   },
 
   actions: {
