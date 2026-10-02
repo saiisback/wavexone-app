@@ -18,11 +18,18 @@ npx expo start              # start the dev server
 npx expo lint               # lint
 npx tsc --noEmit            # typecheck
 npm test                    # jest
+npm run test:live           # read-only regression suite against the real API (tests/live/)
+npm run capture:fixtures    # same, and refresh tests/fixtures/captured/ (demo login only)
 npx expo-doctor             # diagnose dependency and config issues
 npx expo install --fix      # fix incompatible package versions
 ```
 
 Run lint, typecheck and tests before declaring any task done.
+
+Unit tests replay real server traffic from `tests/fixtures/captured/` (loaded
+through `tests/fixtures/captured/index.ts`) rather than hand-written payloads.
+The signed-in live suite reads `WAVEX_LIVE_EMAIL` / `WAVEX_LIVE_PASSWORD`
+from `.env.local`; never commit them, and capture only with a demo login.
 
 ## Navigation & Routing
 

@@ -1,0 +1,17 @@
+{
+  "market-feed": {
+    "capturedAt": "2026-10-02T14:28:27.144Z",
+    "files": [
+      "feeds/market-feed.json"
+    ],
+    "dropped": []
+  },
+  "gate": {
+    "capturedAt": "2026-10-02T14:28:28.508Z",
+    "files": [
+      "http/gate/trading/watch.json",
+      "http/gate/portal/apiBootstrap.json"
+    ],
+    "dropped": []
+  }
+}

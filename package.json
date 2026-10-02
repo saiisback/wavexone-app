@@ -45,7 +45,9 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "test:live": "jest -c jest.live.config.js",
+    "capture:fixtures": "WAVEX_CAPTURE=1 jest -c jest.live.config.js"
   },
   "private": true,
   "overrides": {
@@ -57,6 +59,10 @@
     "testMatch": [
       "<rootDir>/tests/**/*.test.ts",
       "<rootDir>/tests/**/*.test.tsx"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "<rootDir>/tests/live/"
     ],
     "setupFiles": [
       "<rootDir>/jest.setup.js"
