@@ -8,12 +8,12 @@ export const colors = {
   bg: '#F7F7F7',
   /** Card / sheet surface. */
   surface: '#FFFFFF',
-  /** Filled dark surfaces: balance card, price card, Sell button, Trade FAB. */
-  ink: '#1A1A1A',
-  /** Slightly lifted dark, used for the chart tooltip. */
-  inkRaised: '#2F2F2F',
-  /** Navy surface for the home portfolio card and the Trade FAB. */
-  navy: '#1E2A5E',
+  /**
+   * Filled dark surfaces: portfolio and balance cards, quote card, Sell
+   * button, Trade FAB, selected chips. Brand navy, which replaced the
+   * mockups' near-black; body text stays `text`.
+   */
+  ink: '#1E2A5E',
 
   /** Brand gold. Buy button, active segment, portfolio band, chart line. */
   gold: '#E6BE3F',

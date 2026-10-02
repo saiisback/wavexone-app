@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   portfolio: {
     borderRadius: 24,
     borderCurve: 'continuous',
-    backgroundColor: colors.navy,
+    backgroundColor: colors.ink,
     overflow: 'hidden',
   },
   // Rounded on all four corners: the bottom pair reveals the dark card behind.

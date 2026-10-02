@@ -94,9 +94,9 @@ function TabGlyph({ name, focused }: { name: keyof TabParamList; focused: boolea
   switch (name) {
     case 'Home':
       // Drawn solid in every state, exactly as in the mockups.
-      return <HomeIcon size={25} color={colors.text} />
+      return <HomeIcon size={25} color={focused ? colors.ink : colors.text} />
     case 'Markets':
-      return <MarketsIcon size={25} color={colors.text} filled={focused} />
+      return <MarketsIcon size={25} color={focused ? colors.ink : colors.text} filled={focused} />
     case 'Positions':
       return focused ? <PositionsIconFilled size={25} /> : <PositionsIcon size={25} color={colors.text} />
     case 'More':
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     width: FAB_SIZE,
     height: FAB_SIZE,
     borderRadius: FAB_SIZE / 2,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: shadow.fab,
@@ -165,5 +165,6 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     fontFamily: fonts.bold,
+    color: colors.ink,
   },
 })
