@@ -104,6 +104,14 @@ shape is a guess — see `issueOrderFingerprint` in
 
 ## Safe future capture procedure
 
+`npm run capture:fixtures` now does this automatically: it runs the read-only
+live suite (`tests/live/`), refuses to write anything unless the signed-in
+account is a demo account, drops any live accounts the login can see,
+pseudonymises identity values, and writes to `tests/fixtures/captured/`.
+`tests/fixtures/captures.test.ts` re-checks the committed result on every
+`npm test`. The manual rules below still apply to anything captured by hand.
+
+
 Capture only on an authorized account, redact every scalar value, retain field
 names and types, and add the shape to `tests/backend/fixtures/`. Never commit a
 Postman export, raw token, password, portal cookie, fingerprint, name, contact

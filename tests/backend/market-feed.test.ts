@@ -5,8 +5,8 @@ import {
   fetchSparklines,
   type TradingEvent,
 } from '../../src/backend/market-feed'
-import { BackendError } from '../../src/backend/errors'
 import { FakeSocket, createFakeSocket } from './fixtures/fake-socket'
+import { ohlcResponse, tickCapture } from '../fixtures/captured'
 
 beforeEach(() => {
   jest.useFakeTimers()
@@ -18,41 +18,51 @@ afterEach(() => {
 })
 
 describe('quote feed', () => {
+  // Gold, the euro and bitcoin streaming together, as the live feed sent them.
+  const live = tickCapture(['XAUUSD', 'EURUSD', 'BTCUSD'])
+
   it('opens one socket for every subscribed symbol and subscribes them together', () => {
     const feed = createQuoteFeed('wss://feed.test/ticks', createFakeSocket)
     feed.subscribe('XAUUSD', jest.fn())
     feed.subscribe('EURUSD', jest.fn())
+    feed.subscribe('BTCUSD', jest.fn())
     jest.advanceTimersByTime(60)
 
     expect(FakeSocket.instances).toHaveLength(1)
     const socket = FakeSocket.latest()
     socket.open()
-    expect(socket.sent).toEqual([{ action: 'subscribe', symbols: ['XAUUSD', 'EURUSD'] }])
+    // Exactly what the app sent the real feed.
+    expect(socket.sent).toEqual([live.subscribe])
   })
 
   it('notifies only the listeners of a symbol whose quote changed', () => {
     const feed = createQuoteFeed('wss://feed.test/ticks', createFakeSocket)
-    const gold = jest.fn()
-    const euro = jest.fn()
-    feed.subscribe('XAUUSD', gold)
-    feed.subscribe('EURUSD', euro)
+    const calls: Record<string, number> = {}
+    for (const symbol of ['XAUUSD', 'EURUSD', 'BTCUSD']) {
+      calls[symbol] = 0
+      feed.subscribe(symbol, () => (calls[symbol] += 1))
+    }
     jest.advanceTimersByTime(60)
     const socket = FakeSocket.latest()
     socket.open()
 
-    socket.receive({ status: 'subscribed', symbols: ['XAUUSD', 'EURUSD'] })
-    socket.receive({
-      XAUUSD: { p: 2400.5, v: 1, b: 2400.4, a: 2400.6 },
-      EURUSD: { p: 1.1, v: 1, b: 1.09, a: 1.11 },
-    })
-    socket.receive({
-      XAUUSD: { p: 2401, v: 1, b: 2400.9, a: 2401.1 },
-      EURUSD: { p: 1.1, v: 1, b: 1.09, a: 1.11 },
-    })
+    socket.receive(live.acknowledgement)
+    live.frames.forEach((frame) => socket.receive(frame))
 
-    expect(gold).toHaveBeenCalledTimes(2)
-    expect(euro).toHaveBeenCalledTimes(1)
-    expect(feed.latest('XAUUSD')).toEqual({ bid: 2400.9, ask: 2401.1, price: 2401 })
+    // The feed resends unchanged quotes; only a moved bid or ask is news.
+    const changes: Record<string, number> = {}
+    for (const symbol of Object.keys(calls)) {
+      const quotes = live.frames.map((frame) => frame[symbol]).filter(Boolean)
+      changes[symbol] = quotes.filter(
+        (quote, index) => index === 0 || quote.b !== quotes[index - 1].b || quote.a !== quotes[index - 1].a,
+      ).length
+      expect(calls[symbol]).toBe(changes[symbol])
+    }
+    // The capture has to show at least one resent quote for this to prove anything.
+    expect(Object.values(changes).some((count) => count < live.frames.length)).toBe(true)
+
+    const last = live.frames.at(-1)!.XAUUSD
+    expect(feed.latest('XAUUSD')).toEqual({ bid: last.b, ask: last.a, price: last.p })
   })
 
   it('reconnects with back-off and re-subscribes after a drop', () => {
@@ -144,34 +154,30 @@ describe('trading events', () => {
 
 describe('sparklines', () => {
   it('collects closes per symbol over one socket and skips symbols the feed lacks', async () => {
-    const pending = fetchSparklines(['XAUUSD', 'US30'], { createSocket: createFakeSocket })
+    const pending = fetchSparklines(['XAUUSD', 'NOPEXX'], { createSocket: createFakeSocket })
     const socket = FakeSocket.latest()
     socket.open()
     expect(socket.sent).toHaveLength(2)
-    socket.receive({
-      action: 'ohlc_response',
-      success: true,
-      uid: 'XAUUSD',
-      data: [
-        { t: '2026-10-02T02:00:00.000Z', o: 1, h: 1, l: 1, c: 2402 },
-        { t: '2026-10-02T01:00:00.000Z', o: 1, h: 1, l: 1, c: 2401 },
-      ],
-    })
-    socket.receive({ action: 'ohlc_response', success: false, uid: 'US30', error: 'not entitled' })
+
+    const gold = ohlcResponse({ symbol: 'XAUUSD', timeframe: '60', limit: 24 })
+    // Delivered newest first, to show the order is the app's job, not the feed's.
+    socket.receive({ ...gold, data: [...gold.data!].reverse() })
+    socket.receive({ ...ohlcResponse({ symbol: 'NOPEXX', timeframe: '1D' }), uid: 'NOPEXX' })
 
     const result = await pending
-    expect(result.get('XAUUSD')).toEqual([2401, 2402])
-    expect(result.has('US30')).toBe(false)
+    expect(result.get('XAUUSD')).toEqual(gold.data!.map((bar) => bar.c))
+    expect(result.has('NOPEXX')).toBe(false)
   })
 })
 
 describe('candle errors', () => {
   it('reports a market the feed does not carry as a rejection', async () => {
-    const pending = fetchCandles('US30', '60', 10, { createSocket: createFakeSocket })
+    const pending = fetchCandles('NOPEXX', '1D', 1, { createSocket: createFakeSocket })
     const socket = FakeSocket.latest()
     socket.open()
     const { uid } = socket.sent[0] as { uid: string }
-    socket.receive({ action: 'ohlc_response', success: false, uid, error: 'not entitled' })
-    await expect(pending).rejects.toBeInstanceOf(BackendError)
+    const refusal = ohlcResponse({ symbol: 'NOPEXX', timeframe: '1D' })
+    socket.receive({ ...refusal, uid })
+    await expect(pending).rejects.toMatchObject({ kind: 'rejected', serverMessage: refusal.error })
   })
 })

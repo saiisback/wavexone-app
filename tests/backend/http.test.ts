@@ -1,5 +1,6 @@
 import { BackendError } from '../../src/backend/errors'
 import { assertHttps, buildUrl, send, unwrapEnvelope } from '../../src/backend/http'
+import { httpCapture, httpText } from '../fixtures/captured'
 
 /**
  * Transport behaviour. Guide §5 requires four different failure shapes to
@@ -60,6 +61,22 @@ describe('status mapping', () => {
   ])('maps HTTP %i to %s', async (status, kind) => {
     fetchMock.mockResolvedValue({ status, text: async () => 'nope' })
     await expect(send(request())).rejects.toMatchObject({ kind })
+  })
+
+  it('reads the trading API\'s real answer to a missing token as signed out', async () => {
+    // Captured: `collect=watch` with no credentials.
+    const real = httpCapture('trading/watch', 'gate')
+    fetchMock.mockResolvedValue({ status: real.status, text: async () => httpText('trading/watch', 'gate') })
+    await expect(send(request())).rejects.toMatchObject({ kind: 'auth', status: 401, retryable: false })
+  })
+
+  it('reads the portal\'s real expired-session envelope as signed out, not as a decline', async () => {
+    // Captured: `apiBootstrap` with no portal session. A 401 that also says
+    // `status: fail` must still be an auth problem, so the portal re-establishes.
+    const real = httpCapture<{ status: string }>('portal/apiBootstrap', 'gate')
+    expect(real.body.status).toBe('fail')
+    fetchMock.mockResolvedValue({ status: real.status, text: async () => httpText('portal/apiBootstrap', 'gate') })
+    await expect(send(request())).rejects.toMatchObject({ kind: 'auth' })
   })
 
   it('returns the body on a 200', async () => {

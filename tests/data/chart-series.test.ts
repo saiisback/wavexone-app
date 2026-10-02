@@ -1,79 +1,103 @@
-import { buildChartSeries, niceAxis, withLivePrice } from '../../src/data/chart-series'
+import { CHART_REQUESTS, buildChartSeries, niceAxis, withLivePrice } from '../../src/data/chart-series'
+import type { Timeframe } from '../../src/data/types'
+import { capturedCandles } from '../fixtures/captured'
 
-const HOUR = 60 * 60 * 1000
-const start = Date.parse('2026-10-01T00:00:00Z')
-
-function bars(count: number, stepMs: number, price = (index: number) => 100 + index) {
-  return Array.from({ length: count }, (_, index) => ({
-    time: start + index * stepMs,
-    open: price(index) - 0.5,
-    close: price(index),
-  }))
+/** The bars the feed sent for one chart button, exactly as the app requests them. */
+function candlesFor(symbol: string, timeframe: Timeframe) {
+  const request = CHART_REQUESTS[timeframe]
+  return capturedCandles({ symbol, timeframe: request.timeframe, limit: request.limit })
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
 describe('buildChartSeries', () => {
-  it('keeps only the window ending at the newest bar and rests the cursor on it', () => {
-    // 3 days of hourly bars; 1D keeps the last 24 hours.
-    const series = buildChartSeries(bars(72, HOUR), '1D')!
-    expect(series.points).toHaveLength(24)
-    expect(series.cursorIndex).toBe(23)
-    expect(series.cursorClose).toBe(171)
-    expect(series.cursorOpen).toBe(170.5)
-    expect(series.opens).toHaveLength(24)
-    expect(series.labels).toHaveLength(5)
-    expect(new Set(series.labels).size).toBe(5)
-  })
+  it.each(Object.keys(CHART_REQUESTS) as Timeframe[])(
+    'keeps only the %s window ending at the newest gold bar and rests the cursor on it',
+    (timeframe) => {
+      const candles = candlesFor('XAUUSD', timeframe)
+      const newest = candles.at(-1)!
+      const kept = candles.filter((bar) => bar.time > newest.time - CHART_REQUESTS[timeframe].days * DAY_MS)
+
+      const series = buildChartSeries(candles, timeframe)!
+      expect(series.points).toEqual(kept.map((bar) => bar.close))
+      expect(series.opens).toEqual(kept.map((bar) => bar.open))
+      expect(series.cursorIndex).toBe(kept.length - 1)
+      expect(series.cursorClose).toBe(newest.close)
+      expect(series.cursorOpen).toBe(newest.open)
+      expect(new Set(series.labels).size).toBe(series.labels.length)
+    },
+  )
 
   it('sorts bars that arrive out of order', () => {
-    const series = buildChartSeries([...bars(3, HOUR)].reverse(), '5D')!
-    expect(series.points).toEqual([100, 101, 102])
+    const candles = candlesFor('XAUUSD', '5D')
+    const shuffled = [...candles].reverse()
+    expect(buildChartSeries(shuffled, '5D')).toEqual(buildChartSeries(candles, '5D'))
   })
 
   it('returns null when there is too little to draw', () => {
     expect(buildChartSeries([], '1M')).toBeNull()
-    expect(buildChartSeries(bars(1, HOUR), '1M')).toBeNull()
+    expect(buildChartSeries(candlesFor('XAUUSD', '1M').slice(-1), '1M')).toBeNull()
   })
 
   it('puts every point inside the axis', () => {
-    const series = buildChartSeries(bars(30, 24 * HOUR, (index) => 2380 + Math.sin(index) * 40), '3M')!
-    for (const point of series.points) {
-      expect(point).toBeGreaterThanOrEqual(series.min)
-      expect(point).toBeLessThanOrEqual(series.max)
+    for (const [symbol, timeframe] of [['XAUUSD', '3M'], ['EURUSD', '1M']] as const) {
+      const series = buildChartSeries(candlesFor(symbol, timeframe), timeframe)!
+      for (const point of series.points) {
+        expect(point).toBeGreaterThanOrEqual(series.min)
+        expect(point).toBeLessThanOrEqual(series.max)
+      }
     }
   })
 })
 
 describe('niceAxis', () => {
+  const closes = (symbol: string, timeframe: Timeframe) => candlesFor(symbol, timeframe).map((bar) => bar.close)
+
   it('rounds gold-sized prices to whole steps', () => {
-    expect(niceAxis(2012, 2588)).toEqual({ min: 2000, max: 2600, step: 200, axisDecimals: 0 })
+    const gold = closes('XAUUSD', '6M')
+    const axis = niceAxis(Math.min(...gold), Math.max(...gold))
+    expect(axis.axisDecimals).toBe(0)
+    expect(Number.isInteger(axis.step)).toBe(true)
+    expect(axis.min % axis.step).toBe(0)
   })
 
   it('gives FX prices enough decimals and no float noise', () => {
-    const axis = niceAxis(1.12512, 1.12791)
-    expect(axis.axisDecimals).toBe(3)
-    expect(axis.min).toBe(1.125)
-    expect(axis.max).toBe(1.128)
+    const euro = closes('EURUSD', '1M')
+    const axis = niceAxis(Math.min(...euro), Math.max(...euro))
+    expect(axis.axisDecimals).toBeGreaterThanOrEqual(2)
+    expect(axis.min).toBe(Number(axis.min.toFixed(axis.axisDecimals)))
+    expect(axis.max).toBe(Number(axis.max.toFixed(axis.axisDecimals)))
+    expect(axis.min).toBeLessThanOrEqual(Math.min(...euro))
+    expect(axis.max).toBeGreaterThanOrEqual(Math.max(...euro))
   })
 
   it('survives a flat series', () => {
-    const axis = niceAxis(100, 100)
+    const price = closes('XAUUSD', '1D').at(-1)!
+    const axis = niceAxis(price, price)
     expect(axis.max).toBeGreaterThan(axis.min)
   })
 })
 
 describe('withLivePrice', () => {
-  const series = buildChartSeries(bars(24, HOUR), '1D')!
+  const candles = candlesFor('XAUUSD', '1D')
+  const series = buildChartSeries(candles, '1D')!
 
   it('moves the newest point and the read-out to the live price', () => {
-    const live = withLivePrice(series, 123.4)
-    expect(live.points.at(-1)).toBe(123.4)
-    expect(live.cursorClose).toBe(123.4)
+    // A price inside the drawn range: the median close of the day.
+    const inside = [...series.points].sort((a, b) => a - b)[Math.floor(series.points.length / 2)]
+    const live = withLivePrice(series, inside)
+    expect(live.points.at(-1)).toBe(inside)
+    expect(live.cursorClose).toBe(inside)
     expect(live.min).toBe(series.min)
+    expect(live.max).toBe(series.max)
   })
 
   it('widens the axis only when the price leaves it', () => {
-    const live = withLivePrice(series, 500)
-    expect(live.max).toBeGreaterThanOrEqual(500)
+    // The 6-month high is far above a single day's range.
+    const high = Math.max(...candlesFor('XAUUSD', '6M').map((bar) => bar.high))
+    const live = withLivePrice(series, high)
+    expect(high).toBeGreaterThan(series.max)
+    expect(live.max).toBeGreaterThanOrEqual(high)
   })
 
   it('leaves the series alone without a quote', () => {
