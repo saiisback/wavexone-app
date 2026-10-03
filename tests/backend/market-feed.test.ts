@@ -143,6 +143,34 @@ describe('trading events', () => {
 })
 
 describe('sparklines', () => {
+  it('finishes a partial response burst without waiting for the hard timeout', async () => {
+    const pending = fetchSparklines(['XAUUSD', 'MISSING'], {
+      timeoutMs: 10_000,
+      createSocket: createFakeSocket,
+    })
+    const socket = FakeSocket.latest()
+    socket.open()
+    socket.receive({
+      action: 'ohlc_response',
+      success: true,
+      uid: 'XAUUSD',
+      data: [
+        { t: '2026-10-02T01:00:00.000Z', o: 1, h: 1, l: 1, c: 2401 },
+        { t: '2026-10-02T02:00:00.000Z', o: 1, h: 1, l: 1, c: 2402 },
+      ],
+    })
+
+    let settled = false
+    void pending.then(() => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    await jest.advanceTimersByTimeAsync(500)
+
+    expect(settled).toBe(true)
+    await expect(pending).resolves.toEqual(new Map([['XAUUSD', [2401, 2402]]]))
+  })
+
   it('collects closes per symbol over one socket and skips symbols the feed lacks', async () => {
     const pending = fetchSparklines(['XAUUSD', 'US30'], { createSocket: createFakeSocket })
     const socket = FakeSocket.latest()

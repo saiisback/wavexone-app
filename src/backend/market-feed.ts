@@ -227,6 +227,9 @@ type BarsOptions = {
   createSocket?: SocketFactory
 }
 
+/** Feed replies arrive as a burst; unsupported symbols may never reply. */
+const PARTIAL_BATCH_IDLE_MS = 250
+
 /**
  * Bars for many symbols over one socket, oldest first. Resolves with whatever
  * answered before the timeout; a symbol the feed does not carry is absent.
@@ -243,10 +246,12 @@ export function fetchBars(
     const socket = createSocket(url)
     let answered = 0
     let settled = false
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
     const finish = () => {
       if (settled) return
       settled = true
       clearTimeout(timer)
+      clearTimeout(idleTimer)
       socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null
       socket.close()
       resolve(result)
@@ -271,7 +276,12 @@ export function fetchBars(
         const bars = message.data.flatMap(readCandle).sort((a, b) => a.time - b.time)
         if (bars.length > 0) result.set(message.uid, bars)
       }
-      if (answered >= wanted.size) finish()
+      if (answered >= wanted.size) {
+        finish()
+      } else {
+        clearTimeout(idleTimer)
+        idleTimer = setTimeout(finish, PARTIAL_BATCH_IDLE_MS)
+      }
     }
     socket.onerror = finish
     socket.onclose = finish

@@ -182,14 +182,18 @@ export class TradingApiAdapter {
    */
   async marketData(material: SessionMaterial) {
     const headers = this.headers(material)
+    const [catalogueResponse, metadataResponse] = await Promise.all([
+      this.gate.callJson('watch', { headers }),
+      this.gate.callJson('symbolSpread', { headers }),
+    ])
     const catalogue = parseResponse(
       'watch',
-      await this.gate.callJson('watch', { headers }),
+      catalogueResponse,
       parseMarketCatalogue,
     )
     const metadata = parseResponse(
       'symbolSpread',
-      await this.gate.callJson('symbolSpread', { headers }),
+      metadataResponse,
       parseSymbolMetadata,
     )
     return { catalogue, metadata }

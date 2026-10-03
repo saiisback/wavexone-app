@@ -244,6 +244,29 @@ describe('headers', () => {
 })
 
 describe('marketData', () => {
+  it('starts the catalogue and symbol settings requests together', async () => {
+    let resolveCatalogue!: (response: { status: number; text(): Promise<string> }) => void
+    let resolveMetadata!: (response: { status: number; text(): Promise<string> }) => void
+    const fetchMock = jest
+      .fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveCatalogue = resolve }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveMetadata = resolve }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const pending = adapter().marketData(MATERIAL)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    resolveCatalogue({
+      status: 200,
+      text: async () => JSON.stringify({ fx: [{ name: 'Gold', ticker: 'C:XAUUSD', market: 'metals' }] }),
+    })
+    resolveMetadata({
+      status: 200,
+      text: async () => JSON.stringify({ XAUUSD: { spread: 1, decimal: 2, lot: 100 } }),
+    })
+    await expect(pending).resolves.toMatchObject({ catalogue: [expect.objectContaining({ ticker: 'C:XAUUSD' })] })
+  })
+
   it('reads the catalogue and symbol settings, and not the dead current-day route', async () => {
     const fetchMock = scriptFetch(
       { body: JSON.stringify({ fx: [{ name: 'Gold', ticker: 'C:XAUUSD', market: 'metals' }], crypto: [] }) },
