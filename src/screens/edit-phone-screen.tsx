@@ -1,7 +1,21 @@
 import * as Crypto from 'expo-crypto'
 import { useState } from 'react'
+import { StyleSheet, View } from 'react-native'
 
-import { Button, ButtonText, Field, Sheet, Text, colors, useActionMenu } from '../design-system'
+import {
+  Button,
+  ButtonText,
+  Card,
+  Field,
+  InfoIcon,
+  Reveal,
+  Sheet,
+  Text,
+  UserIcon,
+  colors,
+  spacing,
+  useActionMenu,
+} from '../design-system'
 import { mutationFailureMessage } from '../backend/errors'
 import { useBackend, useInvalidateQueries } from '../backend/provider'
 import { useAccountData } from '../features/accounts/use-account-data'
@@ -57,27 +71,78 @@ export function EditPhoneScreen() {
   return (
     <Sheet
       title="Phone"
-      subtitle="Used by WaveXOne to contact you about your account"
       footer={
-        <Button tone="gold" disabled={!canSave} onPress={save}>
-          <ButtonText tone="gold">{saving ? 'Saving…' : 'Save'}</ButtonText>
+        <Button tone="ink" disabled={!canSave} onPress={save}>
+          <ButtonText tone="ink">{saving ? 'Saving…' : 'Save'}</ButtonText>
         </Button>
       }
     >
-      <Field
-        label="Phone number"
-        value={input ?? saved}
-        onChangeText={setInput}
-        placeholder="+44 7700 900123"
-        keyboardType="phone-pad"
-        inputMode="tel"
-        autoComplete="tel"
-        invalid={phone !== '' && !valid}
-        hint={phone !== '' && !valid ? 'Enter a phone number, including the country code.' : undefined}
-      />
-      <Text variant="caption" color={colors.textMuted}>
-        Your name, email and country are changed through WaveXOne support.
-      </Text>
+      <Reveal style={styles.intro}>
+        <View style={styles.disc}>
+          <UserIcon size={26} color={colors.brand} />
+        </View>
+        <Text variant="caption" color={colors.textMuted} style={styles.centered}>
+          Used by WaveXOne to contact you about your account
+        </Text>
+      </Reveal>
+
+      <Reveal index={1}>
+        <Card style={styles.form}>
+          <Field
+            label="Phone number"
+            value={input ?? saved}
+            onChangeText={setInput}
+            placeholder="+44 7700 900123"
+            keyboardType="phone-pad"
+            inputMode="tel"
+            autoComplete="tel"
+            invalid={phone !== '' && !valid}
+            hint={phone !== '' && !valid ? 'Enter a phone number, including the country code.' : undefined}
+          />
+        </Card>
+      </Reveal>
+
+      <Reveal index={2} style={styles.note}>
+        <InfoIcon size={16} color={colors.textSubtle} />
+        <Text variant="caption" color={colors.textMuted} style={styles.noteText}>
+          Your name, email and country are changed through WaveXOne support.
+        </Text>
+      </Reveal>
     </Sheet>
   )
 }
+
+const styles = StyleSheet.create({
+  intro: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  disc: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brandTintStrong,
+    boxShadow: `0px 0px 0px 8px ${colors.brandTint}`,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  centered: {
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  form: {
+    padding: spacing.lg,
+  },
+  note: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  noteText: {
+    flex: 1,
+  },
+})

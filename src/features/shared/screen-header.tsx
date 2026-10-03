@@ -1,7 +1,6 @@
-import { useNavigation } from '@react-navigation/native'
 import { StyleSheet, View } from 'react-native'
 
-import { ArrowLeftIcon, CircleButton, Gutter, Text, colors } from '../../design-system'
+import { ArrowLeftIcon, CircleButton, Gutter, Text, colors, useSafeBack } from '../../design-system'
 
 export type ScreenHeaderProps = {
   title: string
@@ -12,7 +11,7 @@ export type ScreenHeaderProps = {
 
 /** Back button plus title, for the screens pushed onto a tab's stack. */
 export function ScreenHeader({ title, subtitle, action }: ScreenHeaderProps) {
-  const { goBack } = useNavigation()
+  const goBack = useSafeBack()
 
   return (
     <Gutter style={styles.row}>

@@ -23,9 +23,9 @@ const labelColor: Record<BadgeTone, string> = {
 
 const styles = StyleSheet.create({
   base: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
     borderCurve: 'continuous',
   },
   label: {

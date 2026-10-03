@@ -1,10 +1,16 @@
 import { useState } from 'react'
 import { StyleSheet, View, type LayoutChangeEvent, type TextStyle } from 'react-native'
-import Animated, { useAnimatedStyle, useDerivedValue } from 'react-native-reanimated'
+import Animated, {
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated'
 import { Stop } from 'react-native-svg'
 import { AnimatedText, LineChart } from 'react-native-wagmi-charts'
 
-import { Card, Text, colors, fonts, radius } from '../../design-system'
+import { Card, Text, colors, fonts, radius, type } from '../../design-system'
 import { formatPrice } from '../../data/format'
 import type { ChartSeries } from '../../data/types'
 import { formatPercentWorklet, formatPriceWorklet, formatStampWorklet } from './worklet-format'
@@ -41,6 +47,8 @@ export type PriceChartProps = {
   series: ChartSeries
   /** Line and cursor colour. */
   color?: string
+  /** Digits for the scrubbing tooltip; the axis's own decimals when absent. */
+  precision?: number
 }
 
 /**
@@ -55,14 +63,21 @@ const Y_GUTTER = 16
 type Size = { width: number; height: number }
 
 /**
- * The plot: round-number gridlines and price axis, a gold line over a soft
- * wash, a dashed guide at the period's first price, a pulsing dot on the
- * live price, and a crosshair that follows a finger (or the pointer on web).
+ * The plot: faint hairline gridlines and a quiet price axis, a bright brand
+ * line over a soft wash that fades to nothing, a dashed guide at the
+ * period's first price, a pulsing dot on the live price, and a crosshair
+ * (rule, ringed dot and a navy price tooltip) that eases in under a finger
+ * or the pointer on web.
  *
  * Fills whatever space the parent gives it, so the card reaches the
  * Sell / Buy pair on every screen height.
  */
-export function PriceChart({ series, color = colors.gold }: PriceChartProps) {
+export function PriceChart({ series, color: override, precision }: PriceChartProps) {
+  // Apple Stocks convention: green when the period closed above where it
+  // opened, red when below.
+  const first = series.points[0] ?? 0
+  const final = series.points[series.points.length - 1] ?? first
+  const color = override ?? (final < first ? colors.red : colors.green)
   // undefined until the first layout pass; nothing is drawn before then.
   const [size, setSize] = useState<Size | undefined>(undefined)
 
@@ -77,13 +92,20 @@ export function PriceChart({ series, color = colors.gold }: PriceChartProps) {
   const tickLabels = ticks.map((tick) => tick.toFixed(series.axisDecimals ?? 0))
   const axisWidth = 12 + Math.max(...tickLabels.map((label) => label.length)) * 7.6
   const last = series.points.length - 1
+  const digits = precision ?? series.axisDecimals ?? 2
+  // The tooltip text is a read-only input with no intrinsic width on web.
+  const tipWidth = formatPrice(series.max, digits).length * 7.8 + 4
+  const formatTip = ({ value }: { value: string }) => {
+    'worklet'
+    return formatPriceWorklet(Number(value), digits)
+  }
 
   /** Same mapping wagmi uses for the path: `max` at the top gutter. */
   const tickY = (value: number, height: number) =>
     Y_GUTTER + ((series.max - value) / (series.max - series.min || 1)) * (height - Y_GUTTER * 2)
 
   return (
-    <Card style={styles.card}>
+    <Card padded={false} style={styles.card}>
       <View style={styles.plotRow}>
         {/* The id scopes the web sizing fix in price-chart.css. */}
         <View nativeID="wavex-price-chart" style={styles.plot} onLayout={onLayout}>
@@ -103,27 +125,41 @@ export function PriceChart({ series, color = colors.gold }: PriceChartProps) {
                 yGutter={Y_GUTTER}
                 style={styles.chart}
               >
-                <LineChart.Path color={color} width={2.6}>
+                <LineChart.Path
+                  color={color}
+                  width={2.4}
+                  pathProps={{ strokeLinecap: 'round', strokeLinejoin: 'round' }}
+                >
                   <LineChart.Gradient color={color}>
-                    <Stop offset="0%" stopColor={color} stopOpacity={0.3} />
-                    <Stop offset="70%" stopColor={color} stopOpacity={0.06} />
+                    <Stop offset="0%" stopColor={color} stopOpacity={0.22} />
+                    <Stop offset="55%" stopColor={color} stopOpacity={0.07} />
                     <Stop offset="100%" stopColor={color} stopOpacity={0} />
                   </LineChart.Gradient>
                   <LineChart.HorizontalLine
                     at={{ index: 0 }}
                     color={colors.textSubtle}
-                    lineProps={{ strokeDasharray: '4 6', strokeWidth: 1.2 }}
+                    lineProps={{ strokeDasharray: '3 6', strokeWidth: 1, strokeOpacity: 0.7 }}
                   />
-                  <LineChart.Dot at={last} color={color} size={4.5} hasPulse />
+                  <LineChart.Dot at={last} color={color} size={4} hasPulse />
                 </LineChart.Path>
 
                 <LineChart.CursorCrosshair
                   color={color}
-                  size={14}
-                  outerSize={44}
+                  size={12}
+                  outerSize={40}
                   crosshairProps={{ style: styles.crosshairDot }}
+                  crosshairOuterProps={{ style: styles.crosshairHalo }}
                 >
-                  <CursorGuide height={size.height} />
+                  <CursorGuide height={size.height} color={color} />
+                  <LineChart.Tooltip
+                    position="top"
+                    cursorGutter={30}
+                    yGutter={2}
+                    xGutter={4}
+                    format={formatTip}
+                    style={styles.tooltip}
+                    textStyle={[styles.tooltipText, { width: tipWidth }]}
+                  />
                   <LineChart.HoverTrap />
                 </LineChart.CursorCrosshair>
               </LineChart>
@@ -137,9 +173,9 @@ export function PriceChart({ series, color = colors.gold }: PriceChartProps) {
             : tickLabels.map((label, index) => (
                 <Text
                   key={label}
-                  variant="caption"
-                  color={colors.textMuted}
-                  style={[styles.axisLabel, { top: tickY(ticks[index], size.height) - 9 }]}
+                  variant="micro"
+                  color={colors.textSubtle}
+                  style={[styles.axisLabel, { top: tickY(ticks[index], size.height) - 8 }]}
                 >
                   {label}
                 </Text>
@@ -152,7 +188,7 @@ export function PriceChart({ series, color = colors.gold }: PriceChartProps) {
           <Text
             key={`${label}-${index}`}
             variant="micro"
-            color={colors.textMuted}
+            color={colors.textSubtle}
             style={styles.column}
           >
             {label}
@@ -163,14 +199,25 @@ export function PriceChart({ series, color = colors.gold }: PriceChartProps) {
   )
 }
 
-/** Vertical rule through the crosshair while the plot is being touched. */
-function CursorGuide({ height }: { height: number }) {
+/**
+ * Vertical rule through the crosshair while the plot is being touched,
+ * fading in and out rather than blinking, and drawn in the line's colour.
+ */
+function CursorGuide({ height, color }: { height: number; color: string }) {
   const { currentX, isActive } = LineChart.useChart()
+  // A plain number animated on its own, read by the style below.
+  const shown = useSharedValue(0)
+  useAnimatedReaction(
+    () => isActive.get(),
+    (active) => {
+      shown.set(withTiming(active ? 1 : 0, { duration: 140 }))
+    },
+  )
   const style = useAnimatedStyle(() => ({
-    opacity: isActive.get() ? 1 : 0,
+    opacity: shown.get() * 0.45,
     transform: [{ translateX: currentX.get() }],
   }))
-  return <Animated.View pointerEvents="none" style={[styles.guide, { height }, style]} />
+  return <Animated.View pointerEvents="none" style={[styles.guide, { height, backgroundColor: color }, style]} />
 }
 
 export type ChartReadoutProps = {
@@ -239,9 +286,10 @@ function buildTicks(min: number, max: number, step: number) {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    paddingTop: 12,
-    paddingBottom: 8,
-    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 6,
+    paddingLeft: 14,
+    paddingRight: 8,
     borderRadius: radius.card,
   },
   plotRow: {
@@ -269,18 +317,38 @@ const styles = StyleSheet.create({
     left: 0,
     width: 1,
     marginLeft: -0.5,
-    backgroundColor: colors.textSubtle,
+    opacity: 0,
     zIndex: -1,
   },
   crosshairDot: {
     borderWidth: 3,
     borderColor: colors.surface,
-    boxShadow: '0px 2px 6px rgba(16, 24, 40, 0.25)',
+    boxShadow: '0px 3px 10px rgba(20, 24, 43, 0.30)',
+  },
+  crosshairHalo: {
+    opacity: 0.14,
+  },
+  tooltip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    backgroundColor: colors.brand,
+    boxShadow: '0px 6px 16px rgba(20, 24, 43, 0.28)',
+  },
+  tooltipText: {
+    fontFamily: fonts.semibold,
+    fontSize: 12.5,
+    lineHeight: 16,
+    color: colors.onInk,
+    textAlign: 'center',
+    padding: 0,
+    borderWidth: 0,
+    fontVariant: ['tabular-nums'],
   },
   axisLabel: {
     position: 'absolute',
-    left: 10,
-    fontSize: 12,
+    left: 8,
     fontVariant: ['tabular-nums'],
   },
   columns: {
@@ -303,8 +371,8 @@ const styles = StyleSheet.create({
   },
 })
 
-/** Used by the hero read-out's text styles. */
+/** Used by the hero read-out's text styles: the live price at hero size. */
 export const readoutFonts = {
-  price: { fontFamily: fonts.bold, fontSize: 30, lineHeight: 36, color: colors.onInk },
-  caption: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 18, color: colors.onInkMuted },
+  price: { ...type.hero, fontSize: 42, lineHeight: 50, letterSpacing: -1.6, color: colors.onInk },
+  caption: { ...type.caption, fontSize: 14, lineHeight: 18, color: colors.onInkMuted },
 } as const

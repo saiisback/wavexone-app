@@ -1,9 +1,17 @@
+import { useEffect } from 'react'
 import { StyleSheet, View, type DimensionValue } from 'react-native'
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated'
 
 import { colors } from './colors'
 import { radius, spacing } from './tokens'
 
-/** One placeholder shape. Static on purpose: no spinner, no shimmer loop. */
+/** One placeholder shape. No spinner; the group breathes as a whole. */
 export function SkeletonBlock({
   width,
   height,
@@ -23,29 +31,41 @@ export function SkeletonBlock({
 
 /**
  * Placeholder shaped like the rows it stands in for — badge, two lines and a
- * trailing value — so the layout does not jump when the data lands.
+ * trailing value — so the layout does not jump when the data lands. Pulses
+ * gently while it waits.
  */
 export function SkeletonRows({ count = 3 }: { count?: number }) {
+  const pulse = useSharedValue(1)
+  useEffect(() => {
+    pulse.set(withRepeat(withTiming(0.55, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true))
+  }, [pulse])
+  const breathing = useAnimatedStyle(() => ({ opacity: pulse.get() }))
+
   return (
-    <View accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }} style={styles.rows}>
+    <Animated.View
+      accessible
+      accessibilityLabel="Loading"
+      accessibilityState={{ busy: true }}
+      style={[styles.rows, breathing]}
+    >
       <SkeletonBlock width="38%" height={16} />
       {Array.from({ length: count }, (_, index) => (
         <View key={index} style={styles.row}>
-          <SkeletonBlock width={36} height={36} round />
+          <SkeletonBlock width={40} height={40} round />
           <View style={styles.lines}>
             <SkeletonBlock width="46%" height={13} />
             <SkeletonBlock width="70%" height={11} />
           </View>
-          <SkeletonBlock width={64} height={20} />
+          <SkeletonBlock width={64} height={22} />
         </View>
       ))}
-    </View>
+    </Animated.View>
   )
 }
 
 const styles = StyleSheet.create({
   block: {
-    backgroundColor: colors.navySoft,
+    backgroundColor: colors.track,
     borderRadius: radius.sm,
   },
   rows: {

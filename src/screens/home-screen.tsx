@@ -4,37 +4,54 @@ import { Fragment } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
 import {
+  Amount,
   Avatar,
   BellIcon,
+  BoltIcon,
   Card,
-  ChevronDownIcon,
-  Delta,
+  ChevronRightIcon,
+  CircleButton,
   DepositIcon,
   Divider,
   EmptyState,
+  Delta,
   Gutter,
+  Logo,
+  HeroScreen,
+  IconChip,
+  InfoIcon,
+  LiquidGlass,
+  PillLink,
+  PopIn,
   PositionsIcon,
   Pressable,
   PressableScale,
+  ProgressBar,
+  Reveal,
+  SCREEN_PADDING,
   Screen,
+  SparkleIcon,
   Sparkline,
   SwapIcon,
-  TAB_BAR_CLEARANCE,
   Text,
+  TrendUpIcon,
+  WalletIcon,
   WithdrawIcon,
   colors,
-  fonts,
+  radius,
   shadow,
   spacing,
+  useCountUp,
+  WalletCard,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
 import { formatMoney, formatPercent, formatSignedMoney, trendOf } from '../data/format'
 import { useSession } from '../data/store'
 import type { DetailedAccount, FundingMode, Instrument, Position, Profile } from '../data/types'
-import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountPill } from '../features/accounts/account-pill'
 import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
-import { MARKET_ROW_DIVIDER_INSET } from '../features/markets/market-group'
-import { MarketRow } from '../features/markets/market-row'
+import { useAccountData } from '../features/accounts/use-account-data'
+import { MoverCard } from '../features/markets/mover-card'
 import { useMarketData } from '../features/markets/use-market-data'
 import { POSITION_ROW_DIVIDER_INSET, PositionRow } from '../features/positions/position-row'
 import { QueryStateView, UnavailableState } from '../features/shared/query-state'
@@ -45,7 +62,7 @@ import type { HomeStackParamList } from '../navigation/types'
 type Navigation = NativeStackNavigationProp<HomeStackParamList, 'Dashboard'>
 
 /** How many markets the watchlist shows before "See all". */
-const WATCHLIST_SIZE = 5
+const WATCHLIST_SIZE = 6
 /** How many open positions the summary shows before "See all". */
 const POSITIONS_SIZE = 3
 /** How many recent closed trades the hero's realised P&L line covers. */
@@ -117,141 +134,162 @@ function HomeDashboard({
   const pnlLabel = `${formatSignedMoney(account.floatingPnl)} (${formatPercent(account.changePercent)})`
 
   return (
-    <Screen>
-      <ScrollView
-        contentInsetAdjustmentBehavior="never"
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Gutter style={styles.greetingRow}>
-          <View style={styles.greetingText}>
-            <Text variant="caption" color={colors.textMuted}>
-              Welcome back
-            </Text>
-            <Text variant="heading" numberOfLines={1}>
-              {profile.holder.split(' ')[0]}
-            </Text>
-          </View>
-
-          <View style={styles.greetingActions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
-              hitSlop={8}
-              style={styles.notificationButton}
+    <HeroScreen
+      compact={{ title: 'Total equity', value: formatMoney(account.equity) }}
+      bar={
+        <>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open account" onPress={() => openTab('More')}>
+            <LiquidGlass style={styles.avatarRing}>
+              <Avatar uri={profile.avatarUrl} size={42} />
+            </LiquidGlass>
+          </Pressable>
+          <AccountPill mode={account.mode} number={account.number} onPress={openAccountSwitcher} />
+          <View>
+            <CircleButton
+              tone="glass"
+              size={44}
               onPress={onNotifications}
+              accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
             >
-              <BellIcon size={24} color={colors.text} />
-              {unread > 0 ? <View style={styles.bellDot} /> : null}
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open account"
-              onPress={() => openTab('More')}
-            >
-              <Avatar uri={profile.avatarUrl} size={40} />
-            </Pressable>
+              <BellIcon size={20} color={colors.text} />
+            </CircleButton>
+            {unread > 0 ? (
+              <PopIn delay={700} style={styles.bellDot}>
+                <View style={styles.bellDotFill} />
+              </PopIn>
+            ) : null}
           </View>
-        </Gutter>
-
-        <Gutter style={styles.top}>
-          <Card tone="ink" padded={false}>
-            <View style={styles.portfolioBand}>
-              <Text variant="overline" color={colors.onInkMuted}>
-                Total equity
+        </>
+      }
+      hero={
+        <>
+          <PressableScale
+            accessibilityLabel={`Open balance. Total equity ${formatMoney(account.equity)}. Open P&L ${pnlLabel}.`}
+            onPress={() => openHomeScreen('Balance')}
+            scaleTo={0.98}
+          >
+            <View style={styles.figure}>
+              <Text variant="caption" color={colors.textMuted} style={styles.figureLabel}>
+                {`Hi ${profile.holder.split(' ')[0]}`}
               </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Switch account, ${account.mode} ${account.number}`}
-                onPress={openAccountSwitcher}
-                hitSlop={6}
-                style={styles.accountPill}
-              >
-                <View style={[styles.modeDot, account.mode === 'DEMO' ? styles.modeDotDemo : null]} />
-                <Text style={styles.accountPillLabel}>
-                  {account.mode} · {account.number}
-                </Text>
-                <ChevronDownIcon size={14} color={colors.onInk} />
-              </Pressable>
-            </View>
-
-            <PressableScale
-              accessibilityLabel={`Open balance. Total equity ${formatMoney(account.equity)}. Open P&L ${pnlLabel}.`}
-              onPress={() => openHomeScreen('Balance')}
-              scaleTo={0.985}
-            >
-              <View style={styles.portfolioBody}>
-                <Text variant="hero" color={colors.onInk} numberOfLines={1} adjustsFontSizeToFit>
-                  {formatMoney(account.equity)}
-                </Text>
-                <View style={styles.pnlRow}>
-                  <Delta label={pnlLabel} direction={trendOf(account.floatingPnl)} onInk size={14} />
-                  <Text variant="caption" color={colors.onInkMuted}>
-                    open P&amp;L
+              <WalletCard>
+                <View style={styles.cardTop}>
+                  <Logo size={17} />
+                  <Text variant="micro" color={colors.textMuted}>
+                    {`${account.mode} · ${account.number}`}
                   </Text>
                 </View>
-              </View>
-            </PressableScale>
+                <View style={styles.cardBottom}>
+                  <Text variant="caption" color={colors.textMuted}>
+                    Total equity
+                  </Text>
+                  <EquityFigure value={account.equity} />
+                  <View style={styles.cardPnl}>
+                    <Delta label={pnlLabel} direction={trendOf(account.floatingPnl)} size={13} />
+                    <Text variant="caption" color={colors.textMuted}>
+                      open P&amp;L
+                    </Text>
+                  </View>
+                </View>
+              </WalletCard>
+            </View>
+          </PressableScale>
 
-            {trend ? <RealisedTrend {...trend} /> : <View style={styles.heroFoot} />}
-          </Card>
-
-          <QuickActions onFunding={openFunding} />
-        </Gutter>
-
+          <View style={styles.actions}>
+            {FUNDING_ACTIONS.map(({ mode, label, Icon }, index) => (
+              <Reveal key={mode} index={index + 2} distance={10} style={styles.action}>
+                <HeroAction label={label} primary={mode === 'deposit'} onPress={() => openFunding(mode)}>
+                  <Icon size={21} color={mode === 'deposit' ? colors.white : colors.text} />
+                </HeroAction>
+              </Reveal>
+            ))}
+          </View>
+        </>
+      }
+    >
+      <Reveal index={1}>
         <Gutter style={styles.section}>
+          <View style={styles.sectionRow}>
+            <View style={styles.sectionTitle}>
+              <Text variant="section">Your money</Text>
+              <InfoIcon size={16} color={colors.textSubtle} />
+            </View>
+            <PillLink label="Details" onPress={() => openHomeScreen('Balance')} />
+          </View>
+          <View style={styles.tiles}>
+            <StatTile label="Balance" value={account.balance} Icon={WalletIcon} tone="blue" ink={colors.tintBlueInk} />
+            <StatTile label="Free margin" value={account.freeMargin} Icon={BoltIcon} tone="amber" ink={colors.tintAmberInk} />
+          </View>
+          <MarginInsight equity={account.equity} freeMargin={account.freeMargin} onPress={() => openTab('Positions')} />
+        </Gutter>
+      </Reveal>
+
+      {trend ? (
+        <Reveal index={2}>
+          <Gutter>
+            <RealisedTrend {...trend} />
+          </Gutter>
+        </Reveal>
+      ) : null}
+
+      <Reveal index={3} style={styles.section}>
+        <Gutter>
           <SectionHeader
             title="Watchlist"
             action="See all"
             withChevron="right"
             onPressAction={() => openTab('Markets')}
           />
-          {catalogue.status === 'ready' && watchlist.length === 0 ? (
+        </Gutter>
+        {catalogue.status === 'ready' && watchlist.length === 0 ? (
+          <Gutter>
             <UnavailableState
               title="Markets unavailable"
               message="No live markets are available for this account right now."
             />
-          ) : catalogue.status !== 'ready' ? (
+          </Gutter>
+        ) : catalogue.status !== 'ready' ? (
+          <Gutter>
             <QueryStateView state={catalogue} render={() => null} />
-          ) : (
-            <>
-              <View>
-                {watchlist.map((item, index) => (
-                  <Fragment key={item.id}>
-                    {index > 0 ? <Divider inset={MARKET_ROW_DIVIDER_INSET} /> : null}
-                    <MarketRow
-                      layout="row"
-                      id={item.id}
-                      symbol={item.symbol}
-                      name={item.name}
-                      price={item.price}
-                      precision={item.precision}
-                      changePercent={item.changePercent}
-                      changeBase={item.dayOpen}
-                      iconKind={item.icon}
-                      iconLabel={item.iconLabel}
-                      iconTint={item.iconTint}
-                      category={item.category}
-                      spark={sparkById?.get(item.id) ?? item.spark}
-                      sparkTone={sparkById?.has(item.id) ? undefined : item.sparkTone}
-                      onPress={openInstrument}
-                    />
-                  </Fragment>
-                ))}
-              </View>
-              {pinned.length === 0 ? (
+          </Gutter>
+        ) : (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.watchStrip}>
+              {watchlist.map((item, index) => (
+                <Reveal key={item.id} index={index + 3} distance={12}>
+                  <MoverCard
+                    id={item.id}
+                    symbol={item.symbol}
+                    name={item.name}
+                    price={item.price}
+                    precision={item.precision}
+                    changePercent={item.changePercent}
+                    changeBase={item.dayOpen}
+                    iconKind={item.icon}
+                    iconLabel={item.iconLabel}
+                    iconTint={item.iconTint}
+                    category={item.category}
+                    spark={sparkById?.get(item.id) ?? item.spark}
+                    onPress={openInstrument}
+                  />
+                </Reveal>
+              ))}
+            </ScrollView>
+            {pinned.length === 0 ? (
+              <Gutter>
                 <Text variant="caption" color={colors.textSubtle} style={styles.hint}>
                   Star a market on the Markets tab to pin it here.
                 </Text>
-              ) : null}
-            </>
-          )}
-        </Gutter>
+              </Gutter>
+            ) : null}
+          </>
+        )}
+      </Reveal>
 
+      <Reveal index={4}>
         <Gutter style={styles.section}>
           <SectionHeader
-            title="Your positions"
+            title="Open positions"
             action="See all"
             withChevron="right"
             onPressAction={() => openTab('Positions')}
@@ -268,8 +306,24 @@ function HomeDashboard({
             )}
           />
         </Gutter>
-      </ScrollView>
-    </Screen>
+      </Reveal>
+    </HeroScreen>
+  )
+}
+
+/** The hero figure, rolling up to the account's equity and gliding with it. */
+function EquityFigure({ value }: { value: number }) {
+  const shown = useCountUp(value)
+  return (
+    <Amount
+      variant="hero"
+      color={colors.text}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      accessibilityLabel={formatMoney(value)}
+    >
+      {formatMoney(shown)}
+    </Amount>
   )
 }
 
@@ -278,6 +332,106 @@ const FUNDING_ACTIONS: readonly { mode: FundingMode; label: string; Icon: typeof
   { mode: 'withdraw', label: 'Withdraw', Icon: WithdrawIcon },
   { mode: 'transfer', label: 'Transfer', Icon: SwapIcon },
 ]
+
+/**
+ * Money in, out and between accounts: a Liquid Glass disc over a label.
+ * Deposit is the blue-tinted glass; the others are clear.
+ */
+function HeroAction({
+  label,
+  primary,
+  onPress,
+  children,
+}: {
+  label: string
+  primary: boolean
+  onPress: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <PressableScale accessibilityLabel={label} onPress={onPress} scaleTo={0.92}>
+      <View style={styles.actionInner}>
+        <LiquidGlass tint={primary ? 'accent' : 'clear'} style={styles.actionDisc}>{children}</LiquidGlass>
+        <Text variant="caption" weight="medium" color={colors.text}>
+          {label}
+        </Text>
+      </View>
+    </PressableScale>
+  )
+}
+
+/** A secondary account figure on a white tile, its icon on a soft tint. */
+function StatTile({
+  label,
+  value,
+  Icon,
+  tone,
+  ink,
+}: {
+  label: string
+  value: number
+  Icon: typeof WalletIcon
+  tone: 'blue' | 'amber'
+  ink: string
+}) {
+  const shown = useCountUp(value)
+  return (
+    <Card style={styles.tile}>
+      <IconChip size={42} tone={tone}>
+        <Icon size={20} color={ink} />
+      </IconChip>
+      <View style={styles.tileText}>
+        <Text variant="caption" color={colors.textMuted}>
+          {label}
+        </Text>
+        <Amount
+          variant="displaySm"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          accessibilityLabel={`${label} ${formatMoney(value)}`}
+        >
+          {formatMoney(shown)}
+        </Amount>
+      </View>
+    </Card>
+  )
+}
+
+/**
+ * How much of the account's equity is tied up as margin — equity less free
+ * margin — on an inverted near-black bar, so the one number that can go
+ * wrong stands apart from the white cards around it.
+ */
+function MarginInsight({ equity, freeMargin, onPress }: { equity: number; freeMargin: number; onPress: () => void }) {
+  if (equity <= 0) return null
+  const used = Math.max(equity - freeMargin, 0)
+  const share = used / equity
+  const percent = formatPercent(share * 100).replace('+', '')
+  return (
+    <PressableScale onPress={onPress} scaleTo={0.98} accessibilityLabel={`Margin in use ${percent}. Open positions`}>
+      <View style={styles.insight}>
+        <View style={styles.insightRow}>
+          <SparkleIcon size={20} color={colors.ice} />
+          <View style={styles.insightText}>
+            <Text variant="strong" color={colors.onInk}>
+              {`Margin in use · ${percent}`}
+            </Text>
+            <Text variant="caption" color={colors.onInkMuted} numberOfLines={1}>
+              {`${formatMoney(used)} of ${formatMoney(equity)}`}
+            </Text>
+          </View>
+          <View style={styles.insightLink}>
+            <Text variant="caption" weight="medium" color={colors.onInkMuted}>
+              Positions
+            </Text>
+            <ChevronRightIcon size={14} color={colors.onInkMuted} />
+          </View>
+        </View>
+        <ProgressBar value={share} tone="ice" track="onInk" height={4} />
+      </View>
+    </PressableScale>
+  )
+}
 
 /**
  * Cumulative realised P&L across the most recent closed trades, oldest
@@ -294,46 +448,33 @@ function realisedTrend(history: readonly Position[]) {
   return { points, trades: closed.length, total: points[points.length - 1] }
 }
 
-/** The hero's line: realised P&L over recent trades, in the signature gold. */
+/** Realised P&L across recent trades, as a soft area chart on a white card. */
 function RealisedTrend({ points, trades, total }: { points: number[]; trades: number; total: number }) {
+  const negative = total < 0
   return (
-    <View style={styles.trend}>
-      <Sparkline points={points} width="fill" height={56} color={colors.gold} fillOpacity={0.28} showEndpoint />
-      <View style={styles.trendLegend}>
-        <Text variant="caption" color={colors.onInkMuted}>
-          {`Realised P&L · last ${trades} trades`}
-        </Text>
-        <Text variant="caption" weight="semibold" color={total < 0 ? colors.redOnInk : colors.greenOnInk}>
-          {formatSignedMoney(total)}
-        </Text>
+    <Card padded={false} style={styles.trendCard}>
+      <View style={styles.trendHead}>
+        <View style={styles.trendTitle}>
+          <Text variant="caption" color={colors.textMuted}>
+            {`Realised P&L · last ${trades} trades`}
+          </Text>
+          <Text variant="displaySm" color={negative ? colors.red : colors.text}>
+            {formatSignedMoney(total)}
+          </Text>
+        </View>
+        <View style={[styles.trendBadge, negative ? styles.trendBadgeDown : null]}>
+          <TrendUpIcon size={16} color={negative ? colors.red : colors.green} />
+        </View>
       </View>
-    </View>
-  )
-}
-
-/** Money in, out and between accounts — the same funding sheet as Balance. */
-function QuickActions({ onFunding }: { onFunding: (mode: FundingMode) => void }) {
-  return (
-    <View style={styles.quickActions}>
-      {FUNDING_ACTIONS.map(({ mode, label, Icon }) => (
-        <PressableScale
-          key={mode}
-          accessibilityLabel={label}
-          onPress={() => onFunding(mode)}
-          scaleTo={0.94}
-          style={styles.quickAction}
-        >
-          <View style={styles.quickActionInner}>
-            <View style={[styles.quickActionIcon, mode === 'deposit' ? styles.quickActionPrimary : null]}>
-              <Icon size={20} color={colors.navy} />
-            </View>
-            <Text variant="caption" weight="semibold" color={colors.text}>
-              {label}
-            </Text>
-          </View>
-        </PressableScale>
-      ))}
-    </View>
+      <Sparkline
+        points={points}
+        width="fill"
+        height={72}
+        color={negative ? colors.red : colors.green}
+        fillOpacity={0.18}
+        showEndpoint
+      />
+    </Card>
   )
 }
 
@@ -350,13 +491,15 @@ function OpenPositions({
 }) {
   if (positions.length === 0) {
     return (
-      <EmptyState
-        icon={<PositionsIcon size={24} color={colors.navy} />}
-        title="No open positions"
-        message="Your open trades and their live P&L will appear here."
-        action="Explore markets"
-        onAction={onExplore}
-      />
+      <Card padded={false}>
+        <EmptyState
+          icon={<PositionsIcon size={24} color={colors.navy} />}
+          title="No open positions"
+          message="Your open trades and their live P&L will appear here."
+          action="Explore markets"
+          onAction={onExplore}
+        />
+      </Card>
     )
   }
 
@@ -374,7 +517,7 @@ function OpenPositions({
         <>
           <Divider />
           <Pressable accessibilityRole="button" onPress={onOpen} style={styles.morePositions}>
-            <Text variant="caption" weight="medium" color={colors.textMuted}>
+            <Text variant="caption" weight="semibold" color={colors.navy}>
               {`${hidden} more open ${hidden === 1 ? 'position' : 'positions'}`}
             </Text>
           </Pressable>
@@ -386,134 +529,152 @@ function OpenPositions({
 
 const styles = StyleSheet.create({
   state: { paddingTop: 32 },
-  content: {
-    paddingTop: 8,
-    paddingBottom: TAB_BAR_CLEARANCE,
-    gap: spacing.xxl,
-  },
-  greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  greetingText: {
-    flex: 1,
-  },
-  greetingActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  notificationButton: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+
+  avatarRing: {
+    padding: 2,
+    borderRadius: 24,
   },
   bellDot: {
     position: 'absolute',
-    top: 8,
-    right: 9,
+    top: 9,
+    right: 10,
+  },
+  bellDotFill: {
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: colors.gold,
+    backgroundColor: '#FF8A7A',
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
-
-  top: {
-    gap: spacing.xl,
+  figure: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
   },
-  portfolioBand: {
+  cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: spacing.xl,
-    paddingRight: spacing.sm,
-    paddingTop: spacing.sm,
   },
-  accountPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 10,
+  cardBottom: {
+    gap: 2,
   },
-  modeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.greenOnInk,
-  },
-  modeDotDemo: {
-    backgroundColor: colors.gold,
-  },
-  accountPillLabel: {
-    fontFamily: fonts.semibold,
-    color: colors.onInk,
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  portfolioBody: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.xs,
-  },
-  pnlRow: {
+  cardPnl: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  heroFoot: {
-    height: spacing.xl,
+  figureLabel: {
+    fontSize: 15,
+    paddingHorizontal: 2,
   },
-  trend: {
-    marginTop: spacing.md,
-  },
-  trendLegend: {
+  actions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.onInkDivider,
+    justifyContent: 'center',
+    gap: spacing.xxl,
+    paddingTop: spacing.lg,
   },
-
-  quickActions: {
-    flexDirection: 'row',
-  },
-  quickAction: {
-    flex: 1,
-  },
-  quickActionInner: {
+  action: {
     alignItems: 'center',
-    gap: 8,
-    minHeight: 44,
   },
-  quickActionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  actionInner: {
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  actionDisc: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    boxShadow: shadow.raised,
-  },
-  quickActionPrimary: {
-    backgroundColor: colors.gold,
-    borderColor: colors.gold,
   },
 
   section: {
+    gap: spacing.md,
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 40,
+  },
+  sectionTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tiles: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  tile: {
+    flex: 1,
+    padding: spacing.lg,
+    gap: spacing.xl,
+  },
+  tileText: {
+    gap: 2,
+  },
+  insight: {
+    padding: spacing.lg,
+    paddingBottom: spacing.lg - 2,
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderCurve: 'continuous',
+    backgroundColor: colors.night,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    boxShadow: shadow.hero,
+  },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  insightText: {
+    flex: 1,
+    gap: 1,
+  },
+  insightLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  trendCard: {
+    paddingTop: spacing.lg,
     gap: spacing.sm,
+  },
+  trendHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+  },
+  trendTitle: {
+    gap: 2,
+  },
+  trendBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.greenSoft,
+  },
+  trendBadgeDown: {
+    backgroundColor: colors.redSoft,
+  },
+  watchStrip: {
+    paddingHorizontal: SCREEN_PADDING,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
   },
   hint: {
     paddingHorizontal: spacing.xs,
-    paddingTop: spacing.xs,
   },
   morePositions: {
-    minHeight: 44,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },

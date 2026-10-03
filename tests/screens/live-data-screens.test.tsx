@@ -8,7 +8,7 @@ import { useSession } from '../../src/data/store'
 import { Button, Field, ListRow, QuickPicks, Sparkline, colors } from '../../src/design-system'
 import type { ActionMenuRequest } from '../../src/design-system/action-menu'
 import type { Account, Instrument, Position, Profile } from '../../src/data/types'
-import { MarketRow } from '../../src/features/markets/market-row'
+import { MoverCard } from '../../src/features/markets/mover-card'
 import { PositionRow } from '../../src/features/positions/position-row'
 import { HomeScreen } from '../../src/screens/home-screen'
 import { FundingScreen } from '../../src/screens/funding-screen'
@@ -28,7 +28,8 @@ jest.mock('../../src/design-system/action-menu', () => ({
 }))
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack }),
+  useIsFocused: () => true,
+  useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack, canGoBack: () => true }),
   useRoute: () => ({ params: { mode: mockFundingMode } }),
 }))
 
@@ -229,7 +230,7 @@ describe('account-facing live screen states', () => {
     expect(loadingStates.length).toBeGreaterThan(0)
     const blocks = loadingStates.flatMap((state) => state.findAllByProps({ testID: 'loading-skeleton-block' }))
     expect(blocks.length).toBeGreaterThanOrEqual(4)
-    expect(blocks.every((block) => StyleSheet.flatten(block.props.style).backgroundColor === colors.navySoft)).toBe(true)
+    expect(blocks.every((block) => StyleSheet.flatten(block.props.style).backgroundColor === colors.track)).toBe(true)
     expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0)
   })
 
@@ -263,7 +264,7 @@ describe('account-facing live screen states', () => {
     expect(renderedText(tree)).toContain('XAU/USD')
     expect(renderedText(tree)).not.toContain('Trading signals')
     // No favourites yet: the leading markets stand in.
-    expect(tree.root.findAllByType(MarketRow).map((row) => row.props.id)).toEqual([
+    expect(tree.root.findAllByType(MoverCard).map((card) => card.props.id)).toEqual([
       'xauusd',
       'audcad',
       'btcusd',
@@ -319,7 +320,7 @@ describe('home dashboard', () => {
     await flush()
     await flush()
     await flush()
-    expect(tree.root.findAllByType(MarketRow).map((row) => row.props.id)).toEqual(['btcusd', 'eurusd'])
+    expect(tree.root.findAllByType(MoverCard).map((card) => card.props.id)).toEqual(['btcusd', 'eurusd'])
     expect(renderedText(tree)).not.toContain('Star a market')
   })
 
@@ -342,7 +343,7 @@ describe('home dashboard', () => {
     expect(text).toContain('1 more open')
   })
 
-  it('draws realised P&L across closed trades in the hero, oldest first', async () => {
+  it('draws realised P&L across closed trades on Home, oldest first', async () => {
     useSession.setState({ accountId: account.id })
     const backend = backendWith(async () => [account])
     const closed = (id: string, pnl: number, time: string) =>
@@ -355,7 +356,7 @@ describe('home dashboard', () => {
     const tree = renderHome(backend)
     await flush()
     await flush()
-    const line = tree.root.findAllByType(Sparkline).find((node) => node.props.color === colors.gold)
+    const line = tree.root.findAllByType(Sparkline).find((node) => node.props.color === colors.green)
     expect(line?.props.points).toEqual([0, 100, 60, 75.5])
     const text = renderedText(tree)
     expect(text).toContain('Realised P&L · last 3 trades')

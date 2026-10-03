@@ -1,11 +1,12 @@
 import { useNavigation } from '@react-navigation/native'
 
+import { useSafeBack } from '../design-system'
+
 import type { FundingMode } from '../data/types'
 import type { HomeStackParamList, RootStackParamList, TabParamList } from './types'
 
 type LooseNavigation = {
   navigate: (name: string, params?: object) => void
-  goBack: () => void
 }
 
 /**
@@ -21,6 +22,7 @@ export function useAppNavigation() {
   // which no single static navigator type can express. The cast is contained
   // here; every caller gets the typed methods returned below.
   const navigation = useNavigation() as unknown as LooseNavigation
+  const goBack = useSafeBack()
 
   return {
     openInstrument: (instrumentId: string) => navigation.navigate('Instrument', { instrumentId }),
@@ -46,6 +48,6 @@ export function useAppNavigation() {
     /** Jumps to the Home tab and lands on one of its screens. */
     openHomeScreen: (screen: keyof HomeStackParamList) => navigation.navigate('Home', { screen }),
 
-    goBack: () => navigation.goBack(),
+    goBack,
   }
 }

@@ -1,25 +1,33 @@
 import { FlashList } from '@shopify/flash-list'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
+  Aurora,
+  Amount,
+  BackButton,
   Card,
-  Divider,
+  CircleButton,
+  Donut,
   EmptyState,
   FilterIcon,
-  Gutter,
-  Pressable,
+  PageBar,
+  PageScreen,
+  PageTitle,
   SCREEN_PADDING,
-  Screen,
   SegmentedControl,
   TAB_BAR_CLEARANCE,
   Text,
-  VerticalDivider,
   colors,
+  radius,
+  spacing,
   useActionMenu,
+  useCountUp,
+  useHeroScroll,
 } from '../design-system'
-import { ACTIVITY_ROW_DIVIDER_INSET, ActivityRow } from '../features/activity/activity-row'
-import { ScreenHeader } from '../features/shared/screen-header'
+import { ActivityDayHeader, ActivityGroupCell } from '../features/activity/activity-group'
+import { ActivityRow } from '../features/activity/activity-row'
 import { useBackendQuery } from '../backend/provider'
 import { activityGroup, inPeriod } from '../data/activity-dates'
 import { formatLots, formatSignedMoney } from '../data/format'
@@ -35,8 +43,8 @@ const TABS = ['Trades', 'Funds', 'Orders'] as const
 const RANGES: readonly MarketPeriod[] = ['Today', 'This week', 'This month', 'This year']
 
 type ListItem =
-  | { type: 'header'; id: string; title: string }
-  | { type: 'entry'; id: string; entry: ActivityEntry }
+  | { type: 'header'; id: string; title: string; count: number; total?: number }
+  | { type: 'entry'; id: string; entry: ActivityEntry; first: boolean; last: boolean }
 
 /** Activity: month summary, a Trades / Funds / Orders filter, grouped history. */
 export function ActivityScreen() {
@@ -45,6 +53,8 @@ export function ActivityScreen() {
 
   const showMenu = useActionMenu()
   const { openInstrument, openFunding } = useAppNavigation()
+  const insets = useSafeAreaInsets()
+  const { scrollY, onScrollJS } = useHeroScroll()
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
   const accountId = accountData.status === 'ready' ? accountData.data.account?.id : null
@@ -61,10 +71,18 @@ export function ActivityScreen() {
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
     if (accountData.status === 'ready' && !accountData.data.account) {
-      return <Screen><Gutter style={styles.loading}><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Gutter></Screen>
+      return (
+        <PageScreen back title="Activity" contentStyle={styles.gutter}>
+          <AccountSummaryUnavailable account={accountData.data.selectedAccount} />
+        </PageScreen>
+      )
     }
     const state = accountData.status !== 'ready' ? accountData : catalogue
-    return <Screen><Gutter style={styles.loading}><QueryStateView state={state} render={() => null} /></Gutter></Screen>
+    return (
+      <PageScreen back title="Activity" contentStyle={styles.gutter}>
+        <QueryStateView state={state} render={() => null} />
+      </PageScreen>
+    )
   }
   const account = accountData.data.account
   const instrumentsById = new Map(catalogue.data.map((item) => [item.id, item]))
@@ -103,6 +121,8 @@ export function ActivityScreen() {
   const activityById = new Map(activity.map((entry) => [entry.id, entry]))
   const items = buildItems(
     activity.filter((entry) => entry.tab === tab && inPeriod(entry.date, range)),
+    // A pending order has no result yet, so its day carries no net.
+    tab !== 'Orders',
   )
 
   const openFilter = () =>
@@ -148,9 +168,9 @@ export function ActivityScreen() {
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === 'header') {
       return (
-        <Text variant="overline" color={colors.textSubtle} style={styles.groupHeader}>
-          {item.title}
-        </Text>
+        <View style={styles.gutter}>
+          <ActivityDayHeader title={item.title} count={item.count} total={item.total} />
+        </View>
       )
     }
 
@@ -159,133 +179,200 @@ export function ActivityScreen() {
       : undefined
 
     return (
-      <ActivityRow
-        id={item.entry.id}
-        kind={item.entry.kind}
-        title={item.entry.title}
-        subtitle={item.entry.subtitle}
-        date={item.entry.date}
-        time={item.entry.time}
-        amount={item.entry.amount}
-        iconKind={instrument?.icon}
-        iconLabel={instrument?.iconLabel}
-        iconTint={instrument?.iconTint}
-        iconSymbol={instrument?.symbol}
-        iconCategory={instrument?.category}
-        onMenu={openRowMenu}
-      />
+      <View style={styles.gutter}>
+        <ActivityGroupCell first={item.first} last={item.last}>
+          <ActivityRow
+            id={item.entry.id}
+            kind={item.entry.kind}
+            title={item.entry.title}
+            subtitle={item.entry.subtitle}
+            date={item.entry.date}
+            time={item.entry.time}
+            amount={item.entry.amount}
+            showDate={item.entry.group === 'Earlier'}
+            iconKind={instrument?.icon}
+            iconLabel={instrument?.iconLabel}
+            iconTint={instrument?.iconTint}
+            iconSymbol={instrument?.symbol}
+            iconCategory={instrument?.category}
+            onMenu={openRowMenu}
+          />
+        </ActivityGroupCell>
+      </View>
     )
   }
 
-  return (
-    <Screen>
-      <ScreenHeader
+  const filterButton = (
+    <CircleButton size={42} accessibilityLabel="Filter activity" onPress={openFilter}>
+      <FilterIcon size={19} color={colors.text} />
+    </CircleButton>
+  )
+
+  const header = (
+    <View style={styles.header}>
+      <PageTitle
+        scrollY={scrollY}
         title="Activity"
         subtitle={`${account.mode} · ${account.number} · ${range}`}
-        action={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Filter activity"
-            hitSlop={8}
-            onPress={openFilter}
-          >
-            <FilterIcon size={24} color={colors.text} />
-          </Pressable>
-        }
+        leading={<BackButton />}
+        trailing={filterButton}
+        style={styles.title}
       />
 
-      <Gutter>
-        <Card tone="ink">
-          <Text variant="overline" color={colors.onInkMuted}>
-            {range}
-          </Text>
+      {/* No entrance animations in a FlashList header: they never settle on device. */}
+      <View style={styles.gutter}>
+        <MonthReport
+          net={account.monthNetResult}
+          trades={account.monthTrades}
+          winRate={account.monthWinRate}
+        />
+      </View>
 
-          <View style={styles.summaryBody}>
-            <View style={styles.summaryLeft}>
-              <Text variant="caption" color={colors.onInkMuted}>
-                Net result
-              </Text>
-              <Text
-                variant="displaySm"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-                color={
-                  account.monthNetResult === undefined || account.monthNetResult >= 0
-                    ? colors.greenOnInk
-                    : colors.redOnInk
-                }
-              >
-                {account.monthNetResult === undefined
-                  ? 'Unavailable'
-                  : formatSignedMoney(account.monthNetResult)}
-              </Text>
-            </View>
-
-            <VerticalDivider />
-
-            <View style={styles.summaryRight}>
-              <Text variant="body" color={colors.onInkMuted}>
-                <Text variant="strong" color={colors.onInk}>
-                  {account.monthTrades ?? '—'}
-                </Text>
-                {' trades'}
-              </Text>
-              <Text variant="body" color={colors.onInkMuted}>
-                <Text variant="strong" color={colors.onInk}>
-                  {account.monthWinRate === undefined ? '—' : `${account.monthWinRate}%`}
-                </Text>
-                {' win rate'}
-              </Text>
-            </View>
-          </View>
-        </Card>
-      </Gutter>
-
-      <Gutter style={styles.tabs}>
+      <View style={[styles.gutter, styles.tabs]}>
         <SegmentedControl options={TABS} value={tab} onChange={setTab} />
-      </Gutter>
+      </View>
+    </View>
+  )
 
+  return (
+    <View style={styles.root}>
+      <Aurora />
       <FlashList
         data={items}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         getItemType={getItemType}
-        ItemSeparatorComponent={Separator}
-        contentContainerStyle={styles.list}
+        ListHeaderComponent={header}
+        onScroll={onScrollJS}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ ...styles.list, paddingTop: insets.top + spacing.sm }}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={source.status !== 'ready' ? (
-          <QueryStateView state={source} render={() => null} />
-        ) : (
-          <EmptyState
-            title={`No ${tab.toLowerCase()} in this period`}
-            message="Change the period with the filter above to see more."
-          />
-        )}
+        ListEmptyComponent={
+          <View style={[styles.gutter, styles.empty]}>
+            {source.status !== 'ready' ? (
+              <QueryStateView state={source} render={() => null} />
+            ) : (
+              <Card padded={false}>
+                <EmptyState
+                  icon={<FilterIcon size={22} color={colors.navy} />}
+                  title={`No ${tab.toLowerCase()} in this period`}
+                  message="Change the period with the filter above to see more."
+                />
+              </Card>
+            )}
+          </View>
+        }
       />
-    </Screen>
+      <PageBar scrollY={scrollY} title="Activity" />
+    </View>
+  )
+}
+
+/**
+ * The month at a glance, in the reference "Report" style: the net result as
+ * the big figure, trades and win rate beside it, and a ring of wins against
+ * losses with its legend.
+ */
+function MonthReport({ net, trades, winRate }: { net?: number; trades?: number; winRate?: number }) {
+  const shown = useCountUp(net ?? 0)
+  const wins = trades !== undefined && winRate !== undefined ? Math.round((trades * winRate) / 100) : undefined
+  const losses = wins !== undefined && trades !== undefined ? Math.max(trades - wins, 0) : undefined
+
+  return (
+    <Card tone="ink" style={styles.report}>
+      <View style={styles.reportHead}>
+        <Text variant="caption" color={colors.onInkMuted}>
+          Net result · this month
+        </Text>
+        <View style={styles.reportChip}>
+          <Text variant="micro" color={colors.onInk}>
+            {trades === undefined ? '— trades' : `${trades} ${trades === 1 ? 'trade' : 'trades'}`}
+          </Text>
+        </View>
+      </View>
+
+      {net === undefined ? (
+        <Text variant="display" color={colors.onInkMuted}>
+          Unavailable
+        </Text>
+      ) : (
+        <Amount
+          variant="hero"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          accessibilityLabel={`Net result ${formatSignedMoney(net)}`}
+          color={net >= 0 ? colors.greenOnInk : colors.redOnInk}
+        >
+          {formatSignedMoney(shown)}
+        </Amount>
+      )}
+
+      <View style={styles.reportBody}>
+        <Donut
+          size={96}
+          thickness={11}
+          segments={wins !== undefined && losses !== undefined ? [
+            { key: 'wins', value: wins, color: colors.greenOnInk },
+            { key: 'losses', value: losses, color: colors.redOnInk },
+          ] : []}
+        >
+          <Text variant="strong" color={colors.onInk}>
+            {winRate === undefined ? '—' : `${winRate}%`}
+          </Text>
+          <Text variant="micro" color={colors.onInkMuted}>
+            win rate
+          </Text>
+        </Donut>
+        <View style={styles.legend}>
+          <LegendLine color={colors.greenOnInk} label="Winning trades" value={wins} />
+          <LegendLine color={colors.redOnInk} label="Losing trades" value={losses} />
+        </View>
+      </View>
+    </Card>
+  )
+}
+
+function LegendLine({ color, label, value }: { color: string; label: string; value?: number }) {
+  return (
+    <View style={styles.legendLine}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text variant="caption" color={colors.onInkMuted} style={styles.legendLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text variant="strong" color={colors.onInk}>
+        {value ?? '—'}
+      </Text>
+    </View>
   )
 }
 
 const GROUP_ORDER: readonly ActivityEntry['group'][] = ['Today', 'Yesterday', 'Earlier']
 
 /** Flattens the grouped history into header / entry rows for the virtualizer. */
-function buildItems(entries: readonly ActivityEntry[]): ListItem[] {
-  const items: ListItem[] = []
-  let currentGroup: string | undefined
-
+function buildItems(entries: readonly ActivityEntry[], withTotals: boolean): ListItem[] {
   // Grouped in display order (stable within a group), so a header is never
   // repeated when the server's order interleaves days.
   const ordered = [...entries].sort(
     (a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group),
   )
 
-  for (const entry of ordered) {
-    if (entry.group !== currentGroup) {
-      currentGroup = entry.group
-      items.push({ type: 'header', id: `header-${entry.group}`, title: entry.group })
-    }
-    items.push({ type: 'entry', id: entry.id, entry })
+  const items: ListItem[] = []
+  for (let start = 0; start < ordered.length;) {
+    const group = ordered[start].group
+    let end = start
+    while (end < ordered.length && ordered[end].group === group) end += 1
+    const run = ordered.slice(start, end)
+    items.push({
+      type: 'header',
+      id: `header-${group}`,
+      title: group,
+      count: run.length,
+      total: withTotals ? run.reduce((sum, entry) => sum + entry.amount, 0) : undefined,
+    })
+    run.forEach((entry, index) => {
+      items.push({ type: 'entry', id: entry.id, entry, first: index === 0, last: index === run.length - 1 })
+    })
+    start = end
   }
 
   return items
@@ -294,39 +381,74 @@ function buildItems(entries: readonly ActivityEntry[]): ListItem[] {
 const keyExtractor = (item: ListItem) => item.id
 /** Separate recycling pools so a header never recycles into a row. */
 const getItemType = (item: ListItem) => item.type
-/** A hairline between two entries; group headers bring their own spacing. */
-const Separator = ({ leadingItem, trailingItem }: { leadingItem?: ListItem; trailingItem?: ListItem }) =>
-  leadingItem?.type === 'header' || trailingItem?.type === 'header'
-    ? null
-    : <Divider inset={ACTIVITY_ROW_DIVIDER_INSET} />
 
 const styles = StyleSheet.create({
-  loading: { paddingTop: 32 },
-  summaryBody: {
+  root: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  gutter: {
+    paddingHorizontal: SCREEN_PADDING,
+  },
+  header: {
+    paddingBottom: spacing.xs,
+  },
+  title: {
+    paddingBottom: spacing.lg,
+  },
+
+  report: {
+    paddingVertical: spacing.xl,
+    gap: spacing.xs,
+  },
+  reportHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 14,
-    gap: 14,
+    justifyContent: 'space-between',
   },
-  summaryLeft: {
+  reportChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.glassOnInk,
+    borderWidth: 1,
+    borderColor: colors.glassOnInkEdge,
+  },
+  reportBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xl,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.onInkPanel,
+  },
+  legend: {
     flex: 1,
-    gap: 4,
+    gap: spacing.sm,
   },
-  summaryRight: {
-    flexShrink: 0,
-    gap: 8,
+  legendLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendLabel: {
+    flex: 1,
   },
 
   tabs: {
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingTop: spacing.xl,
   },
-  groupHeader: {
-    paddingTop: 20,
-    paddingBottom: 4,
+  empty: {
+    paddingTop: spacing.xl,
   },
   list: {
-    paddingHorizontal: SCREEN_PADDING,
     paddingBottom: TAB_BAR_CLEARANCE,
   },
 })

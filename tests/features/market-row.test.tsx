@@ -1,4 +1,5 @@
 import { Text as RNText } from 'react-native'
+import { StyleSheet } from 'react-native'
 import renderer, { act, type ReactTestInstance } from 'react-test-renderer'
 import Svg, { Path } from 'react-native-svg'
 
@@ -151,9 +152,13 @@ describe('direction colouring', () => {
     // to be able to say so rather than deriving colour from the number alone.
     const { tree } = renderRow({ changePercent: 1.5, sparkTone: 'negative' })
     const found = sparkColors(tree)
-    // The change label stays green while the sparkline goes red.
+    // The change label stays green while the sparkline goes red. The label
+    // is a solid Stocks-style pill, so its green is the pill's fill.
+    const fills = tree.root
+      .findAll((node) => typeof node.type === 'string' && node.props.style != null)
+      .map((node) => StyleSheet.flatten(node.props.style)?.backgroundColor)
     expect(found).toContain(colors.red)
-    expect(found).toContain(colors.green)
+    expect(fills).toContain(colors.greenFill)
   })
 })
 

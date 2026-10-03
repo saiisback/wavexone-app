@@ -20,6 +20,6 @@ it('highlights keyboard focus without swallowing caller events and keeps errors 
   act(() => { tree.root.findByType(TextInput).props.onBlur(focusEvent) })
   expect(blur).toHaveBeenCalledWith(focusEvent)
   act(() => { tree.update(<Field label="Amount" />) })
-  expect(boxColor()).toBe(colors.border)
+  expect(boxColor()).toBe(colors.divider)
   act(() => { tree.unmount() })
 })

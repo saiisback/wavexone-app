@@ -2,8 +2,9 @@ import { StyleSheet, View } from 'react-native'
 
 import { Button, ButtonText } from './button'
 import { colors } from './colors'
+import { PopIn } from './motion'
 import { Text } from './text'
-import { shadow, spacing } from './tokens'
+import { spacing } from './tokens'
 
 /**
  * Empty, unavailable and failed states: an icon, what is going on, and the
@@ -25,9 +26,13 @@ export function EmptyState({
 }) {
   return (
     <View style={styles.wrap}>
-      {icon ? <View style={styles.icon}>{icon}</View> : null}
+      {icon ? (
+        <PopIn delay={120}>
+          <View style={styles.icon}>{icon}</View>
+        </PopIn>
+      ) : null}
       <View style={styles.copy}>
-        <Text variant="strong" style={styles.center}>
+        <Text variant="section" style={[styles.center, styles.title]}>
           {title}
         </Text>
         {message ? (
@@ -53,15 +58,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   icon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    boxShadow: shadow.raised,
+    backgroundColor: colors.brandTint,
+    boxShadow: '0px 0px 0px 8px rgba(18, 19, 24, 0.03), 0px 0px 0px 16px rgba(18, 19, 24, 0.015)',
   },
   copy: {
     gap: 4,
@@ -69,6 +73,10 @@ const styles = StyleSheet.create({
   },
   center: {
     textAlign: 'center',
+  },
+  title: {
+    fontSize: 17,
+    lineHeight: 22,
   },
   message: {
     fontSize: 14,

@@ -2,30 +2,39 @@ import { FlashList } from '@shopify/flash-list'
 import * as Crypto from 'expo-crypto'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
+  Aurora,
+  Amount,
   Card,
-  ChevronDownIcon,
+  Donut,
   EmptyState,
-  Gutter,
+  LiveDot,
+  PageBar,
+  PageScreen,
+  PageTitle,
   PositionsIcon,
-  Pressable,
   SCREEN_PADDING,
-  Screen,
+  Reveal,
   SegmentedControl,
   TAB_BAR_CLEARANCE,
   Text,
   colors,
   radius,
+  spacing,
   useActionMenu,
+  useCountUp,
+  useHeroScroll,
 } from '../design-system'
 import { PositionCard } from '../features/positions/position-card'
 import { mutationFailureMessage } from '../backend/errors'
 import { useBackend, useBackendQuery, useInvalidateQueries } from '../backend/provider'
-import { formatLots, formatSignedMoney } from '../data/format'
+import { formatLots, formatMoney, formatSignedMoney } from '../data/format'
 import { markPosition } from '../data/live-quote'
 import type { Instrument, Position } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountPill } from '../features/accounts/account-pill'
 import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useLiveQuote, useLiveQuotesVersion } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
@@ -68,6 +77,8 @@ export function PositionsScreen() {
   const backend = useBackend()
   const invalidate = useInvalidateQueries()
   const { openInstrument, openAccountSwitcher, openModifyOrder, openTab } = useAppNavigation()
+  const insets = useSafeAreaInsets()
+  const { scrollY, onScrollJS } = useHeroScroll()
 
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
@@ -81,10 +92,18 @@ export function PositionsScreen() {
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
     if (accountData.status === 'ready' && !accountData.data.account) {
-      return <Screen><Gutter style={styles.loading}><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Gutter></Screen>
+      return (
+        <PageScreen title="Positions" contentStyle={styles.gutter}>
+          <AccountSummaryUnavailable account={accountData.data.selectedAccount} />
+        </PageScreen>
+      )
     }
     const state = accountData.status !== 'ready' ? accountData : catalogue
-    return <Screen><Gutter style={styles.loading}><QueryStateView state={state} render={() => null} /></Gutter></Screen>
+    return (
+      <PageScreen title="Positions" contentStyle={styles.gutter}>
+        <QueryStateView state={state} render={() => null} />
+      </PageScreen>
+    )
   }
 
   const account = accountData.data.account
@@ -175,10 +194,10 @@ export function PositionsScreen() {
     })
   }
 
-  const renderItem = ({ item }: { item: Position }) => {
+  const renderItem = ({ item, index }: { item: Position; index: number }) => {
     const instrument = instrumentOf(item)
 
-    return (
+    const card = (
       <LivePositionCard
         position={item}
         instrument={instrument}
@@ -186,6 +205,7 @@ export function PositionsScreen() {
         actionLabel={
           item.executing ? 'Executing…' : item.busy ? 'Closing…' : CARD_ACTION_LABEL[tab]
         }
+        variant={tab === 'Open' ? 'open' : tab === 'Pending' ? 'pending' : 'closed'}
         entryLabel={tab === 'Pending' ? 'Order price' : 'Open'}
         currentLabel={tab === 'Closed' ? 'Closed at' : 'Current'}
         onAction={confirmAction}
@@ -195,70 +215,148 @@ export function PositionsScreen() {
         onPress={() => openInstrument(item.instrumentId)}
       />
     )
+    // Only the first screenful settles in; later cells appear as they scroll.
+    return index < 8
+      ? <Reveal index={index + 2} style={styles.gutter}>{card}</Reveal>
+      : <View style={styles.gutter}>{card}</View>
   }
 
   const liveOpen = openPositions.status === 'ready'
     ? openPositions.data.filter((item) => item.state === 'Open')
     : null
+  const pendingCount = openPositions.status === 'ready'
+    ? openPositions.data.filter((item) => item.state === 'Pending').length
+    : 0
+
+  const openList = liveOpen ?? positions.filter((item) => item.state === 'Open')
+  const shownOpen = liveOpen ? liveOpen.length : openCount
+
+  const header = (
+    <View style={styles.header}>
+      <PageTitle
+        scrollY={scrollY}
+        title="Positions"
+        trailing={
+          <AccountPill tone="light" mode={account.mode} number={account.number} onPress={openAccountSwitcher} />
+        }
+        style={styles.title}
+      />
+
+      {/* No entrance animations in a FlashList header: they never settle on device. */}
+      <View style={styles.gutter}>
+        <Card tone="ink" style={styles.hero}>
+          <View style={styles.heroLabel}>
+            <LiveDot color={colors.greenOnInk} size={7} />
+            <Text variant="caption" color={colors.onInkMuted}>
+              Floating P&amp;L
+            </Text>
+          </View>
+          <FloatingPnl positions={liveOpen} instrumentsById={instrumentsById} fallback={account.floatingPnl} />
+          <View style={styles.chips}>
+            <View style={styles.chip}>
+              <Text variant="caption" weight="semibold" color={colors.onInk}>
+                {`${shownOpen} open ${shownOpen === 1 ? 'position' : 'positions'}`}
+              </Text>
+            </View>
+            {pendingCount > 0 ? (
+              <View style={styles.chip}>
+                <Text variant="caption" weight="semibold" color={colors.onInk}>
+                  {`${pendingCount} pending`}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Exposure positions={openList} />
+        </Card>
+      </View>
+
+      <View style={[styles.gutter, styles.tabs]}>
+        <SegmentedControl options={TABS} value={tab} onChange={setTab} />
+      </View>
+    </View>
+  )
 
   return (
-    <Screen>
-      <Gutter style={styles.titleRow}>
-        <Text variant="title">Positions</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Switch account"
-          onPress={openAccountSwitcher}
-          style={styles.accountPill}
-        >
-          <Text variant="caption" weight="semibold">
-            {account.mode} · {account.number}
-          </Text>
-          <ChevronDownIcon size={16} color={colors.text} />
-        </Pressable>
-      </Gutter>
-
-      <Gutter>
-        <Card tone="ink" style={styles.summary}>
-          <Text variant="overline" color={colors.onInkMuted}>
-            Floating P&amp;L
-          </Text>
-          <FloatingPnl
-            positions={liveOpen}
-            instrumentsById={instrumentsById}
-            fallback={account.floatingPnl}
-          />
-          <Text variant="caption" color={colors.onInkMuted}>
-            {liveOpen ? liveOpen.length : openCount} open{' '}
-            {(liveOpen ? liveOpen.length : openCount) === 1 ? 'position' : 'positions'}
-          </Text>
-        </Card>
-      </Gutter>
-
-      <Gutter style={styles.tabs}>
-        <SegmentedControl options={TABS} value={tab} onChange={setTab} />
-      </Gutter>
-
+    <View style={styles.root}>
+      <Aurora />
       <FlashList
         data={rows}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ItemSeparatorComponent={Separator}
-        contentContainerStyle={styles.list}
+        ListHeaderComponent={header}
+        onScroll={onScrollJS}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ ...styles.list, paddingTop: insets.top + spacing.sm }}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={positionState.status !== 'ready' ? (
-          <QueryStateView state={positionState} render={() => null} />
-        ) : (
-          <EmptyState
-            icon={<PositionsIcon size={24} color={colors.navy} />}
-            title={EMPTY_TITLE[tab]}
-            message={EMPTY_MESSAGE[tab]}
-            action={tab === 'Closed' ? undefined : 'Explore markets'}
-            onAction={() => openTab('Markets')}
-          />
-        )}
+        ListEmptyComponent={
+          <View style={styles.gutter}>
+            {positionState.status !== 'ready' ? (
+              <QueryStateView state={positionState} render={() => null} />
+            ) : (
+              <Card padded={false}>
+                <EmptyState
+                  icon={<PositionsIcon size={24} color={colors.navy} />}
+                  title={EMPTY_TITLE[tab]}
+                  message={EMPTY_MESSAGE[tab]}
+                  action={tab === 'Closed' ? undefined : 'Explore markets'}
+                  onAction={() => openTab('Markets')}
+                />
+              </Card>
+            )}
+          </View>
+        }
       />
-    </Screen>
+      <PageBar scrollY={scrollY} title="Positions" />
+    </View>
+  )
+}
+
+/**
+ * Which way the book leans: lots held long against lots held short, as a
+ * small ring with a legend. Hidden until something is open.
+ */
+function Exposure({ positions }: { positions: readonly Position[] }) {
+  const long = positions.filter((item) => item.side === 'Buy').reduce((sum, item) => sum + item.lots, 0)
+  const short = positions.filter((item) => item.side === 'Sell').reduce((sum, item) => sum + item.lots, 0)
+  const total = long + short
+  if (total <= 0) return null
+  return (
+    <View style={styles.exposure}>
+      <Donut
+        size={68}
+        thickness={9}
+        segments={[
+          { key: 'long', value: long, color: colors.ice },
+          { key: 'short', value: short, color: colors.brandSky },
+        ]}
+      >
+        <Text variant="micro" color={colors.onInk}>
+          {`${Math.round((long / total) * 100)}%`}
+        </Text>
+      </Donut>
+      <View style={styles.legend}>
+        <Text variant="overline" color={colors.onInkMuted}>
+          Exposure
+        </Text>
+        <LegendLine color={colors.ice} label="Long" value={formatLots(long)} />
+        <LegendLine color={colors.brandSky} label="Short" value={formatLots(short)} />
+      </View>
+    </View>
+  )
+}
+
+function LegendLine({ color, label, value }: { color: string; label: string; value: string }) {
+  return (
+    <View style={styles.legendLine}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text variant="caption" color={colors.onInkMuted} style={styles.legendLabel}>
+        {label}
+      </Text>
+      <Text variant="caption" weight="semibold" color={colors.onInk}>
+        {value}
+      </Text>
+    </View>
   )
 }
 
@@ -293,6 +391,7 @@ function LivePositionCard({
   position,
   instrument,
   streamed,
+  variant,
   actionLabel,
   entryLabel,
   currentLabel,
@@ -305,6 +404,7 @@ function LivePositionCard({
   instrument: Instrument
   /** False for a stand-in instrument, whose lot size is unknown. */
   streamed: boolean
+  variant: 'open' | 'pending' | 'closed'
   actionLabel: string
   entryLabel: string
   currentLabel: string
@@ -330,6 +430,7 @@ function LivePositionCard({
       current={marked.current}
       precision={instrument.precision}
       pnl={marked.pnl}
+      variant={variant}
       entryLabel={entryLabel}
       currentLabel={currentLabel}
       actionLabel={actionLabel}
@@ -362,14 +463,17 @@ function FloatingPnl({
         return sum + markPosition(item, instrumentsById.get(item.instrumentId), quote).pnl
       }, 0)
     : fallback
+  const shown = useCountUp(total)
   return (
-    <Text
+    <Amount
       variant="hero"
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      accessibilityLabel={`Floating P&L ${formatSignedMoney(total)}`}
       color={Math.abs(total) < 0.005 ? colors.onInk : total < 0 ? colors.redOnInk : colors.greenOnInk}
-      style={styles.summaryValue}
     >
-      {formatSignedMoney(total)}
-    </Text>
+      {Math.abs(shown) < 0.005 ? formatMoney(0) : formatSignedMoney(shown)}
+    </Amount>
   )
 }
 
@@ -377,42 +481,75 @@ const keyExtractor = (item: Position) => item.id
 const Separator = () => <View style={styles.separator} />
 
 const styles = StyleSheet.create({
-  loading: { paddingTop: 32 },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 12,
-    paddingBottom: 16,
+  root: {
+    flex: 1,
+    backgroundColor: colors.bg,
   },
-  accountPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 44,
-    paddingLeft: 14,
-    paddingRight: 10,
-    borderRadius: radius.pill,
-    borderCurve: 'continuous',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+  gutter: {
+    paddingHorizontal: SCREEN_PADDING,
+  },
+  header: {
+    paddingBottom: spacing.lg,
+  },
+  title: {
+    paddingBottom: spacing.lg,
   },
 
-  summary: {
-    paddingVertical: 18,
+  hero: {
+    paddingVertical: spacing.xl,
+    gap: spacing.xs,
   },
-  summaryValue: {
-    marginTop: 4,
-    marginBottom: 2,
+  heroLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.glassOnInk,
+    borderWidth: 1,
+    borderColor: colors.glassOnInkEdge,
+  },
+  exposure: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.onInkPanel,
+  },
+  legend: {
+    flex: 1,
+    gap: 3,
+  },
+  legendLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendLabel: {
+    flex: 1,
   },
 
   tabs: {
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingTop: spacing.xl,
   },
   list: {
-    paddingHorizontal: SCREEN_PADDING,
     paddingBottom: TAB_BAR_CLEARANCE,
   },
   separator: {

@@ -6,6 +6,7 @@ import { colors } from './colors'
 /** Blurred stand-in shown while the portrait decodes. */
 const PLACEHOLDER = { blurhash: 'L6H2EC=PM+yV0g-mq.wG9c010J}I' }
 
+/** A round portrait with a hairline edge, so pale photos hold their shape on white. */
 export function Avatar({ uri, size = 48 }: { uri: string; size?: number }) {
   return (
     <Image
@@ -21,6 +22,8 @@ export function Avatar({ uri, size = 48 }: { uri: string; size?: number }) {
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: colors.track,
+    backgroundColor: colors.brandTint,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(20, 24, 43, 0.08)',
   },
 })

@@ -1,13 +1,13 @@
 import { StyleSheet, View } from 'react-native'
 
-import { AssetIcon, Delta, PressableScale, Text, colors } from '../../design-system'
-import { formatLots, formatSignedMoney, trendOf } from '../../data/format'
+import { Amount, AssetIcon, Badge, PressableScale, Text, colors } from '../../design-system'
+import { formatLots, formatPrice, formatSignedMoney } from '../../data/format'
 import { markPosition } from '../../data/live-quote'
 import type { Instrument, Position } from '../../data/types'
 import { useLiveQuote } from '../markets/use-live-quote'
 
-/** Badge (36) plus the row's leading padding and gap. */
-export const POSITION_ROW_DIVIDER_INSET = 62
+/** Icon (40) plus the row's leading padding and gap. */
+export const POSITION_ROW_DIVIDER_INSET = 68
 
 /**
  * Compact open position for a list group: badge, side and size, live P&L.
@@ -27,6 +27,7 @@ export function PositionRow({
   const marked = markPosition(position, instrument, quote)
   const symbol = instrument?.symbol ?? position.instrumentId.replace(/^[^:]+:/, '').toUpperCase()
   const pnl = formatSignedMoney(marked.pnl)
+  const tint = marked.pnl > 0.005 ? colors.green : marked.pnl < -0.005 ? colors.red : colors.textMuted
 
   return (
     <PressableScale
@@ -41,20 +42,29 @@ export function PositionRow({
           tint={instrument?.iconTint}
           symbol={symbol}
           category={instrument?.category}
-          size={36}
+          size={40}
         />
         <View style={styles.identity}>
-          <Text variant="strong" numberOfLines={1}>
-            {symbol}
-          </Text>
-          <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
-            <Text variant="caption" weight="semibold" color={marked.side === 'Buy' ? colors.green : colors.red}>
-              {marked.side}
+          <View style={styles.titleRow}>
+            <Text variant="strong" numberOfLines={1} style={styles.symbol}>
+              {symbol}
             </Text>
-            {` · ${formatLots(marked.lots)}`}
+            <Badge tone={marked.side === 'Buy' ? 'buy' : 'sell'}>{marked.side}</Badge>
+          </View>
+          <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+            {formatLots(marked.lots)}
           </Text>
         </View>
-        <Delta label={pnl} direction={trendOf(marked.pnl)} size={15} />
+        <View style={styles.trailing}>
+          <Amount variant="strong" color={tint} numberOfLines={1} style={styles.tabular}>
+            {pnl}
+          </Amount>
+          {instrument ? (
+            <Text variant="caption" color={colors.textSubtle} numberOfLines={1} style={styles.tabular}>
+              {formatPrice(marked.current, instrument.precision)}
+            </Text>
+          ) : null}
+        </View>
       </View>
     </PressableScale>
   )
@@ -65,12 +75,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    minHeight: 60,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    minHeight: 68,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   identity: {
     flex: 1,
-    gap: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  symbol: {
+    flexShrink: 1,
+  },
+  trailing: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  tabular: {
+    fontVariant: ['tabular-nums'],
   },
 })

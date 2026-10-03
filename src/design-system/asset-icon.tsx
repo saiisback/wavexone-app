@@ -98,16 +98,16 @@ export function AssetIcon({ kind, size = 44, label = '', tint, symbol, category 
       <Svg width={size} height={size} viewBox="0 0 48 48">
         <Circle cx="24" cy="24" r="24" fill={disc} />
         {mark === 'bitcoin' ? (
-          <Path fill={colors.onInk} fillRule="evenodd" d="M19 9h3v5h3V9h3v5c7 1 9 9 3 12 7 3 5 12-3 13v4h-3v-4h-3v4h-3v-4h-6v-4h3V18h-3v-4h6Zm3 9v7h4c5 0 5-7 0-7Zm0 11v6h5c5 0 5-6 0-6Z" transform="translate(3 -2) rotate(12 24 24)" />
+          <Path fill={colors.white} fillRule="evenodd" d="M19 9h3v5h3V9h3v5c7 1 9 9 3 12 7 3 5 12-3 13v4h-3v-4h-3v4h-3v-4h-6v-4h3V18h-3v-4h6Zm3 9v7h4c5 0 5-7 0-7Zm0 11v6h5c5 0 5-6 0-6Z" transform="translate(3 -2) rotate(12 24 24)" />
         ) : mark === 'ethereum' ? (
           <>
-            <Path fill={colors.onInk} d="M24 7 13 25l11 6 11-6Z" />
+            <Path fill={colors.white} d="M24 7 13 25l11 6 11-6Z" />
             <Path fill={colors.onInkMuted} d="m13 28 11 14 11-14-11 6Z" />
           </>
         ) : mark === 'oil' ? (
-          <Path fill={colors.onInk} d="M24 7c-3 6-13 14-13 22a13 13 0 0 0 26 0c0-8-10-16-13-22Zm-7 23a7 7 0 0 0 7 7v-3a4 4 0 0 1-4-4Z" fillRule="evenodd" />
+          <Path fill={colors.white} d="M24 7c-3 6-13 14-13 22a13 13 0 0 0 26 0c0-8-10-16-13-22Zm-7 23a7 7 0 0 0 7 7v-3a4 4 0 0 1-4-4Z" fillRule="evenodd" />
         ) : (
-          <Path fill={colors.onInk} d="M27 5c2 8-5 10-2 16 2-3 5-5 8-6 4 5 7 10 7 16 0 9-7 14-16 14S8 39 8 30c0-8 5-14 11-20-1 7 1 10 4 12-1-8 2-13 4-17Zm-3 35c5 0 8-3 8-8 0-3-2-6-4-9 0 5-3 7-5 10-1-3-3-5-5-6-1 2-2 4-2 6 0 4 3 7 8 7Z" />
+          <Path fill={colors.white} d="M27 5c2 8-5 10-2 16 2-3 5-5 8-6 4 5 7 10 7 16 0 9-7 14-16 14S8 39 8 30c0-8 5-14 11-20-1 7 1 10 4 12-1-8 2-13 4-17Zm-3 35c5 0 8-3 8-8 0-3-2-6-4-9 0 5-3 7-5 10-1-3-3-5-5-6-1 2-2 4-2 6 0 4 3 7 8 7Z" />
         )}
       </Svg>
     )
@@ -290,11 +290,11 @@ const styles = StyleSheet.create({
   },
   currencyBase: { left: 0, top: 2, backgroundColor: colors.navy },
   currencyQuote: { right: 0, bottom: 2, backgroundColor: colors.gold },
-  currencyText: { fontFamily: fonts.bold, color: colors.onInk, includeFontPadding: false },
+  currencyText: { fontFamily: fonts.bold, color: colors.white, includeFontPadding: false },
   currencyQuoteText: { color: colors.navy },
   marketBadge: { backgroundColor: colors.navy },
   cryptoWordmark: { backgroundColor: colors.ink },
-  badgeText: { fontFamily: fonts.bold, color: colors.onInk, includeFontPadding: false },
+  badgeText: { fontFamily: fonts.bold, color: colors.white, includeFontPadding: false },
   glyph: {
     fontFamily: fonts.bold,
     color: colors.navy,

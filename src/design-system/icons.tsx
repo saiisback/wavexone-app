@@ -80,10 +80,10 @@ export function PositionsIcon({ size = DEFAULT, color = colors.text }: IconProps
 export function PositionsIconFilled({ size = DEFAULT }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5" fill={colors.ink} />
+      <Rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5" fill={colors.brand} />
       <Path
         d="M7 8.4h10M7 12h10M7 15.6h5.6"
-        stroke={colors.gold}
+        stroke={colors.white}
         strokeWidth={2}
         strokeLinecap="round"
       />
@@ -275,7 +275,7 @@ export function BoltIcon({ size = DEFAULT, color = colors.gold }: IconProps) {
 /* ------------------------------------------------------------------ */
 
 /** Card with a plus — Deposit / Withdraw / Transfer share this glyph. */
-export function CardPlusIcon({ size = DEFAULT, color = colors.onInk }: IconProps) {
+export function CardPlusIcon({ size = DEFAULT, color = colors.white }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -508,6 +508,112 @@ export function VerifiedIcon({ size = 20 }: IconProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </Svg>
+  )
+}
+
+/** Outlined shield with a tick: risk controls (stop loss, take profit). */
+export function ShieldIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M12 2.8 4.6 5.6v5.6c0 4.6 3.1 8.6 7.4 10 4.3-1.4 7.4-5.4 7.4-10V5.6Z"
+        fill="none"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="m8.8 12.2 2.3 2.3 4.2-4.6"
+        fill="none"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Redesign additions                                                  */
+/* ------------------------------------------------------------------ */
+
+/** A cross — closes sheets and dismisses banners. */
+export function CloseIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M6 6l12 12M18 6 6 18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  )
+}
+
+/** A plus. */
+export function PlusIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  )
+}
+
+/** A four-point sparkle with a small companion — insights and signals. */
+export function SparkleIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M10 3.5c.5 3.6 2.4 5.5 6 6-3.6.5-5.5 2.4-6 6-.5-3.6-2.4-5.5-6-6 3.6-.5 5.5-2.4 6-6Z"
+        fill={color}
+      />
+      <Path d="M18 14.5c.25 1.8 1.2 2.75 3 3-1.8.25-2.75 1.2-3 3-.25-1.8-1.2-2.75-3-3 1.8-.25 2.75-1.2 3-3Z" fill={color} />
+    </Svg>
+  )
+}
+
+/** Circled "i". */
+export function InfoIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx="12" cy="12" r="8.6" fill="none" stroke={color} strokeWidth={1.6} />
+      <Path d="M12 11v5" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      <Circle cx="12" cy="7.9" r="1.1" fill={color} />
+    </Svg>
+  )
+}
+
+/** Diagonal arrow — "open elsewhere", "expand". */
+export function ArrowUpRightIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M7 17 17 7M9 7h8v8" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  )
+}
+
+/** A right arrow, for primary call-to-action pills. */
+export function ArrowRightIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M4.5 12h15m0 0-6-6m6 6-6 6" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  )
+}
+
+/** A clock face — history, pending orders. */
+export function ClockIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx="12" cy="12" r="8.6" fill="none" stroke={color} strokeWidth={1.8} />
+      <Path d="M12 7.5V12l3 2" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  )
+}
+
+/** A check mark. */
+export function CheckIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   )
 }

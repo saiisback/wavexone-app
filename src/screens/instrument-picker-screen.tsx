@@ -1,28 +1,29 @@
-import { useNavigation } from '@react-navigation/native'
-import { useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { Fragment, useState } from 'react'
+import { StyleSheet } from 'react-native'
 
 import {
-  AssetIcon,
-  Delta,
+  Card,
   Divider,
-  Pressable,
+  EmptyState,
   SearchField,
+  SearchIcon,
   Sheet,
-  Text,
   colors,
+  spacing,
+  useSafeBack,
 } from '../design-system'
-import { directionOf, formatPercent, formatPrice } from '../data/format'
-import { applyQuote } from '../data/live-quote'
 import { useTradeDraft } from '../data/trade-draft'
-import type { Instrument } from '../data/types'
-import { useLiveQuote } from '../features/markets/use-live-quote'
+import { MARKET_ROW_DIVIDER_INSET } from '../features/markets/market-group'
+import { MarketRow } from '../features/markets/market-row'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
 
-/** Instrument chooser for the Trade tab. */
+/**
+ * Instrument chooser for the Trade tab: search, then every market in one
+ * white card, drawn with the same rows as the Markets tab.
+ */
 export function InstrumentPickerScreen() {
-  const { goBack } = useNavigation()
+  const goBack = useSafeBack()
   const [query, setQuery] = useState('')
   const setInstrumentId = useTradeDraft((state) => state.setInstrumentId)
   const { catalogue } = useMarketData()
@@ -49,76 +50,47 @@ export function InstrumentPickerScreen() {
       <SearchField value={query} onChangeText={setQuery} />
 
       {rows.length === 0 ? (
-        <Text variant="body" color={colors.textMuted} style={styles.empty}>
-          No markets match that search.
-        </Text>
-      ) : null}
-
-      {rows.map((item, index) => (
-        <View key={item.id}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={item.symbol}
-            onPress={() => choose(item.id)}
-            style={styles.row}
-          >
-            <AssetIcon
-              kind={item.icon}
-              label={item.iconLabel}
-              tint={item.iconTint}
-              symbol={item.symbol}
-              category={item.category}
-              size={38}
-            />
-            <View style={styles.identity}>
-              <Text variant="strong" numberOfLines={1}>
-                {item.symbol}
-              </Text>
-              <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
-                {item.name}
-              </Text>
-            </View>
-            <PickerQuote instrument={item} />
-          </Pressable>
-          {index < rows.length - 1 ? <Divider /> : null}
-        </View>
-      ))}
+        <Card padded={false}>
+          <EmptyState
+            icon={<SearchIcon size={22} color={colors.brand} />}
+            title="No markets found"
+            message="No markets match that search."
+          />
+        </Card>
+      ) : (
+        <Card padded={false} style={styles.list}>
+          {rows.map((item, index) => (
+            <Fragment key={item.id}>
+              {index > 0 ? <Divider inset={MARKET_ROW_DIVIDER_INSET} /> : null}
+              <MarketRow
+                layout="row"
+                accessibilityLabel={item.symbol}
+                id={item.id}
+                symbol={item.symbol}
+                name={item.name}
+                price={item.price}
+                precision={item.precision}
+                changePercent={item.changePercent}
+                changeBase={item.dayOpen}
+                iconKind={item.icon}
+                iconLabel={item.iconLabel}
+                iconTint={item.iconTint}
+                category={item.category}
+                spark={item.spark}
+                sparkTone={item.sparkTone}
+                onPress={choose}
+              />
+            </Fragment>
+          ))}
+        </Card>
+      )}
     </Sheet>
   )
 }
 
-/** Price and change, streamed per row. */
-function PickerQuote({ instrument }: { instrument: Instrument }) {
-  const live = applyQuote(instrument, useLiveQuote(instrument.id))
-  return (
-    <View style={styles.quote}>
-      <Text variant="strong">{formatPrice(live.price, live.precision)}</Text>
-      <Delta
-        label={formatPercent(live.changePercent)}
-        direction={directionOf(live.changePercent)}
-        size={14}
-      />
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-  },
-  identity: {
-    flex: 1,
-    gap: 3,
-  },
-  quote: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  empty: {
-    paddingVertical: 24,
-    textAlign: 'center',
+  list: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
   },
 })

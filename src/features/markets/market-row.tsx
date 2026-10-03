@@ -8,7 +8,9 @@ import {
   Sparkline,
   StarIcon,
   Text,
+  TickFlash,
   colors,
+  radius,
   type AssetIconKind,
 } from '../../design-system'
 import { directionOf, formatPercent, formatPrice } from '../../data/format'
@@ -43,6 +45,8 @@ export type MarketRowProps = {
    * on the page between hairline dividers.
    */
   layout?: 'card' | 'row'
+  /** Names the press target where a row stands in for a plain button (the picker). */
+  accessibilityLabel?: string
 }
 
 /**
@@ -71,6 +75,7 @@ export function MarketRow({
   onLongPress,
   showFavorite = false,
   layout = 'card',
+  accessibilityLabel,
 }: MarketRowProps) {
   // Streamed inside the row, so a tick re-renders this row alone.
   const quote = useLiveQuote(id)
@@ -85,20 +90,21 @@ export function MarketRow({
   const compact = layout === 'row'
   const body = (
     <>
-      <View>
+      <View style={[styles.tile, compact ? styles.tileCompact : null]}>
         <AssetIcon
           kind={iconKind}
           label={iconLabel}
           tint={iconTint}
           symbol={symbol}
           category={category}
-          size={compact ? 36 : 40}
+          size={compact ? 32 : 34}
         />
         {showFavorite ? <FavoriteMark id={id} /> : null}
       </View>
 
       <View style={styles.identity}>
-        <Text variant="strong" numberOfLines={1}>
+        {/* Shrinks a little before it truncates: long FX pairs on large-text phones. */}
+        <Text variant="strong" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {symbol}
         </Text>
         <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
@@ -111,14 +117,18 @@ export function MarketRow({
         key={id}
         points={spark}
         color={sparkColor}
-        width={compact ? 60 : 56}
-        height={compact ? 28 : 30}
+        width={compact ? 40 : 44}
+        height={compact ? 24 : 28}
+        strokeWidth={1.8}
+        fillOpacity={0.16}
       />
 
       <View style={styles.quote}>
-        <Text variant="strong" numberOfLines={1} style={styles.price}>
-          {formatPrice(price, precision)}
-        </Text>
+        <TickFlash value={price}>
+          <Text variant="strong" numberOfLines={1} style={styles.price}>
+            {formatPrice(price, precision)}
+          </Text>
+        </TickFlash>
         <DeltaPill label={formatPercent(changePercent)} direction={direction} size={12} />
       </View>
     </>
@@ -128,12 +138,13 @@ export function MarketRow({
     <PressableScale
       onPress={() => onPress(id)}
       onLongPress={onLongPress ? () => onLongPress(id) : undefined}
-      scaleTo={compact ? 0.99 : 0.985}
+      scaleTo={compact ? 0.99 : 0.975}
+      accessibilityLabel={accessibilityLabel}
     >
       {compact ? (
         <View style={[styles.layout, styles.row]}>{body}</View>
       ) : (
-        <Card style={[styles.layout, styles.card]}>{body}</Card>
+        <Card padded={false} style={[styles.layout, styles.card]}>{body}</Card>
       )}
     </PressableScale>
   )
@@ -148,7 +159,7 @@ function FavoriteMark({ id }: { id: string }) {
   if (!isFavorite) return null
   return (
     <View style={styles.favorite}>
-      <StarIcon size={10} color={colors.gold} filled />
+      <StarIcon size={11} color={colors.gold} filled />
     </View>
   )
 }
@@ -157,36 +168,55 @@ const styles = StyleSheet.create({
   layout: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   card: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 14,
+    paddingLeft: 12,
+    paddingRight: 14,
+    borderRadius: radius.xl,
   },
   row: {
-    minHeight: 64,
+    minHeight: 68,
     paddingVertical: 12,
+  },
+  /** A soft square tile behind the round mark, as on the reference rows. */
+  tile: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.well,
+  },
+  tileCompact: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
   },
   identity: {
     flex: 1,
-    gap: 1,
+    minWidth: 0,
+    gap: 2,
   },
   favorite: {
     position: 'absolute',
-    right: -3,
-    bottom: -3,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    right: -5,
+    top: -5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    boxShadow: '0px 1px 3px rgba(16, 24, 40, 0.18)',
+    backgroundColor: colors.glass,
+    boxShadow: '0px 2px 6px rgba(20, 24, 43, 0.16)',
   },
   quote: {
-    minWidth: 84,
+    minWidth: 76,
+    flexShrink: 0,
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 5,
   },
   price: {
     fontVariant: ['tabular-nums'],

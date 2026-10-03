@@ -65,7 +65,7 @@ const navigationTheme: Theme = {
     background: colors.bg,
     card: colors.surface,
     text: colors.text,
-    primary: colors.gold,
+    primary: colors.brand,
     border: colors.border,
   },
   fonts: {

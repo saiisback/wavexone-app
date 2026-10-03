@@ -12,13 +12,16 @@ export type DeltaProps = {
   direction: 'up' | 'down' | 'flat'
   /** Dark cards use brighter semantic foregrounds than light ones. */
   onInk?: boolean
+  /** Written on the navy Wallet card: light gain and loss shades. */
+  onCard?: boolean
   size?: number
 }
 
 /** Triangle plus signed percentage, the pairing used on every price surface. */
-export function Delta({ label, direction, onInk = false, size = 17 }: DeltaProps) {
-  const tint =
-    direction === 'flat'
+export function Delta({ label, direction, onInk = false, onCard = false, size = 17 }: DeltaProps) {
+  const tint = onCard
+    ? direction === 'flat' ? 'rgba(255, 255, 255, 0.72)' : direction === 'up' ? colors.walletGain : colors.walletLoss
+    : direction === 'flat'
       ? (onInk ? colors.onInkMuted : colors.textMuted)
       : direction === 'up'
         ? (onInk ? colors.greenOnInk : colors.green)
@@ -43,7 +46,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    fontFamily: fonts.bold,
+    fontFamily: fonts.semibold,
   },
 })
 
@@ -54,8 +57,9 @@ const styles = StyleSheet.create({
 export function DeltaPill({ label, direction, size = 13 }: Omit<DeltaProps, 'onInk'>) {
   const flat = direction === 'flat'
   const up = direction === 'up'
-  const tint = flat ? colors.textMuted : up ? colors.green : colors.red
-  const fill = flat ? colors.track : up ? colors.greenSoft : colors.redSoft
+  // Stocks style: a solid pill with white figures.
+  const tint = flat ? colors.textMuted : colors.white
+  const fill = flat ? colors.track : up ? colors.greenFill : colors.redFill
   return (
     <View style={[pill.base, { backgroundColor: fill }]}>
       {flat ? null : <DeltaTriangle direction={direction} color={tint} size={size * 0.62} />}
@@ -71,9 +75,9 @@ const pill = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
     borderCurve: 'continuous',
   },
 })
