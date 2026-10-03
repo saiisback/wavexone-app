@@ -1,4 +1,3 @@
-import { Image } from 'expo-image'
 import { Text as RNText } from 'react-native'
 import renderer, { act, type ReactTestInstance } from 'react-test-renderer'
 import Svg, { Path } from 'react-native-svg'
@@ -105,10 +104,6 @@ describe('rendering', () => {
   ])('derives a non-empty fallback for %s when icon metadata is missing', (symbol, monogram) => {
     const { tree } = renderRow({ symbol, iconKind: 'generic', iconLabel: undefined })
     const mark = tree.root.findByType(AssetIcon)
-    // A stock-shaped ticker tries remote artwork first; spend every source.
-    while (mark.findAllByType(Image).length > 0) {
-      act(() => mark.findAllByType(Image)[0].props.onError())
-    }
     expect(mark.findAllByType(RNText).map(flatten)).toContain(monogram)
   })
 
