@@ -3,11 +3,12 @@ import { StyleSheet, View } from 'react-native'
 import {
   AssetIcon,
   Card,
-  Delta,
+  DeltaPill,
   PressableScale,
   Sparkline,
   StarIcon,
   Text,
+  TickFlash,
   colors,
   radius,
   type AssetIconKind,
@@ -31,12 +32,21 @@ export type MarketRowProps = {
   iconKind: AssetIconKind
   iconLabel?: string
   iconTint?: string
+  /** "Stocks", "Forex", … — narrows the logo lookup. */
+  category?: string
   spark: readonly number[]
   sparkTone?: 'positive' | 'negative'
   onPress: (id: string) => void
   onLongPress?: (id: string) => void
   /** Draws the favourite marker; off on Market Watch, on in the catalogue. */
   showFavorite?: boolean
+  /**
+   * `card` is a free-standing card; `row` is a flat, compact row that sits
+   * on the page between hairline dividers.
+   */
+  layout?: 'card' | 'row'
+  /** Names the press target where a row stands in for a plain button (the picker). */
+  accessibilityLabel?: string
 }
 
 /**
@@ -58,11 +68,14 @@ export function MarketRow({
   iconKind,
   iconLabel,
   iconTint,
+  category,
   spark,
   sparkTone,
   onPress,
   onLongPress,
   showFavorite = false,
+  layout = 'card',
+  accessibilityLabel,
 }: MarketRowProps) {
   // Streamed inside the row, so a tick re-renders this row alone.
   const quote = useLiveQuote(id)
@@ -74,72 +87,138 @@ export function MarketRow({
       ? colors.green
       : colors.red
 
+  const compact = layout === 'row'
+  const body = (
+    <>
+      <View style={[styles.tile, compact ? styles.tileCompact : null]}>
+        <AssetIcon
+          kind={iconKind}
+          label={iconLabel}
+          tint={iconTint}
+          symbol={symbol}
+          category={category}
+          size={compact ? 32 : 34}
+        />
+        {showFavorite ? <FavoriteMark id={id} /> : null}
+      </View>
+
+      <View style={styles.identity}>
+        {/* Shrinks a little before it truncates: long FX pairs on large-text phones. */}
+        <Text variant="strong" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+          {symbol}
+        </Text>
+        <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+          {name}
+        </Text>
+      </View>
+
+      {/* Keyed so a recycled row remounts rather than morphing from another market. */}
+      <Sparkline
+        key={id}
+        points={spark}
+        color={sparkColor}
+        width={compact ? 40 : 44}
+        height={compact ? 24 : 28}
+        strokeWidth={1.8}
+        fillOpacity={0.16}
+      />
+
+      <View style={styles.quote}>
+        <TickFlash value={price}>
+          <Text variant="strong" numberOfLines={1} style={styles.price}>
+            {formatPrice(price, precision)}
+          </Text>
+        </TickFlash>
+        <DeltaPill label={formatPercent(changePercent)} direction={direction} size={12} />
+      </View>
+    </>
+  )
+
   return (
     <PressableScale
       onPress={() => onPress(id)}
       onLongPress={onLongPress ? () => onLongPress(id) : undefined}
-      scaleTo={0.985}
+      scaleTo={compact ? 0.99 : 0.975}
+      accessibilityLabel={accessibilityLabel}
     >
-      <Card style={styles.card}>
-        <AssetIcon kind={iconKind} label={iconLabel ?? symbol} tint={iconTint} size={40} />
-
-        <View style={styles.identity}>
-          <View style={styles.symbolRow}>
-            <Text variant="strong" numberOfLines={1}>
-              {symbol}
-            </Text>
-            {showFavorite ? <FavoriteMark id={id} /> : null}
-          </View>
-          <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
-            {name}
-          </Text>
-        </View>
-
-        <Sparkline
-          points={spark}
-          color={sparkColor}
-          gradientId={`spark-${id}`}
-          width={68}
-          height={40}
-        />
-
-        <View style={styles.quote}>
-          <Text variant="strong">{formatPrice(price, precision)}</Text>
-          <Delta label={formatPercent(changePercent)} direction={direction} size={15} />
-        </View>
-      </Card>
+      {compact ? (
+        <View style={[styles.layout, styles.row]}>{body}</View>
+      ) : (
+        <Card padded={false} style={[styles.layout, styles.card]}>{body}</Card>
+      )}
     </PressableScale>
   )
 }
 
-/** Subscribes to a single id rather than the whole favourites set. */
+/**
+ * A star pinned to the badge's corner, so it costs the symbol no width.
+ * Subscribes to a single id rather than the whole favourites set.
+ */
 function FavoriteMark({ id }: { id: string }) {
   const isFavorite = useSession((state) => state.favorites.has(id))
   if (!isFavorite) return null
-  return <StarIcon size={13} color={colors.gold} filled />
+  return (
+    <View style={styles.favorite}>
+      <StarIcon size={11} color={colors.gold} filled />
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
-  card: {
+  layout: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+  },
+  card: {
     paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: radius.card,
+    paddingLeft: 12,
+    paddingRight: 14,
+    borderRadius: radius.xl,
+  },
+  row: {
+    minHeight: 68,
+    paddingVertical: 12,
+  },
+  /** A soft square tile behind the round mark, as on the reference rows. */
+  tile: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.well,
+  },
+  tileCompact: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
   },
   identity: {
     flex: 1,
-    gap: 3,
+    minWidth: 0,
+    gap: 2,
   },
-  symbolRow: {
-    flexDirection: 'row',
+  favorite: {
+    position: 'absolute',
+    right: -5,
+    top: -5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    backgroundColor: colors.glass,
+    boxShadow: '0px 2px 6px rgba(20, 24, 43, 0.16)',
   },
   quote: {
-    width: 88,
+    minWidth: 76,
+    flexShrink: 0,
     alignItems: 'flex-end',
     gap: 5,
+  },
+  price: {
+    fontVariant: ['tabular-nums'],
   },
 })

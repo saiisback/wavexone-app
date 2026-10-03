@@ -1,22 +1,38 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import * as Crypto from 'expo-crypto'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import {
+  Amount,
+  ArrowRightIcon,
   Button,
+  ButtonRow,
   ButtonText,
   Card,
-  Divider,
+  CardPlusIcon,
+  CheckIcon,
+  DepositIcon,
   Field,
+  IconChip,
   ListGroup,
   ListRow,
+  PopIn,
+  PressableScale,
   QuickPicks,
+  Reveal,
+  SegmentedControl,
   Sheet,
+  SwapIcon,
   Text,
+  WalletIcon,
+  WithdrawIcon,
   colors,
+  radius,
   spacing,
   useActionMenu,
+  useSafeBack,
 } from '../design-system'
 import type { FundingConfiguration, FundingRequest } from '../backend/contract'
 import { BackendError } from '../backend/errors'
@@ -31,12 +47,29 @@ import type { RootStackParamList } from '../navigation/types'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
 type FundingRoute = RouteProp<RootStackParamList, 'Funding'>
+type FundingNavigation = NativeStackNavigationProp<RootStackParamList, 'Funding'>
+
+/** The sheet's own title; the mode's title sits centred under the icon disc. */
+const SHEET_TITLE = 'Move money'
+
+const MODES: readonly { mode: FundingMode; label: string }[] = [
+  { mode: 'deposit', label: 'Deposit' },
+  { mode: 'withdraw', label: 'Withdraw' },
+  { mode: 'transfer', label: 'Transfer' },
+]
+const MODE_LABELS = MODES.map((item) => item.label)
+
+const MODE_ICON: Record<FundingMode, typeof DepositIcon> = {
+  deposit: DepositIcon,
+  withdraw: WithdrawIcon,
+  transfer: SwapIcon,
+}
 
 const COPY: Record<FundingMode, { title: string; subtitle: string; cta: string }> = {
   deposit: {
     title: 'Deposit',
     subtitle: 'Add funds to your trading account',
-    cta: 'Continue to payment',
+    cta: 'Submit deposit request',
   },
   withdraw: {
     title: 'Withdraw',
@@ -100,7 +133,8 @@ function FundingForm({ mode, account, accounts, configuration }: {
   configuration: FundingConfiguration
 }) {
   const copy = COPY[mode]
-  const { goBack } = useNavigation()
+  const navigation = useNavigation<FundingNavigation>()
+  const goBack = useSafeBack()
   const showMenu = useActionMenu()
   const backend = useBackend()
   const { openAccountSwitcher } = useAppNavigation()
@@ -175,14 +209,6 @@ function FundingForm({ mode, account, accounts, configuration }: {
       ? 'Request submitted'
       : mode === 'withdraw' && !awaitingOtp ? 'Send withdrawal code' : copy.cta
 
-  const pickMethod = () =>
-    showMenu({
-      title: mode === 'withdraw' ? 'Withdraw to' : 'Pay with',
-      options: methods.map(
-        (option) => ({ label: option, onSelect: () => setMethod(option) }),
-      ),
-    })
-
   const pickAccount = (onPick: (id: string) => void, exclude?: string) =>
     showMenu({
       title: 'Choose account',
@@ -247,87 +273,131 @@ function FundingForm({ mode, account, accounts, configuration }: {
     })
   }
 
+  const ModeIcon = MODE_ICON[mode]
+  const switchMode = (label: string) => {
+    const next = MODES.find((item) => item.label === label)?.mode
+    if (next && next !== mode && !locked) navigation.setParams({ mode: next })
+  }
+
   return (
     <Sheet
-      title={copy.title}
-      subtitle={copy.subtitle}
+      title={SHEET_TITLE}
       footer={
-        <Button tone="gold" disabled={!canSubmit} onPress={submit}>
-          <ButtonText tone="gold">{cta}</ButtonText>
+        <Button tone="ink" disabled={!canSubmit} onPress={submit}>
+          <ButtonRow>
+            <ButtonText tone="ink">{cta}</ButtonText>
+            {submission === 'idle' || awaitingOtp ? <ArrowRightIcon size={18} color={colors.white} /> : null}
+          </ButtonRow>
         </Button>
       }
     >
-      <Card style={styles.balance}>
-        <View style={styles.balanceRow}>
-          <Text variant="body" color={colors.textMuted}>
-            {mode === 'deposit' ? 'Depositing to' : 'From'}
-          </Text>
-          <Text variant="strong">
-            {account.mode} · {account.number}
-          </Text>
+      <Reveal index={0} style={styles.intro}>
+        <PopIn>
+          <View style={styles.discRing}>
+            <View style={styles.disc}>
+              <ModeIcon size={26} color={colors.white} />
+            </View>
+          </View>
+        </PopIn>
+        <Text variant="heading" style={styles.centred}>
+          {copy.title}
+        </Text>
+        <Text variant="body" color={colors.textMuted} style={styles.centred}>
+          {copy.subtitle}
+        </Text>
+      </Reveal>
+
+      <Reveal index={1}>
+        <View pointerEvents={locked ? 'none' : 'auto'} style={locked ? styles.dimmed : null}>
+          <SegmentedControl options={MODE_LABELS} value={copy.title} onChange={switchMode} />
         </View>
-        <Divider />
-        <View style={styles.balanceRow}>
-          <Text variant="body" color={colors.textMuted}>
-            Available
-          </Text>
-          <Text variant="strong">{formatMoney(configuration.availableFund)}</Text>
-        </View>
-      </Card>
+      </Reveal>
 
-      {mode === 'transfer' ? (
-        <ListGroup>
-          <ListRow
-            label="From"
-            value={`${account.mode} · ${account.number}`}
-            onPress={locked || !transferAvailable ? undefined : openAccountSwitcher}
-          />
-          <ListRow
-            label="To"
-            value={destination ? `${destination.mode} · ${destination.number}` : 'No other account'}
-            divider={false}
-            onPress={locked || !transferAvailable ? undefined : () => pickAccount(setDestinationId, account.id)}
-          />
-        </ListGroup>
-      ) : (
-        <ListGroup>
-          <ListRow
-            label={mode === 'withdraw' ? 'Destination' : 'Payment method'}
-            value={selectedMethod}
-            divider={false}
-            onPress={locked || !selectedMethod ? undefined : pickMethod}
-          />
-        </ListGroup>
-      )}
+      <Reveal index={2}>
+        <Card style={styles.source}>
+          <IconChip size={42} shape="square" tone="blue">
+            <WalletIcon size={20} color={colors.tintBlueInk} />
+          </IconChip>
+          <View style={styles.sourceText}>
+            <Text variant="caption" color={colors.textMuted}>
+              {mode === 'deposit' ? 'Depositing to' : 'From'}
+            </Text>
+            <Text variant="strong" numberOfLines={1}>
+              {account.mode} · {account.number}
+            </Text>
+          </View>
+          <View style={styles.sourceValue}>
+            <Text variant="caption" color={colors.textMuted}>
+              Available
+            </Text>
+            <Amount variant="strong" style={styles.tabular}>
+              {formatMoney(configuration.availableFund)}
+            </Amount>
+          </View>
+        </Card>
+      </Reveal>
 
-      {unavailable ? <Text variant="caption" color={colors.textMuted}>{unavailable}</Text> : null}
-
-      <Field
-        label="Amount"
-        prefix="$"
-        value={amount}
-        onChangeText={setAmount}
-        editable={!locked}
-        accessibilityLabel="Amount"
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-        inputMode="decimal"
-        invalid={exceedsBalance}
-        hint={
-          exceedsBalance
-            ? `Above the available ${formatMoney(configuration.availableFund)}`
-            : mode === 'transfer' ? 'Enter an amount to transfer' : `Minimum ${formatMoney(minimum)}`
-        }
-      />
-
-      {!locked ? (
-        <QuickPicks
-          values={quickAmounts}
-          selected={quickAmounts.includes(value) ? value : undefined}
-          onSelect={(next) => setAmount(String(next))}
-          format={(next) => `$${next.toLocaleString('en-US')}`}
+      <Reveal index={3} style={styles.group}>
+        <Field
+          label="Amount"
+          prefix="$"
+          value={amount}
+          onChangeText={setAmount}
+          editable={!locked}
+          accessibilityLabel="Amount"
+          placeholder="0.00"
+          keyboardType="decimal-pad"
+          inputMode="decimal"
+          invalid={exceedsBalance}
+          hint={
+            exceedsBalance
+              ? `Above the available ${formatMoney(configuration.availableFund)}`
+              : mode === 'transfer' ? 'Enter an amount to transfer' : `Minimum ${formatMoney(minimum)}`
+          }
         />
-      ) : null}
+
+        {!locked ? (
+          <QuickPicks
+            values={quickAmounts}
+            selected={quickAmounts.includes(value) ? value : undefined}
+            onSelect={(next) => setAmount(String(next))}
+            format={(next) => `$${next.toLocaleString('en-US')}`}
+          />
+        ) : null}
+      </Reveal>
+
+      <Reveal index={4} style={styles.group}>
+        <Text variant="overline" color={colors.textSubtle}>
+          {mode === 'transfer' ? 'Route' : mode === 'withdraw' ? 'Withdraw to' : 'Pay with'}
+        </Text>
+        {mode === 'transfer' ? (
+          <ListGroup variant="card">
+            <ListRow
+              label="From"
+              value={`${account.mode} · ${account.number}`}
+              onPress={locked || !transferAvailable ? undefined : openAccountSwitcher}
+            />
+            <ListRow
+              label="To"
+              value={destination ? `${destination.mode} · ${destination.number}` : 'No other account'}
+              divider={false}
+              onPress={locked || !transferAvailable ? undefined : () => pickAccount(setDestinationId, account.id)}
+            />
+          </ListGroup>
+        ) : (
+          methods.map((option) => (
+            <OptionCard
+              key={option}
+              label={option}
+              detail={mode === 'withdraw' ? 'Saved destination' : 'Funding method'}
+              selected={option === selectedMethod}
+              disabled={locked}
+              onPress={() => setMethod(option)}
+            />
+          ))
+        )}
+        {unavailable ? <Text variant="caption" color={colors.textMuted}>{unavailable}</Text> : null}
+      </Reveal>
 
       {withdrawalFields.map((field) => (
         <Field
@@ -364,6 +434,50 @@ function FundingForm({ mode, account, accounts, configuration }: {
   )
 }
 
+/**
+ * A choice in the reference "subscription" style: a white card that, when
+ * selected, takes a brand outline, a soft brand fill and a filled radio.
+ */
+function OptionCard({
+  label,
+  detail,
+  selected,
+  disabled,
+  onPress,
+}: {
+  label: string
+  detail: string
+  selected: boolean
+  disabled: boolean
+  onPress: () => void
+}) {
+  return (
+    <PressableScale
+      onPress={onPress}
+      disabled={disabled}
+      scaleTo={0.98}
+      accessibilityLabel={`${label}${selected ? ', selected' : ''}`}
+    >
+      <View style={[styles.option, selected ? styles.optionSelected : null, disabled && !selected ? styles.dimmed : null]}>
+        <IconChip size={42} shape="square" tone={selected ? 'surface' : 'navy'}>
+          <CardPlusIcon size={20} color={colors.brand} />
+        </IconChip>
+        <View style={styles.optionText}>
+          <Text variant="strong" numberOfLines={1}>
+            {label}
+          </Text>
+          <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+            {detail}
+          </Text>
+        </View>
+        <View style={[styles.radio, selected ? styles.radioOn : null]}>
+          {selected ? <CheckIcon size={13} color={colors.white} /> : null}
+        </View>
+      </View>
+    </PressableScale>
+  )
+}
+
 function fundingFailureMessage(error: unknown): string {
   if (error instanceof BackendError && error.kind === 'rejected') {
     return 'That request was declined. Review your details before submitting again.'
@@ -375,18 +489,90 @@ function fundingFailureMessage(error: unknown): string {
 }
 
 const styles = StyleSheet.create({
-  balance: {
-    padding: spacing.xl,
-    gap: spacing.lg,
+  intro: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingBottom: spacing.sm,
   },
-  balanceRow: {
+  discRing: {
+    padding: 8,
+    marginBottom: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandTint,
+  },
+  disc: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brand,
+    boxShadow: '0px 10px 22px rgba(20, 24, 43, 0.25)',
+  },
+  centred: {
+    textAlign: 'center',
+  },
+  dimmed: {
+    opacity: 0.5,
+  },
+  source: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  sourceText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  sourceValue: {
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  tabular: {
+    fontVariant: ['tabular-nums'],
+  },
+  group: {
+    gap: spacing.md,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderCurve: 'continuous',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: colors.glass,
+    boxShadow: '0px 0px 0px 1px rgba(20, 24, 43, 0.04), 0px 8px 22px rgba(20, 24, 43, 0.05)',
+  },
+  optionSelected: {
+    borderColor: colors.brand,
+    backgroundColor: colors.brandTint,
+  },
+  optionText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.glass,
+  },
+  radioOn: {
+    borderColor: colors.brand,
+    backgroundColor: colors.brand,
   },
   note: {
     lineHeight: 20,
+    textAlign: 'center',
   },
 })

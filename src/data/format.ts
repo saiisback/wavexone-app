@@ -56,3 +56,8 @@ export function formatLots(value: number) {
 export function directionOf(value: number): 'up' | 'down' {
   return value < 0 ? 'down' : 'up'
 }
+
+/** As `directionOf`, but an amount that rounds to zero cents is `flat`. */
+export function trendOf(value: number): 'up' | 'down' | 'flat' {
+  return Math.abs(value) < 0.005 ? 'flat' : directionOf(value)
+}

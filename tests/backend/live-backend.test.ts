@@ -359,6 +359,36 @@ describe('accounts', () => {
     ])
   })
 
+  it.each([
+    ['d', 'DEMO'],
+    ['a', 'LIVE'],
+  ])('labels a linked account with book code %s as %s, never the raw code', async (book, mode) => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    scriptFetch({
+      body: JSON.stringify([
+        ...tradingAccountsResponse,
+        { uid: 'user-1', token: 'linked-token', account_id: '20005', balance: 10000, book },
+      ]),
+    })
+
+    const accounts = await backend.accounts.list()
+    expect(accounts.find((account) => account.id === 'linked-token')).toMatchObject({ mode })
+  })
+
+  it('takes Live / Demo for a detailed account from the portal, not the trading book code', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    scriptFetch({ body: JSON.stringify([{ ...tradingAccountsResponse[0], book: 'a' }]) })
+    await expect(backend.accounts.list()).resolves.toEqual([
+      expect.objectContaining({ id: 'account-1', mode: 'LIVE' }),
+    ])
+  })
+
   it('falls back to portal account data when the trading API uses a different id', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)

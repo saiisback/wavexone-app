@@ -62,6 +62,23 @@ describe('status mapping', () => {
     await expect(send(request())).rejects.toMatchObject({ kind })
   })
 
+  it('keeps only the message of a JSON error body, never the raw document', async () => {
+    fetchMock.mockResolvedValue({
+      status: 400,
+      text: async () => '{"status":"fail","message":"Demo account cannot use real deposit methods"}',
+    })
+    await expect(send(request())).rejects.toMatchObject({
+      kind: 'rejected',
+      serverMessage: 'Demo account cannot use real deposit methods',
+    })
+  })
+
+  it('drops a JSON error body that carries no message', async () => {
+    fetchMock.mockResolvedValue({ status: 400, text: async () => '{"status":"fail"}' })
+    const error = await send(request()).catch((caught: unknown) => caught)
+    expect(error).toMatchObject({ kind: 'rejected', serverMessage: undefined })
+  })
+
   it('returns the body on a 200', async () => {
     await expect(send(request())).resolves.toMatchObject({
       status: 200,

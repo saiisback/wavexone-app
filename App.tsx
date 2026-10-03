@@ -1,5 +1,6 @@
 import './src/design-system/fonts.css'
 
+import { useFonts } from 'expo-font'
 import { StatusBar } from 'expo-status-bar'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -7,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { BackendProvider } from './src/backend/provider'
 import { SignedInDataBootstrap } from './src/backend/data-bootstrap'
 import { SessionProvider, useAppSession } from './src/backend/session-provider'
-import { ActionMenuProvider, Gutter, Screen, Text } from './src/design-system'
+import { ActionMenuProvider, BrandSplash } from './src/design-system'
 import { RootNavigator } from './src/navigation/root-navigator'
 import { SignInScreen } from './src/screens/sign-in-screen'
 
@@ -32,17 +33,27 @@ export default function App() {
   )
 }
 
+/**
+ * Inter, registered under the family names `tokens.ts` uses. A native build
+ * embeds these at build time through the expo-font config plugin; Expo Go
+ * skips config plugins, so without this it falls back to the system font.
+ * Loading them again in a native build is quick and harmless.
+ */
+const INTER = {
+  Inter_400Regular: require('./assets/fonts/Inter_400Regular.ttf'),
+  Inter_500Medium: require('./assets/fonts/Inter_500Medium.ttf'),
+  Inter_600SemiBold: require('./assets/fonts/Inter_600SemiBold.ttf'),
+  Inter_700Bold: require('./assets/fonts/Inter_700Bold.ttf'),
+  Inter_800ExtraBold: require('./assets/fonts/Inter_800ExtraBold.ttf'),
+}
+
 function SessionGate() {
   const { state } = useAppSession()
+  const [fontsLoaded, fontError] = useFonts(INTER)
 
-  if (state === 'restoring') {
-    return (
-      <Screen edges={['top', 'bottom']} style={styles.restoring}>
-        <Gutter>
-          <Text variant="strong">Restoring your secure session…</Text>
-        </Gutter>
-      </Screen>
-    )
+  // A failed font load is not fatal: carry on with the system font.
+  if (state === 'restoring' || (!fontsLoaded && !fontError)) {
+    return <BrandSplash message="Restoring your secure session…" />
   }
 
   return state === 'signed-in' ? (
@@ -57,5 +68,4 @@ function SessionGate() {
 
 const styles = {
   root: { flex: 1 },
-  restoring: { justifyContent: 'center' },
 } as const

@@ -1,4 +1,9 @@
-import { instrumentIconLabel, instrumentMark } from '../../src/design-system/instrument-marks'
+import {
+  currencyPairFlags,
+  indexFlag,
+  instrumentIconLabel,
+  instrumentMark,
+} from '../../src/design-system/instrument-marks'
 
 describe('instrument artwork metadata', () => {
   it.each([
@@ -43,5 +48,60 @@ describe('instrument artwork metadata', () => {
     ['HK:0001.HK', '0001'],
   ])('keeps a useful artwork label for %s', (symbol, label) => {
     expect(instrumentIconLabel(symbol)).toBe(label)
+  })
+
+  it.each([
+    ['X:SOLUSD', 'solana'],
+    ['XRPUSDT', 'xrp'],
+    ['DOGEUSD', 'dogecoin'],
+    ['LINKUSD', 'chainlink'],
+  ])('maps the wider coin set: %s → %s', (symbol, mark) => {
+    expect(instrumentMark(symbol)).toBe(mark)
+  })
+
+  it('treats quoted coins as coins even when the feed labels them stocks', () => {
+    expect(instrumentMark('X:BTCUSD', 'Stocks')).toBe('bitcoin')
+    expect(instrumentMark('SOLUSD', 'Stocks')).toBe('solana')
+  })
+
+  it('keeps bare stock tickers that collide with coin codes as stocks', () => {
+    expect(instrumentMark('US:SOL', 'Stocks')).toBe('stock')
+    expect(instrumentMark('US:LTC', 'Stocks')).toBe('stock')
+    expect(instrumentMark('LTC', 'Crypto')).toBe('litecoin')
+    expect(instrumentMark('SOLVAY')).toBe('generic')
+  })
+
+  it('does not show a parcel courier for Hermès', () => {
+    expect(instrumentMark('HRMS', 'Stocks')).toBe('stock')
+  })
+
+  it.each([
+    ['C:EURUSD', ['eu', 'us']],
+    ['GBP/JPY', ['gb', 'jp']],
+    ['USDTRY', ['us', 'tr']],
+  ])('finds both flags for %s', (symbol, flags) => {
+    expect(currencyPairFlags(symbol)).toEqual(flags)
+  })
+
+  it('has no flags for an unknown pair', () => {
+    expect(currencyPairFlags('XAUUSD')).toBeNull()
+    expect(currencyPairFlags('AAPL')).toBeNull()
+  })
+
+  it.each([
+    ['C:US100cash', 'us'],
+    ['US30', 'us'],
+    ['NAS100', 'us'],
+    ['GER40', 'de'],
+    ['UK100', 'gb'],
+    ['JP225', 'jp'],
+    ['AUS200', 'au'],
+    ['EU50', 'eu'],
+  ])('finds the home market of index %s', (symbol, flag) => {
+    expect(indexFlag(symbol)).toBe(flag)
+  })
+
+  it('has no flag for an unknown index', () => {
+    expect(indexFlag('ZZ10')).toBeNull()
   })
 })

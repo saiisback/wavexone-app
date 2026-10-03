@@ -118,7 +118,7 @@ export async function send(request: HttpRequest): Promise<HttpResponse> {
     throw new BackendError('rejected', 'The request was declined.', {
       endpoint: request.endpoint,
       status: response.status,
-      serverMessage: firstLine(text),
+      serverMessage: serverText(text),
     })
   }
 
@@ -178,6 +178,20 @@ function tryParseJson(text: string): unknown {
 }
 
 /** Server text is for diagnostics only, so one short line is enough. */
+/**
+ * The readable part of an error body: a JSON envelope's `message` (as
+ * `unwrapEnvelope` reads it), otherwise the first line of plain text — never
+ * the raw `{"status":"fail",…}` document.
+ */
+function serverText(text: string): string | undefined {
+  const parsed = tryParseJson(text)
+  if (typeof parsed === 'object' && parsed !== null) {
+    const message = (parsed as Record<string, unknown>).message
+    return typeof message === 'string' && message.trim() ? message.trim().slice(0, 200) : undefined
+  }
+  return firstLine(text)
+}
+
 function firstLine(text: string): string | undefined {
   const line = text.trim().split('\n', 1)[0]
   return line ? line.slice(0, 200) : undefined

@@ -1,21 +1,30 @@
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
+import { useRoute, type RouteProp } from '@react-navigation/native'
 import * as Crypto from 'expo-crypto'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import {
+  ArrowRightIcon,
   AssetIcon,
   Badge,
   Button,
+  ButtonRow,
   ButtonText,
   Card,
   Divider,
   Field,
-  Pressable,
+  IconChip,
+  LiveDot,
+  PopIn,
+  Reveal,
   Sheet,
+  ShieldIcon,
   Text,
   colors,
+  radius,
+  spacing,
   useActionMenu,
+  useSafeBack,
 } from '../design-system'
 import { formatLots, formatMoney, formatPrice } from '../data/format'
 import { applyQuote } from '../data/live-quote'
@@ -25,6 +34,7 @@ import { AccountSummaryUnavailable } from '../features/accounts/account-summary-
 import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
+import { KeyValueRow, LotStepper, SheetIntro } from '../features/trade/ticket-parts'
 import { mutationFailureMessage } from '../backend/errors'
 import { useBackend, useInvalidateQueries } from '../backend/provider'
 import { AFTER_TRADE } from '../features/shared/query-keys'
@@ -43,7 +53,7 @@ const DECIMAL = /^\d+(\.\d+)?$/
  */
 export function OrderTicketScreen() {
   const { params } = useRoute<OrderRoute>()
-  const { goBack } = useNavigation()
+  const goBack = useSafeBack()
   const showMenu = useActionMenu()
   const backend = useBackend()
 
@@ -122,139 +132,153 @@ export function OrderTicketScreen() {
       }],
     })
 
+  const [lotCount, lotUnit] = formatLots(lots).split(' ')
+  const tone = side === 'Buy' ? 'brand' : 'night'
+
   return (
     <Sheet
-      title={`${side}${isLimit ? ' limit' : ''} ${instrument.symbol}`}
-      subtitle={instrument.description}
+      title="Review order"
       footer={
-        <Button tone={side === 'Buy' ? 'gold' : 'ink'} disabled={!canPlace} onPress={place}>
-          <ButtonText tone={side === 'Buy' ? 'gold' : 'ink'}>
-            {isLimit
-              ? limitValid ? `${side} limit at ${limitPrice.trim()}` : `${side} limit`
-              : `${side} at ${formatPrice(price, instrument.precision)}`}
-          </ButtonText>
+        <Button tone={tone} disabled={!canPlace} onPress={place}>
+          <ButtonRow>
+            <ButtonText tone={tone}>
+              {isLimit
+                ? limitValid ? `${side} limit at ${limitPrice.trim()}` : `${side} limit`
+                : `${side} at ${formatPrice(price, instrument.precision)}`}
+            </ButtonText>
+            <ArrowRightIcon size={18} color={side === 'Buy' ? colors.white : colors.ink} />
+          </ButtonRow>
         </Button>
       }
     >
-      <Card style={styles.instrument}>
-        <AssetIcon
-          kind={instrument.icon}
-          label={instrument.iconLabel}
-          tint={instrument.iconTint}
-          size={42}
-        />
-        <View style={styles.identity}>
-          <Text variant="strong">{instrument.symbol}</Text>
-          <Text variant="caption" color={colors.textMuted}>
-            {formatPrice(instrument.bid, instrument.precision)} /{' '}
-            {formatPrice(instrument.ask, instrument.precision)}
-          </Text>
-        </View>
-        <Badge tone={side === 'Buy' ? 'buy' : 'sell'}>{side}</Badge>
-      </Card>
+      <Reveal index={0}>
+        <SheetIntro
+          icon={
+            <AssetIcon
+              kind={instrument.icon}
+              label={instrument.iconLabel}
+              tint={instrument.iconTint}
+              symbol={instrument.symbol}
+              category={instrument.category}
+              size={52}
+            />
+          }
+          title={`${side}${isLimit ? ' limit' : ''} ${instrument.symbol}`}
+          subtitle={instrument.description}
+        >
+          <PopIn delay={240}>
+            <Badge tone={side === 'Buy' ? 'buy' : 'sell'}>{side}</Badge>
+          </PopIn>
+          <View style={styles.quotePill}>
+            <LiveDot color={colors.green} size={6} />
+            <Text variant="caption" weight="medium" color={colors.textMuted} style={styles.tabular}>
+              {formatPrice(instrument.bid, instrument.precision)} / {formatPrice(instrument.ask, instrument.precision)}
+            </Text>
+          </View>
+        </SheetIntro>
+      </Reveal>
 
-      <Card style={styles.volume}>
-        <Text variant="body" color={colors.textMuted}>
-          Volume
-        </Text>
-        <View style={styles.stepper}>
-          <Stepper label="−" onPress={() => step(-1)} />
-          <Text variant="displaySm" style={styles.lots}>
-            {formatLots(lots)}
-          </Text>
-          <Stepper label="+" onPress={() => step(1)} />
-        </View>
-      </Card>
+      <Reveal index={1}>
+        <Card style={styles.volume}>
+          <View style={styles.cardHead}>
+            <Text variant="caption" weight="medium" color={colors.textMuted}>
+              Volume
+            </Text>
+            <Text variant="caption" color={colors.textSubtle}>
+              {`${instrument.contractSize.toLocaleString('en-US')} / lot`}
+            </Text>
+          </View>
+          <LotStepper compact lots={lotCount} unit={lotUnit} onDecrease={() => step(-1)} onIncrease={() => step(1)} />
+        </Card>
+      </Reveal>
 
       {isLimit ? (
-        <Field
-          label="Limit price"
-          value={limitPrice}
-          onChangeText={setLimitPrice}
-          placeholder={formatPrice(marketPrice, instrument.precision)}
-          keyboardType="decimal-pad"
-          inputMode="decimal"
-          invalid={limitPrice.trim() !== '' && !limitValid}
-          hint="The order waits on the account until this price is reached."
-        />
+        <Reveal index={2}>
+          <Field
+            label="Limit price"
+            value={limitPrice}
+            onChangeText={setLimitPrice}
+            placeholder={formatPrice(marketPrice, instrument.precision)}
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+            invalid={limitPrice.trim() !== '' && !limitValid}
+            hint="The order waits on the account until this price is reached."
+          />
+        </Reveal>
       ) : null}
 
-      <View style={styles.protection}>
-        <View style={styles.protectionField}>
-          <Field
-            label="Stop loss"
-            value={stopLoss}
-            onChangeText={setStopLoss}
-            placeholder="—"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-          />
-        </View>
-        <View style={styles.protectionField}>
-          <Field
-            label="Take profit"
-            value={takeProfit}
-            onChangeText={setTakeProfit}
-            placeholder="—"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-          />
-        </View>
-      </View>
+      <Reveal index={3}>
+        <Card style={styles.protectionCard}>
+          <View style={styles.protectionHead}>
+            <IconChip tone="mint" size={36} shape="square">
+              <ShieldIcon size={18} color={colors.tintMintInk} />
+            </IconChip>
+            <View style={styles.protectionTitle}>
+              <Text variant="strong">Protection</Text>
+              <Text variant="caption" color={colors.textMuted}>
+                Optional. Leave blank for none.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.protection}>
+            <View style={styles.protectionField}>
+              <Field
+                label="Stop loss"
+                value={stopLoss}
+                onChangeText={setStopLoss}
+                placeholder="—"
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+              />
+            </View>
+            <View style={styles.protectionField}>
+              <Field
+                label="Take profit"
+                value={takeProfit}
+                onChangeText={setTakeProfit}
+                placeholder="—"
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+              />
+            </View>
+          </View>
+        </Card>
+      </Reveal>
 
-      <Card style={styles.summary}>
-        <SummaryRow label="Account" value={`${account.mode} · ${account.number}`} />
-        <Divider />
-        <SummaryRow
-          label="Required margin"
-          value={margin === null ? 'Unavailable' : formatMoney(margin)}
-          tint={exceedsMargin ? colors.red : undefined}
-        />
-        <Divider />
-        <SummaryRow label="Free margin" value={formatMoney(account.freeMargin)} />
-        <Divider />
-        <SummaryRow
-          label="Leverage"
-          value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
-        />
-      </Card>
+      <Reveal index={4}>
+        <Card style={styles.summary}>
+          <KeyValueRow label="Account" value={`${account.mode} · ${account.number}`} />
+          <Divider />
+          <KeyValueRow
+            label={isLimit ? 'Limit price' : 'Fill price'}
+            value={isLimit && !limitValid ? '—' : formatPrice(price, instrument.precision)}
+          />
+          <Divider />
+          <KeyValueRow label="Free margin" value={formatMoney(account.freeMargin)} />
+          <Divider />
+          <KeyValueRow
+            label="Leverage"
+            value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
+          />
+          <KeyValueRow
+            well
+            label="Required margin"
+            value={margin === null ? 'Unavailable' : formatMoney(margin)}
+            tint={exceedsMargin ? colors.red : undefined}
+          />
+        </Card>
+      </Reveal>
 
       {exceedsMargin ? (
-        <Text variant="caption" color={colors.red}>
+        <Text variant="caption" color={colors.red} style={styles.note}>
           This volume needs more margin than the account has free.
         </Text>
       ) : margin === null ? (
-        <Text variant="caption" color={colors.textMuted}>
+        <Text variant="caption" color={colors.textMuted} style={styles.note}>
           Margin estimate unavailable. The broker will validate available margin when you confirm.
         </Text>
       ) : null}
     </Sheet>
-  )
-}
-
-function Stepper({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label === '+' ? 'Increase volume' : 'Decrease volume'}
-      onPress={onPress}
-      style={styles.stepperButton}
-    >
-      <Text variant="heading">{label}</Text>
-    </Pressable>
-  )
-}
-
-function SummaryRow({ label, value, tint }: { label: string; value: string; tint?: string }) {
-  return (
-    <View style={styles.summaryRow}>
-      <Text variant="body" color={colors.textMuted}>
-        {label}
-      </Text>
-      <Text variant="strong" color={tint}>
-        {value}
-      </Text>
-    </View>
   )
 }
 
@@ -264,54 +288,57 @@ function round(value: number) {
 }
 
 const styles = StyleSheet.create({
-  instrument: {
+  quotePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 18,
+    gap: 6,
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  identity: {
-    flex: 1,
-    gap: 3,
+  tabular: {
+    fontVariant: ['tabular-nums'],
   },
   volume: {
-    padding: 16,
-    borderRadius: 18,
-    gap: 12,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
-  stepper: {
+  cardHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  stepperButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderCurve: 'continuous',
-    backgroundColor: colors.track,
-    alignItems: 'center',
-    justifyContent: 'center',
+  protectionCard: {
+    padding: spacing.lg,
+    gap: spacing.lg,
   },
-  lots: {
-    fontSize: 24,
+  protectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  protectionTitle: {
+    flex: 1,
+    gap: 1,
   },
   protection: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   protectionField: {
     flex: 1,
   },
   summary: {
-    padding: 16,
-    borderRadius: 18,
-    gap: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.xs,
   },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  note: {
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
 })

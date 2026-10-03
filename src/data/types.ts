@@ -156,6 +156,8 @@ export type ChartSeries = {
   step: number
   /** Per-point opens, so touching the chart can read any bar. */
   opens?: readonly number[]
+  /** Per-point bar times (epoch ms), for the scrubbing read-out. */
+  times?: readonly number[]
   /** Digits on the price axis; whole numbers when absent. */
   axisDecimals?: number
 }

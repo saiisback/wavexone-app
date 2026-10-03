@@ -53,6 +53,7 @@ export function buildChartSeries(candles: readonly CandleLike[], timeframe: Time
   return {
     points,
     opens: bars.map((bar) => bar.open),
+    times: bars.map((bar) => bar.time),
     labels,
     cursorIndex: last,
     cursorOpen: bars[last].open,

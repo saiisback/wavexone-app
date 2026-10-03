@@ -32,7 +32,6 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="Dashboard" component={HomeScreen} />
       <HomeStack.Screen name="Balance" component={BalanceScreen} />
       <HomeStack.Screen name="Notifications" component={NotificationsScreen} />
-      <HomeStack.Screen name="Signals" component={SignalsScreen} />
     </HomeStack.Navigator>
   )
 }
@@ -44,6 +43,7 @@ function MoreStackNavigator() {
       <MoreStack.Screen name="Activity" component={ActivityScreen} />
       <MoreStack.Screen name="Profile" component={ProfileScreen} />
       <MoreStack.Screen name="Settings" component={SettingsScreen} />
+      <MoreStack.Screen name="Signals" component={SignalsScreen} />
     </MoreStack.Navigator>
   )
 }

@@ -4,16 +4,26 @@ import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import {
+  ArrowRightIcon,
   AssetIcon,
   Badge,
   Button,
+  ButtonRow,
   ButtonText,
   Card,
   Divider,
   Field,
+  IconChip,
+  LiveDot,
+  PopIn,
+  Reveal,
   Sheet,
+  ShieldIcon,
   Text,
+  TrendUpIcon,
   colors,
+  radius,
+  spacing,
   useActionMenu,
 } from '../design-system'
 import type { ModifyOrderRequest } from '../backend/contract'
@@ -27,6 +37,7 @@ import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { AFTER_TRADE } from '../features/shared/query-keys'
 import { QueryStateView } from '../features/shared/query-state'
+import { KeyValueRow, SheetIntro } from '../features/trade/ticket-parts'
 import type { RootStackParamList } from '../navigation/types'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
@@ -82,7 +93,9 @@ export function ModifyOrderScreen() {
   if (!position || !instrument || position.state === 'Closed') {
     return (
       <Sheet title="Modify order">
-        <Text color={colors.textMuted}>This order is no longer open on the account.</Text>
+        <Text color={colors.textMuted} style={styles.note}>
+          This order is no longer open on the account.
+        </Text>
       </Sheet>
     )
   }
@@ -132,74 +145,99 @@ export function ModifyOrderScreen() {
       }],
     })
 
+  const current = markPosition(position, instrument, quote).current
+  const pending = position.state === 'Pending'
+
   return (
     <Sheet
-      title={`Modify ${instrument.symbol}`}
-      subtitle={position.state === 'Pending' ? 'Pending order' : 'Open position'}
+      title="Modify order"
       footer={
-        <Button tone="gold" disabled={!canSubmit} onPress={submit}>
-          <ButtonText tone="gold">Save changes</ButtonText>
+        <Button tone="brand" disabled={!canSubmit} onPress={submit}>
+          <ButtonRow>
+            <ButtonText tone="brand">Save changes</ButtonText>
+            <ArrowRightIcon size={18} color={colors.white} />
+          </ButtonRow>
         </Button>
       }
     >
-      <Card style={styles.instrument}>
-        <AssetIcon
-          kind={instrument.icon}
-          label={instrument.iconLabel}
-          tint={instrument.iconTint}
-          size={42}
-        />
-        <View style={styles.identity}>
-          <Text variant="strong">{instrument.symbol}</Text>
-          <Text variant="caption" color={colors.textMuted}>
-            {formatLots(position.lots)} · {position.state === 'Pending' ? 'Trigger' : 'Entry'}{' '}
-            {formatPrice(position.state === 'Pending' ? position.current : position.entry, instrument.precision)}
-          </Text>
-        </View>
-        <Badge tone={position.side === 'Buy' ? 'buy' : 'sell'}>{position.side}</Badge>
-      </Card>
+      <Reveal index={0}>
+        <SheetIntro
+          icon={
+            <AssetIcon
+              kind={instrument.icon}
+              label={instrument.iconLabel}
+              tint={instrument.iconTint}
+              symbol={instrument.symbol}
+              category={instrument.category}
+              size={52}
+            />
+          }
+          title={`Modify ${instrument.symbol}`}
+          subtitle={pending ? 'Pending order' : 'Open position'}
+        >
+          <PopIn delay={240}>
+            <Badge tone={position.side === 'Buy' ? 'buy' : 'sell'}>{position.side}</Badge>
+          </PopIn>
+          <View style={styles.metaPill}>
+            <Text variant="caption" weight="medium" color={colors.textMuted} style={styles.tabular}>
+              {formatLots(position.lots)} · {pending ? 'Trigger' : 'Entry'}{' '}
+              {formatPrice(pending ? position.current : position.entry, instrument.precision)}
+            </Text>
+          </View>
+        </SheetIntro>
+      </Reveal>
 
-      <View style={styles.protection}>
-        <View style={styles.protectionField}>
-          <Field
-            label="Stop loss"
-            value={stopLoss}
-            onChangeText={setStopLoss}
-            placeholder="—"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            invalid={stopLossError !== undefined}
-            hint={stopLossError}
+      <Reveal index={1}>
+        <Card style={styles.summary}>
+          <KeyValueRow
+            well
+            label="Current price"
+            leading={<LiveDot color={colors.green} size={6} />}
+            value={formatPrice(current, instrument.precision)}
           />
-        </View>
-        <View style={styles.protectionField}>
-          <Field
-            label="Take profit"
-            value={takeProfit}
-            onChangeText={setTakeProfit}
-            placeholder="—"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            invalid={takeProfitError !== undefined}
-            hint={takeProfitError}
+          <KeyValueRow
+            label="Bid / Ask"
+            value={`${formatPrice(instrument.bid, instrument.precision)} / ${formatPrice(instrument.ask, instrument.precision)}`}
           />
-        </View>
-      </View>
+        </Card>
+      </Reveal>
 
-      <Card style={styles.summary}>
-        <SummaryRow
-          label="Current price"
-          value={formatPrice(markPosition(position, instrument, quote).current, instrument.precision)}
-        />
-        <Divider />
-        <SummaryRow
-          label="Bid / Ask"
-          value={`${formatPrice(instrument.bid, instrument.precision)} / ${formatPrice(instrument.ask, instrument.precision)}`}
-        />
-      </Card>
+      <Reveal index={2}>
+        <Card style={styles.levelCard}>
+          <LevelRow icon={<ShieldIcon size={18} color={colors.tintRoseInk} />} tone="rose">
+            <Field
+              label="Stop loss"
+              value={stopLoss}
+              onChangeText={setStopLoss}
+              placeholder="—"
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              invalid={stopLossError !== undefined}
+              hint={stopLossError ?? 'Closes the trade to cap a loss.'}
+            />
+          </LevelRow>
+          <Divider />
+          <LevelRow icon={<TrendUpIcon size={18} color={colors.tintMintInk} />} tone="mint">
+            <Field
+              label="Take profit"
+              value={takeProfit}
+              onChangeText={setTakeProfit}
+              placeholder="—"
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              invalid={takeProfitError !== undefined}
+              hint={takeProfitError ?? 'Closes the trade to lock in a gain.'}
+            />
+          </LevelRow>
+        </Card>
+      </Reveal>
+
+      <Text variant="caption" color={colors.textSubtle} style={styles.note}>
+        Clear a field to remove that level. Changes are sent once, after you confirm.
+      </Text>
 
       {missingTrigger ? (
-        <Text variant="caption" color={colors.red}>
+        <Text variant="caption" color={colors.red} style={styles.note}>
           The server did not report this order&apos;s trigger price, so it cannot be modified here.
         </Text>
       ) : null}
@@ -223,44 +261,65 @@ function levelValue(value: string, initial: string): string | undefined {
   return initial === '' ? undefined : '0'
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+/** A tinted icon tile beside a level's field, lined up with the input. */
+function LevelRow({
+  icon,
+  tone,
+  children,
+}: {
+  icon: React.ReactNode
+  tone: 'rose' | 'mint'
+  children: React.ReactNode
+}) {
   return (
-    <View style={styles.summaryRow}>
-      <Text variant="body" color={colors.textMuted}>
-        {label}
-      </Text>
-      <Text variant="strong">{value}</Text>
+    <View style={styles.levelRow}>
+      <View style={styles.levelIcon}>
+        <IconChip tone={tone} size={40} shape="square">
+          {icon}
+        </IconChip>
+      </View>
+      <View style={styles.levelField}>{children}</View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  instrument: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 18,
+  metaPill: {
+    height: 26,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  identity: {
-    flex: 1,
-    gap: 3,
-  },
-  protection: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  protectionField: {
-    flex: 1,
+  tabular: {
+    fontVariant: ['tabular-nums'],
   },
   summary: {
-    padding: 16,
-    borderRadius: 18,
-    gap: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.xs,
   },
-  summaryRow: {
+  levelCard: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  levelRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  // Caption label (18) + gap (8) + half the input's slack: centred on the input.
+  levelIcon: {
+    paddingTop: 18 + spacing.sm + 8,
+  },
+  levelField: {
+    flex: 1,
+  },
+  note: {
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
 })

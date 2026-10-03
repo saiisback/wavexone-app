@@ -7,7 +7,7 @@ import type { Account, Instrument, Profile } from '../../src/data/types'
 const mockShowMenu = jest.fn()
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ goBack: jest.fn() }),
+  useNavigation: () => ({ goBack: jest.fn(), canGoBack: () => true }),
   useRoute: () => ({
     params: { instrumentId: 'xauusd', side: 'Buy', orderType: 'Market', lots: 0.01 },
   }),

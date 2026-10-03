@@ -1,11 +1,13 @@
-import { useNavigation } from '@react-navigation/native'
 import { Platform, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { Aurora } from './aurora'
 import { colors } from './colors'
-import { Pressable } from './pressable'
+import { CloseIcon } from './icons'
+import { PressableScale } from './pressable'
 import { Text } from './text'
-import { SCREEN_PADDING, fonts, radius } from './tokens'
+import { useSafeBack } from './use-safe-back'
+import { SCREEN_PADDING, radius } from './tokens'
 
 /**
  * Chrome for the screens presented as native form sheets.
@@ -26,11 +28,12 @@ export function Sheet({
   /** Pinned under the scroll area — the primary action usually lives here. */
   footer?: React.ReactNode
 }) {
-  const { goBack } = useNavigation()
+  const goBack = useSafeBack()
   const insets = useSafeAreaInsets()
 
   return (
     <View style={styles.root}>
+      <Aurora />
       {/* iOS draws its own grabber on a form sheet. */}
       {Platform.OS === 'ios' ? null : <View style={styles.grabber} />}
 
@@ -46,15 +49,11 @@ export function Sheet({
           ) : null}
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          hitSlop={10}
-          onPress={goBack}
-          style={styles.close}
-        >
-          <Text style={styles.closeLabel}>Close</Text>
-        </Pressable>
+        <PressableScale accessibilityLabel="Close" hitSlop={10} onPress={goBack} scaleTo={0.88}>
+          <View style={styles.close}>
+            <CloseIcon size={18} color={colors.text} />
+          </View>
+        </PressableScale>
       </View>
 
       <ScrollView
@@ -66,7 +65,9 @@ export function Sheet({
       </ScrollView>
 
       {footer ? (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>{footer}</View>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          {footer}
+        </View>
       ) : null}
     </View>
   )
@@ -90,8 +91,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: SCREEN_PADDING,
-    paddingTop: 18,
-    paddingBottom: 14,
+    paddingTop: 20,
+    paddingBottom: 16,
     gap: 16,
   },
   headerText: {
@@ -102,12 +103,14 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   close: {
-    paddingTop: 4,
-  },
-  closeLabel: {
-    fontFamily: fonts.semibold,
-    fontSize: 16,
-    color: colors.textMuted,
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   content: {
     paddingHorizontal: SCREEN_PADDING,
@@ -116,9 +119,12 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: SCREEN_PADDING,
-    paddingTop: 12,
+    paddingTop: 14,
+    backgroundColor: colors.glassStrong,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-    backgroundColor: colors.surface,
+    borderTopColor: colors.border,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    boxShadow: '0px -8px 24px rgba(20, 24, 43, 0.05)',
   },
 })
