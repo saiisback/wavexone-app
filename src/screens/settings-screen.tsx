@@ -9,8 +9,6 @@ import {
   Screen,
   Switch,
   TAB_BAR_CLEARANCE,
-  Text,
-  colors,
 } from '../design-system'
 import { ScreenHeader } from '../features/shared/screen-header'
 import { useOpenClientPortal } from '../features/shared/use-client-portal'
@@ -29,27 +27,15 @@ export function SettingsScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Gutter>
-          <Text variant="caption" color={colors.textMuted}>
-            NOTIFICATIONS
-          </Text>
-        </Gutter>
-
-        <Gutter>
-          <ListGroup>
+          <ListGroup title="Notifications">
             <SettingToggle settingKey="priceAlerts" label="Price alerts" />
             <SettingToggle settingKey="orderFills" label="Order fills" />
             <SettingToggle settingKey="marketNews" label="Market news" divider={false} />
           </ListGroup>
         </Gutter>
 
-        <Gutter style={styles.sectionLabel}>
-          <Text variant="caption" color={colors.textMuted}>
-            SECURITY
-          </Text>
-        </Gutter>
-
         <Gutter>
-          <ListGroup>
+          <ListGroup title="Security">
             <SettingToggle settingKey="biometricUnlock" label="Biometric unlock" />
             <ListRow
               label="Confirm every order"
@@ -72,14 +58,8 @@ export function SettingsScreen() {
           </ListGroup>
         </Gutter>
 
-        <Gutter style={styles.sectionLabel}>
-          <Text variant="caption" color={colors.textMuted}>
-            ACCOUNT
-          </Text>
-        </Gutter>
-
         <Gutter>
-          <ListGroup>
+          <ListGroup title="Account">
             <ListRow label="Profile & verification" onPress={() => navigate('Profile')} />
             <ListRow label="Transaction history" onPress={() => navigate('Activity')} />
             <ListRow label="App version" value="1.0.0 (dev)" divider={false} />
@@ -125,9 +105,6 @@ const noop = () => {}
 const styles = StyleSheet.create({
   content: {
     paddingBottom: TAB_BAR_CLEARANCE,
-    gap: 10,
-  },
-  sectionLabel: {
-    paddingTop: 10,
+    gap: 24,
   },
 })

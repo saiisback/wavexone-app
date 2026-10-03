@@ -6,25 +6,25 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 import {
   Avatar,
   BellIcon,
-  Button,
-  ButtonText,
   Card,
   ChevronDownIcon,
   Delta,
   DepositIcon,
   Divider,
+  EmptyState,
   Gutter,
+  PositionsIcon,
   Pressable,
   PressableScale,
   Screen,
+  Sparkline,
   SwapIcon,
   TAB_BAR_CLEARANCE,
   Text,
-  Watermark,
   WithdrawIcon,
   colors,
   fonts,
-  radius,
+  shadow,
   spacing,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
@@ -36,7 +36,7 @@ import { AccountSummaryUnavailable } from '../features/accounts/account-summary-
 import { MARKET_ROW_DIVIDER_INSET } from '../features/markets/market-group'
 import { MarketRow } from '../features/markets/market-row'
 import { useMarketData } from '../features/markets/use-market-data'
-import { PositionRow } from '../features/positions/position-row'
+import { POSITION_ROW_DIVIDER_INSET, PositionRow } from '../features/positions/position-row'
 import { QueryStateView, UnavailableState } from '../features/shared/query-state'
 import { SectionHeader } from '../features/shared/section-header'
 import { useAppNavigation } from '../navigation/use-app-navigation'
@@ -48,6 +48,8 @@ type Navigation = NativeStackNavigationProp<HomeStackParamList, 'Dashboard'>
 const WATCHLIST_SIZE = 5
 /** How many open positions the summary shows before "See all". */
 const POSITIONS_SIZE = 3
+/** How many recent closed trades the hero's realised P&L line covers. */
+const TREND_TRADES = 30
 
 /**
  * Home tab, in the order a trader acts: what the account is worth, money in
@@ -101,8 +103,10 @@ function HomeDashboard({
   )
   const sparkById = sparks.status === 'ready' ? sparks.data : undefined
 
-  // Same key as the Positions tab, so both screens share one request.
+  // Same keys as the Positions tab, so both screens share one request each.
   const positions = useBackendQuery(`positions:${account.id}`, (backend) => backend.orders.list(account.id))
+  const history = useBackendQuery(`history:${account.id}`, (backend) => backend.orders.history(account.id))
+  const trend = history.status === 'ready' ? realisedTrend(history.data) : null
 
   // Same key as the Notifications screen; a failed read just shows no dot.
   const notifications = useBackendQuery('notifications', (backend) => backend.engagement.notifications())
@@ -152,11 +156,10 @@ function HomeDashboard({
         </Gutter>
 
         <Gutter style={styles.top}>
-          <View style={styles.portfolio}>
-            <Watermark size={140} right={-22} bottom={-28} />
+          <Card tone="ink" padded={false}>
             <View style={styles.portfolioBand}>
-              <Text variant="caption" weight="medium" color={colors.onInkMuted}>
-                Portfolio
+              <Text variant="overline" color={colors.onInkMuted}>
+                Total equity
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -165,6 +168,7 @@ function HomeDashboard({
                 hitSlop={6}
                 style={styles.accountPill}
               >
+                <View style={[styles.modeDot, account.mode === 'DEMO' ? styles.modeDotDemo : null]} />
                 <Text style={styles.accountPillLabel}>
                   {account.mode} · {account.number}
                 </Text>
@@ -178,18 +182,20 @@ function HomeDashboard({
               scaleTo={0.985}
             >
               <View style={styles.portfolioBody}>
-                <Text variant="display" color={colors.onInk} style={styles.equity}>
+                <Text variant="hero" color={colors.onInk} numberOfLines={1} adjustsFontSizeToFit>
                   {formatMoney(account.equity)}
                 </Text>
                 <View style={styles.pnlRow}>
-                  <Text variant="caption" color={colors.onInkMuted}>
-                    Open P&amp;L
-                  </Text>
                   <Delta label={pnlLabel} direction={trendOf(account.floatingPnl)} onInk size={14} />
+                  <Text variant="caption" color={colors.onInkMuted}>
+                    open P&amp;L
+                  </Text>
                 </View>
               </View>
             </PressableScale>
-          </View>
+
+            {trend ? <RealisedTrend {...trend} /> : <View style={styles.heroFoot} />}
+          </Card>
 
           <QuickActions onFunding={openFunding} />
         </Gutter>
@@ -210,7 +216,7 @@ function HomeDashboard({
             <QueryStateView state={catalogue} render={() => null} />
           ) : (
             <>
-              <Card padded={false}>
+              <View>
                 {watchlist.map((item, index) => (
                   <Fragment key={item.id}>
                     {index > 0 ? <Divider inset={MARKET_ROW_DIVIDER_INSET} /> : null}
@@ -233,7 +239,7 @@ function HomeDashboard({
                     />
                   </Fragment>
                 ))}
-              </Card>
+              </View>
               {pinned.length === 0 ? (
                 <Text variant="caption" color={colors.textSubtle} style={styles.hint}>
                   Star a market on the Markets tab to pin it here.
@@ -273,10 +279,42 @@ const FUNDING_ACTIONS: readonly { mode: FundingMode; label: string; Icon: typeof
   { mode: 'transfer', label: 'Transfer', Icon: SwapIcon },
 ]
 
+/**
+ * Cumulative realised P&L across the most recent closed trades, oldest
+ * first. `null` until there are enough trades to draw a line.
+ */
+function realisedTrend(history: readonly Position[]) {
+  const closed = history
+    .filter((item) => item.state === 'Closed')
+    .sort((left, right) => (left.time ?? '').localeCompare(right.time ?? ''))
+    .slice(-TREND_TRADES)
+  if (closed.length < 2) return null
+  const points = [0]
+  for (const trade of closed) points.push(points[points.length - 1] + trade.pnl)
+  return { points, trades: closed.length, total: points[points.length - 1] }
+}
+
+/** The hero's line: realised P&L over recent trades, in the signature gold. */
+function RealisedTrend({ points, trades, total }: { points: number[]; trades: number; total: number }) {
+  return (
+    <View style={styles.trend}>
+      <Sparkline points={points} width="fill" height={56} color={colors.gold} fillOpacity={0.28} showEndpoint />
+      <View style={styles.trendLegend}>
+        <Text variant="caption" color={colors.onInkMuted}>
+          {`Realised P&L · last ${trades} trades`}
+        </Text>
+        <Text variant="caption" weight="semibold" color={total < 0 ? colors.redOnInk : colors.greenOnInk}>
+          {formatSignedMoney(total)}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
 /** Money in, out and between accounts — the same funding sheet as Balance. */
 function QuickActions({ onFunding }: { onFunding: (mode: FundingMode) => void }) {
   return (
-    <Card padded={false} style={styles.quickActions}>
+    <View style={styles.quickActions}>
       {FUNDING_ACTIONS.map(({ mode, label, Icon }) => (
         <PressableScale
           key={mode}
@@ -286,16 +324,16 @@ function QuickActions({ onFunding }: { onFunding: (mode: FundingMode) => void })
           style={styles.quickAction}
         >
           <View style={styles.quickActionInner}>
-            <View style={styles.quickActionIcon}>
+            <View style={[styles.quickActionIcon, mode === 'deposit' ? styles.quickActionPrimary : null]}>
               <Icon size={20} color={colors.navy} />
             </View>
-            <Text variant="caption" weight="medium" color={colors.text}>
+            <Text variant="caption" weight="semibold" color={colors.text}>
               {label}
             </Text>
           </View>
         </PressableScale>
       ))}
-    </Card>
+    </View>
   )
 }
 
@@ -312,15 +350,13 @@ function OpenPositions({
 }) {
   if (positions.length === 0) {
     return (
-      <Card style={styles.emptyPositions}>
-        <Text variant="strong">No open positions</Text>
-        <Text variant="caption" color={colors.textMuted}>
-          Your open trades and their live P&amp;L will appear here.
-        </Text>
-        <Button tone="track" onPress={onExplore} style={styles.emptyAction}>
-          <ButtonText tone="track">Explore markets</ButtonText>
-        </Button>
-      </Card>
+      <EmptyState
+        icon={<PositionsIcon size={24} color={colors.navy} />}
+        title="No open positions"
+        message="Your open trades and their live P&L will appear here."
+        action="Explore markets"
+        onAction={onExplore}
+      />
     )
   }
 
@@ -330,7 +366,7 @@ function OpenPositions({
     <Card padded={false}>
       {positions.slice(0, POSITIONS_SIZE).map((position, index) => (
         <Fragment key={position.id}>
-          {index > 0 ? <Divider inset={MARKET_ROW_DIVIDER_INSET} /> : null}
+          {index > 0 ? <Divider inset={POSITION_ROW_DIVIDER_INSET} /> : null}
           <PositionRow position={position} instrument={byId.get(position.instrumentId)} onPress={onOpen} />
         </Fragment>
       ))}
@@ -385,28 +421,31 @@ const styles = StyleSheet.create({
   },
 
   top: {
-    gap: spacing.md,
-  },
-  portfolio: {
-    borderRadius: radius.card,
-    borderCurve: 'continuous',
-    backgroundColor: colors.ink,
-    overflow: 'hidden',
+    gap: spacing.xl,
   },
   portfolioBand: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingLeft: spacing.xl,
-    paddingRight: spacing.md,
+    paddingRight: spacing.sm,
     paddingTop: spacing.sm,
   },
   accountPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     minHeight: 44,
     paddingHorizontal: 10,
+  },
+  modeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.greenOnInk,
+  },
+  modeDotDemo: {
+    backgroundColor: colors.gold,
   },
   accountPillLabel: {
     fontFamily: fonts.semibold,
@@ -416,37 +455,54 @@ const styles = StyleSheet.create({
   },
   portfolioBody: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-    gap: spacing.sm,
-  },
-  equity: {
-    fontVariant: ['tabular-nums'],
+    gap: spacing.xs,
   },
   pnlRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
+  heroFoot: {
+    height: spacing.xl,
+  },
+  trend: {
+    marginTop: spacing.md,
+  },
+  trendLegend: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.onInkDivider,
+  },
 
   quickActions: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
   },
   quickAction: {
     flex: 1,
   },
   quickActionInner: {
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     minHeight: 44,
   },
   quickActionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.navySoft,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    boxShadow: shadow.raised,
+  },
+  quickActionPrimary: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
   },
 
   section: {
@@ -455,12 +511,6 @@ const styles = StyleSheet.create({
   hint: {
     paddingHorizontal: spacing.xs,
     paddingTop: spacing.xs,
-  },
-  emptyPositions: {
-    gap: spacing.xs,
-  },
-  emptyAction: {
-    marginTop: spacing.md,
   },
   morePositions: {
     minHeight: 44,

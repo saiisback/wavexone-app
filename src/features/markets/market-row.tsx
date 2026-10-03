@@ -39,8 +39,8 @@ export type MarketRowProps = {
   /** Draws the favourite marker; off on Market Watch, on in the catalogue. */
   showFavorite?: boolean
   /**
-   * `card` is a free-standing card; `row` is a flat, compact row for a list
-   * group, which supplies the surface and the dividers.
+   * `card` is a free-standing card; `row` is a flat, compact row that sits
+   * on the page between hairline dividers.
    */
   layout?: 'card' | 'row'
 }
@@ -111,8 +111,8 @@ export function MarketRow({
         key={id}
         points={spark}
         color={sparkColor}
-        width={compact ? 52 : 56}
-        height={compact ? 26 : 30}
+        width={compact ? 60 : 56}
+        height={compact ? 28 : 30}
       />
 
       <View style={styles.quote}>
@@ -164,9 +164,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   row: {
-    minHeight: 60,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    minHeight: 64,
+    paddingVertical: 12,
   },
   identity: {
     flex: 1,

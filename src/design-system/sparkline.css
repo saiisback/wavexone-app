@@ -1,0 +1,11 @@
+/*
+ * Web only — Metro turns CSS imports into no-ops on iOS and Android.
+ *
+ * Same fix as features/chart/price-chart.css: wagmi-charts draws the wash in
+ * an <svg> given no size, which browsers render at 300 × 150, so a sparkline
+ * wider than 300pt loses its fill at the right. Sized paths keep theirs.
+ */
+[id='wavex-sparkline'] svg:not([width]) {
+  width: 100%;
+  height: 100%;
+}

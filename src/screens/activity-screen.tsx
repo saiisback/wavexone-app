@@ -3,6 +3,9 @@ import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import {
+  Card,
+  Divider,
+  EmptyState,
   FilterIcon,
   Gutter,
   Pressable,
@@ -12,12 +15,10 @@ import {
   TAB_BAR_CLEARANCE,
   Text,
   VerticalDivider,
-  Watermark,
   colors,
-  radius,
   useActionMenu,
 } from '../design-system'
-import { ActivityRow } from '../features/activity/activity-row'
+import { ACTIVITY_ROW_DIVIDER_INSET, ActivityRow } from '../features/activity/activity-row'
 import { ScreenHeader } from '../features/shared/screen-header'
 import { useBackendQuery } from '../backend/provider'
 import { activityGroup, inPeriod } from '../data/activity-dates'
@@ -147,7 +148,7 @@ export function ActivityScreen() {
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === 'header') {
       return (
-        <Text variant="heading" style={styles.groupHeader}>
+        <Text variant="overline" color={colors.textSubtle} style={styles.groupHeader}>
           {item.title}
         </Text>
       )
@@ -194,9 +195,8 @@ export function ActivityScreen() {
       />
 
       <Gutter>
-        <View style={styles.summary}>
-          <Watermark size={140} right={-22} top={-24} />
-          <Text variant="strong" color={colors.onInk} style={styles.summaryTitle}>
+        <Card tone="ink">
+          <Text variant="overline" color={colors.onInkMuted}>
             {range}
           </Text>
 
@@ -215,7 +215,6 @@ export function ActivityScreen() {
                     ? colors.greenOnInk
                     : colors.redOnInk
                 }
-                style={styles.summaryValue}
               >
                 {account.monthNetResult === undefined
                   ? 'Unavailable'
@@ -240,7 +239,7 @@ export function ActivityScreen() {
               </Text>
             </View>
           </View>
-        </View>
+        </Card>
       </Gutter>
 
       <Gutter style={styles.tabs}>
@@ -258,11 +257,10 @@ export function ActivityScreen() {
         ListEmptyComponent={source.status !== 'ready' ? (
           <QueryStateView state={source} render={() => null} />
         ) : (
-          <View style={styles.empty}>
-            <Text variant="body" color={colors.textMuted}>
-              No {tab.toLowerCase()} in this period.
-            </Text>
-          </View>
+          <EmptyState
+            title={`No ${tab.toLowerCase()} in this period`}
+            message="Change the period with the filter above to see more."
+          />
         )}
       />
     </Screen>
@@ -296,20 +294,14 @@ function buildItems(entries: readonly ActivityEntry[]): ListItem[] {
 const keyExtractor = (item: ListItem) => item.id
 /** Separate recycling pools so a header never recycles into a row. */
 const getItemType = (item: ListItem) => item.type
-const Separator = () => <View style={styles.separator} />
+/** A hairline between two entries; group headers bring their own spacing. */
+const Separator = ({ leadingItem, trailingItem }: { leadingItem?: ListItem; trailingItem?: ListItem }) =>
+  leadingItem?.type === 'header' || trailingItem?.type === 'header'
+    ? null
+    : <Divider inset={ACTIVITY_ROW_DIVIDER_INSET} />
 
 const styles = StyleSheet.create({
   loading: { paddingTop: 32 },
-  summary: {
-    backgroundColor: colors.ink,
-    borderRadius: radius.card,
-    borderCurve: 'continuous',
-    padding: 20,
-    overflow: 'hidden',
-  },
-  summaryTitle: {
-    fontSize: 16,
-  },
   summaryBody: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -319,9 +311,6 @@ const styles = StyleSheet.create({
   summaryLeft: {
     flex: 1,
     gap: 4,
-  },
-  summaryValue: {
-    fontVariant: ['tabular-nums'],
   },
   summaryRight: {
     flexShrink: 0,
@@ -333,19 +322,11 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
   groupHeader: {
-    fontSize: 16,
-    paddingBottom: 12,
-    paddingTop: 6,
+    paddingTop: 20,
+    paddingBottom: 4,
   },
   list: {
     paddingHorizontal: SCREEN_PADDING,
     paddingBottom: TAB_BAR_CLEARANCE,
-  },
-  separator: {
-    height: 8,
-  },
-  empty: {
-    paddingTop: 40,
-    alignItems: 'center',
   },
 })

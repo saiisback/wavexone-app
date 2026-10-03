@@ -6,15 +6,17 @@ import {
   ButtonSubText,
   Card,
   ChevronDownIcon,
-  ChevronRightIcon,
-  Delta,
+  DeltaPill,
   Divider,
   Gutter,
+  ListGroup,
+  ListRow,
   Pressable,
   PressableScale,
   SCREEN_PADDING,
   Screen,
   SegmentedControl,
+  Sparkline,
   TAB_BAR_CLEARANCE,
   Text,
   colors,
@@ -98,6 +100,7 @@ export function TradeScreen() {
       : openOrderTicket(instrument.id, side, { lots, orderType })
 
   const direction = directionOf(instrument.changePercent)
+  const [lotCount, lotUnit] = formatLots(lots).split(' ')
 
   return (
     <Screen>
@@ -121,45 +124,61 @@ export function TradeScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Gutter>
+        <Gutter style={styles.hero}>
+          <View style={styles.heroIdentity}>
+            <AssetIcon
+              kind={instrument.icon}
+              label={instrument.iconLabel}
+              tint={instrument.iconTint}
+              symbol={instrument.symbol}
+              category={instrument.category}
+              size={40}
+            />
+            <View style={styles.instrumentIdentity}>
+              <Text variant="section" numberOfLines={1}>
+                {instrument.symbol}
+              </Text>
+              <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+                {instrument.description}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${instrument.symbol}. Change market`}
+              onPress={openInstrumentPicker}
+              style={styles.changeMarket}
+            >
+              <Text variant="caption" weight="semibold">
+                Change
+              </Text>
+              <ChevronDownIcon size={14} color={colors.text} />
+            </Pressable>
+          </View>
+
           <PressableScale
             scaleTo={0.99}
-            onPress={openInstrumentPicker}
-            onLongPress={() => openInstrument(instrument.id)}
-            accessibilityLabel={`${instrument.symbol}, ${formatPrice(instrument.price, instrument.precision)}, ${formatPercent(instrument.changePercent)}. Change market`}
+            onPress={() => openInstrument(instrument.id)}
+            accessibilityLabel={`${instrument.symbol}, ${formatPrice(instrument.price, instrument.precision)}, ${formatPercent(instrument.changePercent)}. Open chart`}
           >
-            <View style={styles.hero}>
-              <View style={styles.heroIdentity}>
-                <AssetIcon
-                  kind={instrument.icon}
-                  label={instrument.iconLabel}
-                  tint={instrument.iconTint}
-                  symbol={instrument.symbol}
-                  category={instrument.category}
-                  size={32}
-                />
-                <View style={styles.instrumentIdentity}>
-                  <Text variant="strong" numberOfLines={1}>
-                    {instrument.symbol}
-                  </Text>
-                  <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
-                    {instrument.description}
-                  </Text>
-                </View>
-                <View style={styles.changeMarket}>
-                  <Text variant="caption" weight="medium" color={colors.textMuted}>
-                    Change
-                  </Text>
-                  <ChevronRightIcon size={16} color={colors.textMuted} />
-                </View>
-              </View>
-              <View style={styles.heroQuote}>
-                <Text variant="display" style={styles.heroPrice}>
-                  {formatPrice(instrument.price, instrument.precision)}
+            <View style={styles.heroQuote}>
+              <Text variant="hero" numberOfLines={1} adjustsFontSizeToFit>
+                {formatPrice(instrument.price, instrument.precision)}
+              </Text>
+              <View style={styles.heroChange}>
+                <DeltaPill label={formatPercent(instrument.changePercent)} direction={direction} />
+                <Text variant="caption" color={colors.textMuted}>
+                  today
                 </Text>
-                <Delta label={formatPercent(instrument.changePercent)} direction={direction} size={15} />
               </View>
             </View>
+            <Sparkline
+              points={instrument.spark}
+              width="fill"
+              height={64}
+              color={direction === 'down' ? colors.red : colors.green}
+              fillOpacity={0.16}
+              showEndpoint
+            />
           </PressableScale>
         </Gutter>
 
@@ -168,31 +187,35 @@ export function TradeScreen() {
         </Gutter>
 
         <Gutter>
-          <Card style={styles.volume}>
-            <Text variant="caption" weight="medium" color={colors.textMuted}>
-              Quantity
-            </Text>
-            <View style={styles.stepper}>
-              <Stepper
-                label="−"
-                accessibilityLabel="Decrease volume"
-                onPress={() => setLots((previous) => previous - LOT_STEP)}
-              />
-              <Text variant="displaySm" style={styles.lots}>
-                {formatLots(lots)}
+          <Card padded={false}>
+            <View style={styles.formSection}>
+              <Text variant="overline" color={colors.textSubtle}>
+                Quantity
               </Text>
-              <Stepper
-                label="+"
-                accessibilityLabel="Increase volume"
-                onPress={() => setLots((previous) => previous + LOT_STEP)}
-              />
+              <View style={styles.stepper}>
+                <Stepper
+                  label="−"
+                  accessibilityLabel="Decrease volume"
+                  onPress={() => setLots((previous) => previous - LOT_STEP)}
+                />
+                <View style={styles.lotsValue}>
+                  <Text variant="displaySm">{lotCount}</Text>
+                  <Text variant="caption" color={colors.textMuted}>
+                    {lotUnit}
+                  </Text>
+                </View>
+                <Stepper
+                  label="+"
+                  accessibilityLabel="Increase volume"
+                  onPress={() => setLots((previous) => previous + LOT_STEP)}
+                />
+              </View>
             </View>
-          </Card>
-        </Gutter>
-
-        <Gutter>
-          <Card style={styles.protection}>
-            <View style={styles.protectionText}>
+            <Divider />
+            <View style={styles.formSection}>
+              <Text variant="overline" color={colors.textSubtle}>
+                Risk controls
+              </Text>
               <Text variant="body" weight="medium">
                 Stop loss · Take profit
               </Text>
@@ -204,32 +227,26 @@ export function TradeScreen() {
         </Gutter>
 
         <Gutter>
-          <Card style={styles.summary}>
-            <View style={styles.summaryGrid}>
-              <SummaryCell
-                label="Required margin"
-                value={margin === null ? 'Unavailable' : formatMoney(margin)}
-              />
-              <SummaryCell label="Free margin" value={formatMoney(account.freeMargin)} />
-              <SummaryCell label="Spread" value={formatPrice(spread, instrument.precision)} />
-              <SummaryCell
-                label="Leverage"
-                value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
-              />
-            </View>
-            <Divider />
-            <View style={styles.summaryFooter}>
-              <Text variant="caption" color={colors.textMuted}>
-                Contract size
-              </Text>
-              <Text variant="caption" weight="semibold">
-                {`${instrument.contractSize.toLocaleString('en-US')} / lot`}
-              </Text>
-            </View>
-          </Card>
-        </Gutter>
-
-        <Gutter>
+          <ListGroup title="Margin">
+            <ListRow
+              compact
+              label="Required margin"
+              value={margin === null ? 'Unavailable' : formatMoney(margin)}
+            />
+            <ListRow compact label="Free margin" value={formatMoney(account.freeMargin)} />
+            <ListRow
+              compact
+              label="Leverage"
+              value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
+            />
+            <ListRow compact label="Spread" value={formatPrice(spread, instrument.precision)} />
+            <ListRow
+              compact
+              label="Contract size"
+              value={`${instrument.contractSize.toLocaleString('en-US')} / lot`}
+              divider={false}
+            />
+          </ListGroup>
           <Text variant="caption" color={colors.textSubtle} style={styles.disclaimer}>
             Every order passes through a confirmation step before it reaches the trading API.
           </Text>
@@ -237,34 +254,23 @@ export function TradeScreen() {
       </ScrollView>
 
       <View style={styles.actionBar}>
-        <Button
-          tone="ink"
-          style={styles.action}
-          onPress={() => openTicket('Sell')}
-          accessibilityLabel={`Sell at ${formatPrice(instrument.bid, instrument.precision)}`}
-        >
-          <Text variant="caption" weight="semibold" color={colors.onInkMuted} style={styles.actionLabel}>
-            SELL
-          </Text>
-          <ButtonSubText tone="ink">
-            {formatPrice(instrument.bid, instrument.precision)}
-          </ButtonSubText>
-        </Button>
-        <Button
-          tone="gold"
-          style={styles.action}
-          onPress={() => openTicket('Buy')}
-          accessibilityLabel={`Buy at ${formatPrice(instrument.ask, instrument.precision)}`}
-        >
-          <Text variant="caption" weight="semibold" color={colors.ink} style={styles.actionLabel}>
-            BUY
-          </Text>
-          <ButtonSubText tone="gold">
-            {formatPrice(instrument.ask, instrument.precision)}
-          </ButtonSubText>
-        </Button>
+        <TradeAction side="Sell" price={formatPrice(instrument.bid, instrument.precision)} onPress={() => openTicket('Sell')} />
+        <TradeAction side="Buy" price={formatPrice(instrument.ask, instrument.precision)} onPress={() => openTicket('Buy')} />
       </View>
     </Screen>
+  )
+}
+
+/** Sell on navy, Buy in the signature gold: side, then the price it fills at. */
+function TradeAction({ side, price, onPress }: { side: 'Buy' | 'Sell'; price: string; onPress: () => void }) {
+  const tone = side === 'Buy' ? 'gold' : 'ink'
+  return (
+    <Button tone={tone} style={styles.action} onPress={onPress} accessibilityLabel={`${side} at ${price}`}>
+      <Text variant="overline" color={side === 'Buy' ? colors.ink : colors.onInkMuted}>
+        {side}
+      </Text>
+      <ButtonSubText tone={tone}>{price}</ButtonSubText>
+    </Button>
   )
 }
 
@@ -286,19 +292,6 @@ function Stepper({
     >
       <Text variant="heading">{label}</Text>
     </Pressable>
-  )
-}
-
-function SummaryCell({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.summaryCell}>
-      <Text variant="caption" color={colors.textMuted}>
-        {label}
-      </Text>
-      <Text variant="strong" numberOfLines={1} style={styles.summaryValue}>
-        {value}
-      </Text>
-    </View>
   )
 }
 
@@ -326,16 +319,15 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: spacing.xl,
-    gap: spacing.lg,
+    gap: spacing.xl,
   },
   hero: {
     gap: spacing.md,
-    paddingTop: spacing.xs,
   },
   heroIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.md,
   },
   instrumentIdentity: {
     flex: 1,
@@ -344,21 +336,24 @@ const styles = StyleSheet.create({
   changeMarket: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    minHeight: 44,
+    gap: 4,
+    height: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.track,
   },
   heroQuote: {
+    gap: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  heroChange: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    flexWrap: 'wrap',
-    columnGap: spacing.md,
+    alignItems: 'center',
+    gap: spacing.sm,
   },
-  heroPrice: {
-    fontVariant: ['tabular-nums'],
-  },
-  volume: {
+  formSection: {
     padding: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   stepper: {
     flexDirection: 'row',
@@ -374,41 +369,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  lots: {
-    fontSize: 24,
-    fontVariant: ['tabular-nums'],
-  },
-  protection: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-  },
-  protectionText: {
-    gap: 2,
-  },
-  summary: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  summaryGrid: {
+  lotsValue: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    rowGap: spacing.md,
-  },
-  summaryCell: {
-    width: '50%',
-    gap: 2,
-  },
-  summaryValue: {
-    fontVariant: ['tabular-nums'],
-  },
-  summaryFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: 6,
   },
   disclaimer: {
+    paddingTop: spacing.md,
     lineHeight: 18,
-    textAlign: 'center',
   },
   actionBar: {
     flexDirection: 'row',
@@ -422,8 +390,5 @@ const styles = StyleSheet.create({
   },
   action: {
     flex: 1,
-  },
-  actionLabel: {
-    letterSpacing: 1,
   },
 })

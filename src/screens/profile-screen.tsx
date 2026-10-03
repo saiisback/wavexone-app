@@ -71,7 +71,7 @@ export function ProfileScreen() {
         </Gutter>
 
         <Gutter>
-          <ListGroup>
+          <ListGroup title="Contact">
             <ListRow
               label="Email"
               value={profile.email}
@@ -87,14 +87,8 @@ export function ProfileScreen() {
           </ListGroup>
         </Gutter>
 
-        <Gutter style={styles.sectionLabel}>
-          <Text variant="caption" color={colors.textMuted}>
-            VERIFICATION
-          </Text>
-        </Gutter>
-
         <Gutter>
-          <ListGroup>
+          <ListGroup title="Verification">
             <ListRow
               label="Identity document"
               detail="Passport ending 4721"
@@ -124,7 +118,7 @@ const styles = StyleSheet.create({
   state: { paddingTop: 32 },
   content: {
     paddingBottom: TAB_BAR_CLEARANCE,
-    gap: 14,
+    gap: 24,
   },
   identity: {
     flexDirection: 'row',
@@ -144,9 +138,6 @@ const styles = StyleSheet.create({
   },
   nameText: {
     fontSize: 20,
-  },
-  sectionLabel: {
-    paddingTop: 6,
   },
   note: {
     lineHeight: 20,

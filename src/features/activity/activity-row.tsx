@@ -2,7 +2,6 @@ import { StyleSheet, View } from 'react-native'
 
 import {
   AssetIcon,
-  Card,
   DepositIcon,
   MoreVerticalIcon,
   Pressable,
@@ -10,7 +9,6 @@ import {
   Text,
   WithdrawIcon,
   colors,
-  radius,
   type AssetIconKind,
 } from '../../design-system'
 import { formatSignedMoney } from '../../data/format'
@@ -32,6 +30,10 @@ export type ActivityRowProps = {
   onMenu: (id: string) => void
 }
 
+const ACTIVITY_ICON = 36
+/** Icon plus the row's gap, so dividers start at the text. */
+export const ACTIVITY_ROW_DIVIDER_INSET = ACTIVITY_ICON + 12
+
 /** One line of history: a closed trade, a deposit or a withdrawal. */
 export function ActivityRow({
   id,
@@ -50,10 +52,10 @@ export function ActivityRow({
 }: ActivityRowProps) {
   return (
     <PressableScale onPress={() => onMenu(id)} scaleTo={0.99}>
-      <Card style={styles.card}>
-        <View style={styles.icon}>
-          {kind === 'deposit' ? <DepositIcon size={26} color={colors.text} /> : null}
-          {kind === 'withdrawal' ? <WithdrawIcon size={26} color={colors.text} /> : null}
+      <View style={styles.row}>
+        <View style={[styles.icon, kind === 'trade' ? null : styles.fundingIcon]}>
+          {kind === 'deposit' ? <DepositIcon size={20} color={colors.text} /> : null}
+          {kind === 'withdrawal' ? <WithdrawIcon size={20} color={colors.text} /> : null}
           {kind === 'trade' && iconKind ? (
             <AssetIcon
               kind={iconKind}
@@ -61,7 +63,7 @@ export function ActivityRow({
               tint={iconTint}
               symbol={iconSymbol}
               category={iconCategory}
-              size={30}
+              size={36}
             />
           ) : null}
         </View>
@@ -98,24 +100,30 @@ export function ActivityRow({
         >
           <MoreVerticalIcon size={18} color={colors.textMuted} />
         </Pressable>
-      </Card>
+      </View>
     </PressableScale>
   )
 }
 
 const styles = StyleSheet.create({
-  card: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+    minHeight: 64,
     paddingVertical: 12,
-    paddingLeft: 14,
-    paddingRight: 6,
-    borderRadius: radius.card,
   },
   icon: {
-    width: 32,
+    width: ACTIVITY_ICON,
+    height: ACTIVITY_ICON,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fundingIcon: {
+    borderRadius: ACTIVITY_ICON / 2,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   identity: {
     flex: 1,

@@ -20,7 +20,7 @@ export function SectionHeader({
 }: SectionHeaderProps) {
   return (
     <View style={styles.row}>
-      <Text variant="heading">{title}</Text>
+      <Text variant="section">{title}</Text>
       {action ? (
         <Pressable
           accessibilityRole="button"

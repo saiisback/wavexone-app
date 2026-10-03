@@ -5,7 +5,7 @@ import type { FundingConfiguration, WaveXBackend } from '../../src/backend/contr
 import { BackendError } from '../../src/backend/errors'
 import { BackendProvider, useInvalidateQueries } from '../../src/backend/provider'
 import { useSession } from '../../src/data/store'
-import { Button, Field, ListRow, QuickPicks, colors } from '../../src/design-system'
+import { Button, Field, ListRow, QuickPicks, Sparkline, colors } from '../../src/design-system'
 import type { ActionMenuRequest } from '../../src/design-system/action-menu'
 import type { Account, Instrument, Position, Profile } from '../../src/data/types'
 import { MarketRow } from '../../src/features/markets/market-row'
@@ -340,6 +340,38 @@ describe('home dashboard', () => {
     expect(text).toContain('+$320.00')
     expect(text).toContain('-$137.30')
     expect(text).toContain('1 more open')
+  })
+
+  it('draws realised P&L across closed trades in the hero, oldest first', async () => {
+    useSession.setState({ accountId: account.id })
+    const backend = backendWith(async () => [account])
+    const closed = (id: string, pnl: number, time: string) =>
+      ({ ...position(id, 'xauusd', 'Buy', pnl), state: 'Closed' as const, time })
+    backend.orders.history = async () => [
+      closed('c2', -40, '2026-09-02 10:00:00'),
+      closed('c1', 100, '2026-09-01 10:00:00'),
+      closed('c3', 15.5, '2026-09-03 10:00:00'),
+    ]
+    const tree = renderHome(backend)
+    await flush()
+    await flush()
+    const line = tree.root.findAllByType(Sparkline).find((node) => node.props.color === colors.gold)
+    expect(line?.props.points).toEqual([0, 100, 60, 75.5])
+    const text = renderedText(tree)
+    expect(text).toContain('Realised P&L · last 3 trades')
+    expect(text).toContain('+$75.50')
+  })
+
+  it('leaves the realised line out until there are two closed trades', async () => {
+    useSession.setState({ accountId: account.id })
+    const backend = backendWith(async () => [account])
+    backend.orders.history = async () => [
+      { ...position('c1', 'xauusd', 'Buy', 100), state: 'Closed' as const },
+    ]
+    const tree = renderHome(backend)
+    await flush()
+    await flush()
+    expect(renderedText(tree)).not.toContain('Realised P&L')
   })
 
   it('marks the bell when notifications are unread', async () => {

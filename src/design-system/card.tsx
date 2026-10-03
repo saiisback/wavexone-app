@@ -1,6 +1,7 @@
 import { View, StyleSheet, type ViewProps } from 'react-native'
 
 import { colors } from './colors'
+import { InkBackdrop } from './ink-backdrop'
 import { radius, shadow, spacing } from './tokens'
 
 export type CardProps = ViewProps & {
@@ -10,9 +11,18 @@ export type CardProps = ViewProps & {
   padded?: boolean
 }
 
-/** Rounded container used for every block on every screen. */
-export function Card({ tone = 'surface', padded = true, style, ...rest }: CardProps) {
-  return <View {...rest} style={[styles.base, tones[tone], padded ? styles.padded : null, style]} />
+/**
+ * Rounded container for information that deserves its own surface: a hero
+ * figure, a position, a form. Lists and settings sit on the page instead.
+ * The `ink` tone carries the navy gradient and watermark of every hero card.
+ */
+export function Card({ tone = 'surface', padded = true, style, children, ...rest }: CardProps) {
+  return (
+    <View {...rest} style={[styles.base, tones[tone], padded ? styles.padded : null, style]}>
+      {tone === 'ink' ? <InkBackdrop /> : null}
+      {children}
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
@@ -35,6 +45,7 @@ const tones = StyleSheet.create({
   },
   ink: {
     backgroundColor: colors.ink,
+    boxShadow: shadow.hero,
   },
   gold: {
     backgroundColor: colors.gold,

@@ -15,6 +15,9 @@ export const colors = {
   ink: '#1E2A5E',
   /** Slightly lifted dark, used for the chart tooltip. */
   inkRaised: '#303F74',
+  /** Gradient stops either side of `ink` on hero surfaces; same hue, ±lightness. */
+  inkLift: '#2A3A7C',
+  inkDeep: '#172150',
   /** Navy surface for the home portfolio card and the Trade FAB. */
   navy: '#1E2A5E',
   /** Selected rows, quiet controls and skeletons. */

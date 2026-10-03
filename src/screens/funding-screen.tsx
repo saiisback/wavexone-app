@@ -276,7 +276,7 @@ function FundingForm({ mode, account, accounts, configuration }: {
       </Card>
 
       {mode === 'transfer' ? (
-        <ListGroup>
+        <ListGroup variant="card">
           <ListRow
             label="From"
             value={`${account.mode} · ${account.number}`}
@@ -290,7 +290,7 @@ function FundingForm({ mode, account, accounts, configuration }: {
           />
         </ListGroup>
       ) : (
-        <ListGroup>
+        <ListGroup variant="card">
           <ListRow
             label={mode === 'withdraw' ? 'Destination' : 'Payment method'}
             value={selectedMethod}

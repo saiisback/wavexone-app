@@ -3,11 +3,13 @@ import { useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
 import {
+  EmptyState,
   Gutter,
   Pressable,
   SCREEN_PADDING,
   Screen,
   SearchField,
+  SearchIcon,
   StarIcon,
   TAB_BAR_CLEARANCE,
   Text,
@@ -17,7 +19,7 @@ import {
   useActionMenu,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
-import { MarketGroupCell, MarketGroupSeparator } from '../features/markets/market-group'
+import { MarketGroupSeparator } from '../features/markets/market-group'
 import { MarketRow } from '../features/markets/market-row'
 import { MoverCard } from '../features/markets/mover-card'
 import { useSession } from '../data/store'
@@ -115,28 +117,26 @@ export function MarketsScreen() {
     })
   }
 
-  const renderItem = ({ item, index }: { item: Instrument; index: number }) => (
-    <MarketGroupCell index={index} count={rows.length}>
-      <MarketRow
-        layout="row"
-        id={item.id}
-        symbol={item.symbol}
-        name={item.name}
-        price={item.price}
-        precision={item.precision}
-        changePercent={item.changePercent}
-        changeBase={item.dayOpen}
-        iconKind={item.icon}
-        iconLabel={item.iconLabel}
-        iconTint={item.iconTint}
-        category={item.category}
-        spark={sparkById?.get(item.id) ?? item.spark}
-        sparkTone={sparkById?.has(item.id) ? undefined : item.sparkTone}
-        onPress={openInstrument}
-        onLongPress={openRowMenu}
-        showFavorite
-      />
-    </MarketGroupCell>
+  const renderItem = ({ item }: { item: Instrument }) => (
+    <MarketRow
+      layout="row"
+      id={item.id}
+      symbol={item.symbol}
+      name={item.name}
+      price={item.price}
+      precision={item.precision}
+      changePercent={item.changePercent}
+      changeBase={item.dayOpen}
+      iconKind={item.icon}
+      iconLabel={item.iconLabel}
+      iconTint={item.iconTint}
+      category={item.category}
+      spark={sparkById?.get(item.id) ?? item.spark}
+      sparkTone={sparkById?.has(item.id) ? undefined : item.sparkTone}
+      onPress={openInstrument}
+      onLongPress={openRowMenu}
+      showFavorite
+    />
   )
 
   return (
@@ -217,9 +217,7 @@ export function MarketsScreen() {
             <View>
               {showMovers ? (
                 <View style={styles.movers}>
-                  <Text variant="strong" style={styles.sectionTitle}>
-                    Top movers
-                  </Text>
+                  <Text variant="section">Top movers</Text>
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -248,7 +246,7 @@ export function MarketsScreen() {
                 </View>
               ) : null}
               <View style={styles.sectionRow}>
-                <Text variant="strong" style={styles.sectionTitle}>
+                <Text variant="section">
                   {needle ? 'Results' : filter === 'All' ? 'All markets' : filter}
                 </Text>
                 <Text variant="caption" color={colors.textMuted}>
@@ -267,19 +265,19 @@ export function MarketsScreen() {
 const keyExtractor = (item: Instrument) => item.id
 
 const Empty = () => (
-  <View style={styles.empty}>
-    <Text variant="body" color={colors.textMuted}>
-      No markets match that search.
-    </Text>
-  </View>
+  <EmptyState
+    icon={<SearchIcon size={22} color={colors.navy} />}
+    title="No markets found"
+    message="No markets match that search. Try a symbol such as EURUSD or a name such as Gold."
+  />
 )
 
 const NoFavorites = () => (
-  <View style={styles.empty}>
-    <Text variant="body" color={colors.textMuted}>
-      No favourites yet — press and hold a market to add one.
-    </Text>
-  </View>
+  <EmptyState
+    icon={<StarIcon size={22} color={colors.gold} filled />}
+    title="No favourites yet"
+    message="Press and hold a market to add it to your favourites."
+  />
 )
 
 const Hint = () => (
@@ -362,19 +360,11 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 16,
-  },
 
   list: {
     paddingHorizontal: SCREEN_PADDING,
     paddingTop: 16,
     paddingBottom: TAB_BAR_CLEARANCE,
-  },
-  empty: {
-    paddingTop: 48,
-    paddingHorizontal: 24,
-    alignItems: 'center',
   },
   hint: {
     textAlign: 'center',

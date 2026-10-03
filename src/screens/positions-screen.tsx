@@ -4,18 +4,17 @@ import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import {
-  Button,
-  ButtonText,
   Card,
   ChevronDownIcon,
+  EmptyState,
   Gutter,
+  PositionsIcon,
   Pressable,
   SCREEN_PADDING,
   Screen,
   SegmentedControl,
   TAB_BAR_CLEARANCE,
   Text,
-  Watermark,
   colors,
   radius,
   useActionMenu,
@@ -220,9 +219,8 @@ export function PositionsScreen() {
       </Gutter>
 
       <Gutter>
-        <View style={styles.summary}>
-          <Watermark size={150} right={-26} bottom={-26} />
-          <Text variant="caption" weight="medium" color={colors.onInkMuted}>
+        <Card tone="ink" style={styles.summary}>
+          <Text variant="overline" color={colors.onInkMuted}>
             Floating P&amp;L
           </Text>
           <FloatingPnl
@@ -234,7 +232,7 @@ export function PositionsScreen() {
             {liveOpen ? liveOpen.length : openCount} open{' '}
             {(liveOpen ? liveOpen.length : openCount) === 1 ? 'position' : 'positions'}
           </Text>
-        </View>
+        </Card>
       </Gutter>
 
       <Gutter style={styles.tabs}>
@@ -251,17 +249,13 @@ export function PositionsScreen() {
         ListEmptyComponent={positionState.status !== 'ready' ? (
           <QueryStateView state={positionState} render={() => null} />
         ) : (
-          <Card style={styles.empty}>
-            <Text variant="strong">{EMPTY_TITLE[tab]}</Text>
-            <Text variant="caption" color={colors.textMuted} style={styles.emptyMessage}>
-              {EMPTY_MESSAGE[tab]}
-            </Text>
-            {tab === 'Closed' ? null : (
-              <Button tone="track" onPress={() => openTab('Markets')} style={styles.emptyAction}>
-                <ButtonText tone="track">Explore markets</ButtonText>
-              </Button>
-            )}
-          </Card>
+          <EmptyState
+            icon={<PositionsIcon size={24} color={colors.navy} />}
+            title={EMPTY_TITLE[tab]}
+            message={EMPTY_MESSAGE[tab]}
+            action={tab === 'Closed' ? undefined : 'Explore markets'}
+            onAction={() => openTab('Markets')}
+          />
         )}
       />
     </Screen>
@@ -370,7 +364,7 @@ function FloatingPnl({
     : fallback
   return (
     <Text
-      variant="display"
+      variant="hero"
       color={Math.abs(total) < 0.005 ? colors.onInk : total < 0 ? colors.redOnInk : colors.greenOnInk}
       style={styles.summaryValue}
     >
@@ -406,17 +400,11 @@ const styles = StyleSheet.create({
   },
 
   summary: {
-    backgroundColor: colors.ink,
-    borderRadius: radius.card,
-    borderCurve: 'continuous',
-    paddingHorizontal: 20,
     paddingVertical: 18,
-    overflow: 'hidden',
   },
   summaryValue: {
     marginTop: 4,
     marginBottom: 2,
-    fontVariant: ['tabular-nums'],
   },
 
   tabs: {
@@ -429,16 +417,5 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 12,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  emptyMessage: {
-    textAlign: 'center',
-  },
-  emptyAction: {
-    marginTop: 12,
-    alignSelf: 'stretch',
   },
 })

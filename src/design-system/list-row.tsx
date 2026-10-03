@@ -6,7 +6,7 @@ import { Divider } from './divider'
 import { ChevronRightIcon } from './icons'
 import { Pressable } from './pressable'
 import { Text } from './text'
-import { spacing } from './tokens'
+import { radius, spacing } from './tokens'
 
 export type ListRowProps = {
   icon?: React.ReactNode
@@ -21,6 +21,8 @@ export type ListRowProps = {
   /** Hairline below the row; omit on the last row of a group. */
   divider?: boolean
   destructive?: boolean
+  /** A key-value line: shorter, muted label, emphasised value. */
+  compact?: boolean
 }
 
 /** One line inside a `ListGroup`. */
@@ -33,6 +35,7 @@ export function ListRow({
   onPress,
   divider = true,
   destructive = false,
+  compact = false,
 }: ListRowProps) {
   return (
     <View>
@@ -41,12 +44,16 @@ export function ListRow({
         accessibilityLabel={[label, value, detail].filter(Boolean).join('. ')}
         disabled={!onPress}
         onPress={onPress}
-        style={styles.row}
+        style={[styles.row, compact ? styles.compactRow : null]}
       >
         {icon ? <View style={styles.icon}>{icon}</View> : null}
 
         <View style={styles.text}>
-          <Text style={[styles.label, destructive ? styles.destructive : null]}>{label}</Text>
+          <Text
+            style={[styles.label, compact ? styles.compactLabel : null, destructive ? styles.destructive : null]}
+          >
+            {label}
+          </Text>
           {detail ? (
             <Text variant="caption" color={colors.textMuted}>
               {detail}
@@ -55,7 +62,12 @@ export function ListRow({
         </View>
 
         {value ? (
-          <Text variant="body" color={colors.text} numberOfLines={1} style={styles.value}>
+          <Text
+            variant={compact ? 'strong' : 'body'}
+            color={colors.text}
+            numberOfLines={1}
+            style={[styles.value, compact ? styles.compactValue : null]}
+          >
             {value}
           </Text>
         ) : null}
@@ -63,23 +75,51 @@ export function ListRow({
         {trailing ?? (onPress ? <ChevronRightIcon size={20} color={colors.textSubtle} /> : null)}
       </Pressable>
 
-      {divider ? <Divider inset={icon ? 54 : 0} /> : null}
+      {divider ? <Divider inset={icon ? ICON_TILE + spacing.md : 0} /> : null}
     </View>
   )
 }
 
-/** Card that groups a run of `ListRow`s. */
-export function ListGroup({ children }: { children: React.ReactNode }) {
+/**
+ * A run of `ListRow`s. `plain` (the default) lets menus and settings sit on
+ * the page with hairlines between rows; `card` keeps a surface for form
+ * fields inside sheets.
+ */
+export function ListGroup({
+  variant = 'plain',
+  title,
+  children,
+}: {
+  variant?: 'plain' | 'card'
+  /** Small caps label above the group: "ACCOUNT", "SECURITY". */
+  title?: string
+  children: React.ReactNode
+}) {
   return (
-    <Card padded={false} style={styles.group}>
-      {children}
-    </Card>
+    <View>
+      {title ? (
+        <Text variant="overline" color={colors.textSubtle} style={styles.title}>
+          {title}
+        </Text>
+      ) : null}
+      {variant === 'plain' ? children : (
+        <Card padded={false} style={styles.group}>
+          {children}
+        </Card>
+      )}
+    </View>
   )
 }
+
+/** The rounded tile a row's icon sits on. */
+const ICON_TILE = 36
 
 const styles = StyleSheet.create({
   group: {
     paddingHorizontal: spacing.lg,
+  },
+  title: {
+    paddingBottom: spacing.xs,
   },
   row: {
     flexDirection: 'row',
@@ -89,8 +129,15 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   icon: {
-    width: 26,
+    width: ICON_TILE,
+    height: ICON_TILE,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   text: {
     flex: 1,
@@ -109,5 +156,17 @@ const styles = StyleSheet.create({
   },
   destructive: {
     color: colors.red,
+  },
+  compactRow: {
+    minHeight: 44,
+    paddingVertical: spacing.sm,
+  },
+  compactLabel: {
+    fontSize: 15,
+    color: colors.textMuted,
+  },
+  compactValue: {
+    fontSize: 15,
+    fontVariant: ['tabular-nums'],
   },
 })

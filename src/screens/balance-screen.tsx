@@ -15,14 +15,14 @@ import {
   SearchField,
   TAB_BAR_CLEARANCE,
   Text,
-  Watermark,
+  InkBackdrop,
   colors,
   radius,
   spacing,
   useActionMenu,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
-import { MarketGroupCell, MarketGroupSeparator } from '../features/markets/market-group'
+import { MarketGroupSeparator } from '../features/markets/market-group'
 import { MarketRow } from '../features/markets/market-row'
 import { useMarketData } from '../features/markets/use-market-data'
 import { SectionHeader } from '../features/shared/section-header'
@@ -64,30 +64,28 @@ export function BalanceScreen() {
       )
     : catalogue
 
-  const renderItem = ({ item, index }: { item: Instrument; index: number }) => {
+  const renderItem = ({ item }: { item: Instrument }) => {
     const spark = sparkById?.get(item.id)
     // "Today" measures from the day's open; longer periods from their first close.
     const changeBase = period === 'Today' || !spark ? item.dayOpen : spark[0]
     return (
-      <MarketGroupCell index={index} count={rows.length}>
-        <MarketRow
-          layout="row"
-          id={item.id}
-          symbol={item.symbol}
-          name={item.name}
-          price={item.price}
-          precision={item.precision}
-          changePercent={item.changePercent}
-          changeBase={changeBase}
-          iconKind={item.icon}
-          iconLabel={item.iconLabel}
-          iconTint={item.iconTint}
-          category={item.category}
-          spark={spark ?? item.spark}
-          sparkTone={spark ? undefined : item.sparkTone}
-          onPress={openInstrument}
-        />
-      </MarketGroupCell>
+      <MarketRow
+        layout="row"
+        id={item.id}
+        symbol={item.symbol}
+        name={item.name}
+        price={item.price}
+        precision={item.precision}
+        changePercent={item.changePercent}
+        changeBase={changeBase}
+        iconKind={item.icon}
+        iconLabel={item.iconLabel}
+        iconTint={item.iconTint}
+        category={item.category}
+        spark={spark ?? item.spark}
+        sparkTone={spark ? undefined : item.sparkTone}
+        onPress={openInstrument}
+      />
     )
   }
 
@@ -148,16 +146,16 @@ function BalanceHeader({
   return (
     <View style={styles.header}>
       <View style={[styles.panel, { paddingTop: insets.top + 14 }]}>
-        <Watermark size={168} right={-56} bottom={136} />
+        <InkBackdrop />
 
         <View style={styles.logoRow}>
           <Logo size={21} tone="dark" />
         </View>
 
-        <Text variant="body" color={colors.onInk} style={styles.balanceLabel}>
+        <Text variant="overline" color={colors.onInkMuted} style={styles.balanceLabel}>
           Your Balance
         </Text>
-        <Text variant="display" color={colors.onInk} style={styles.balanceValue}>
+        <Text variant="hero" color={colors.onInk} style={styles.balanceValue}>
           {account ? formatMoney(account.equity) : '—'}
         </Text>
 
@@ -228,13 +226,10 @@ const styles = StyleSheet.create({
   balanceLabel: {
     marginTop: 24,
     textAlign: 'center',
-    fontSize: 17,
   },
   balanceValue: {
     marginTop: 4,
     textAlign: 'center',
-    fontSize: 36,
-    lineHeight: 44,
   },
   actions: {
     flexDirection: 'row',

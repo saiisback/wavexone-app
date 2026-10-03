@@ -107,7 +107,7 @@ export function PositionCard({
 
       <View style={styles.pnlRow}>
         <View>
-          <Text variant="caption" color={colors.textMuted}>
+          <Text variant="overline" color={colors.textSubtle}>
             P&amp;L
           </Text>
           <Delta label={formatSignedMoney(pnl)} direction={trendOf(pnl)} size={20} />
@@ -141,7 +141,7 @@ export function PositionCard({
 function Metric({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.metric}>
-      <Text variant="caption" color={colors.textMuted}>
+      <Text variant="overline" color={colors.textSubtle}>
         {label}
       </Text>
       <Text variant="strong" style={styles.metricValue} numberOfLines={1}>

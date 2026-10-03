@@ -132,34 +132,34 @@ export function AccountScreen() {
         </Gutter>
 
         <Gutter>
-          <ListGroup>
+          <ListGroup title="Account">
             <ListRow
-              icon={<WalletIcon size={24} color={colors.text} />}
+              icon={<WalletIcon size={20} color={colors.text} />}
               label="Balance & funding"
               onPress={() => openHomeScreen('Balance')}
             />
             <ListRow
-              icon={<PositionsIcon size={24} color={colors.text} />}
+              icon={<PositionsIcon size={20} color={colors.text} />}
               label="Transaction history"
               onPress={() => navigate('Activity')}
             />
             <ListRow
-              icon={<UserIcon size={24} color={colors.text} />}
+              icon={<UserIcon size={20} color={colors.text} />}
               label="Profile & verification"
               onPress={() => navigate('Profile')}
             />
             <ListRow
-              icon={<MarketsIcon size={24} color={colors.text} filled />}
+              icon={<MarketsIcon size={20} color={colors.text} filled />}
               label="Trading signals"
               onPress={() => navigate('Signals')}
             />
             <ListRow
-              icon={<ExternalLinkIcon size={24} color={colors.text} />}
+              icon={<ExternalLinkIcon size={20} color={colors.text} />}
               label="Client portal"
               onPress={openClientPortal}
             />
             <ListRow
-              icon={<CodeIcon size={24} color={colors.text} />}
+              icon={<CodeIcon size={20} color={colors.text} />}
               label="API access"
               onPress={() =>
                 // No API-key route exists in either collection; the portal issues them.
@@ -170,7 +170,7 @@ export function AccountScreen() {
               }
             />
             <ListRow
-              icon={<HeadsetIcon size={24} color={colors.text} />}
+              icon={<HeadsetIcon size={20} color={colors.text} />}
               label="Support"
               divider={false}
               onPress={openSupport}
@@ -179,19 +179,19 @@ export function AccountScreen() {
         </Gutter>
 
         <Gutter>
-          <ListGroup>
+          <ListGroup title="App">
             <ListRow
-              icon={<SettingsIcon size={24} color={colors.text} />}
+              icon={<SettingsIcon size={20} color={colors.text} />}
               label="Settings"
               onPress={() => navigate('Settings')}
             />
             <ListRow
-              icon={<SwapIcon size={24} color={colors.text} />}
+              icon={<SwapIcon size={20} color={colors.text} />}
               label="Switch account"
               onPress={openAccountSwitcher}
             />
             <ListRow
-              icon={<LogoutIcon size={24} color={colors.text} />}
+              icon={<LogoutIcon size={20} color={colors.text} />}
               label="Log out"
               divider={false}
               destructive
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   content: {
     paddingTop: 12,
     paddingBottom: TAB_BAR_CLEARANCE,
-    gap: 16,
+    gap: 24,
   },
   masthead: {
     flexDirection: 'row',

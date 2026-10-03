@@ -6,6 +6,9 @@ import { markPosition } from '../../data/live-quote'
 import type { Instrument, Position } from '../../data/types'
 import { useLiveQuote } from '../markets/use-live-quote'
 
+/** Badge (36) plus the row's leading padding and gap. */
+export const POSITION_ROW_DIVIDER_INSET = 62
+
 /**
  * Compact open position for a list group: badge, side and size, live P&L.
  * Marks itself to its instrument's stream, so a tick re-renders this row alone.
