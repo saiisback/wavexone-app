@@ -342,6 +342,30 @@ describe('home dashboard', () => {
     expect(text).toContain('1 more open')
   })
 
+  it('marks the bell when notifications are unread', async () => {
+    useSession.setState({ accountId: account.id, readNotifications: new Set(['n1']) })
+    const backend = backendWith(async () => [account])
+    ;(backend as unknown as { engagement: object }).engagement = {
+      notifications: async () => [
+        { id: 'n1', kind: 'order', title: 'Filled', body: '', time: '10:00' },
+        { id: 'n2', kind: 'funds', title: 'Deposit', body: '', time: '11:00' },
+      ],
+    }
+    const tree = renderHome(backend)
+    await flush()
+    await flush()
+    expect(tree.root.findByProps({ accessibilityLabel: 'Notifications, 1 unread' })).toBeTruthy()
+  })
+
+  it('shows a zero open P&L without claiming a direction', async () => {
+    useSession.setState({ accountId: account.id })
+    const tree = renderHome(backendWith(async () => [{ ...account, floatingPnl: 0, changePercent: 0 }]))
+    await flush()
+    await flush()
+    expect(renderedText(tree)).toContain('+$0.00 (+0.00%)')
+    expect(tree.root.findAll((node) => node.props.direction === 'flat').length).toBeGreaterThan(0)
+  })
+
   it('invites the trader to explore markets when nothing is open', async () => {
     useSession.setState({ accountId: account.id })
     const tree = renderHome(backendWith(async () => [account]))

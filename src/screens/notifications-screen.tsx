@@ -34,7 +34,7 @@ export function NotificationsScreen() {
   )
   const notifications = notificationsState.status === 'ready' ? notificationsState.data : []
 
-  const unread = notifications.length - read.size
+  const unread = notifications.filter((item) => !read.has(item.id)).length
 
   const reconcileRead = (ids: readonly string[]) => {
     const before = [...read]
@@ -52,7 +52,11 @@ export function NotificationsScreen() {
     <Screen>
       <ScreenHeader
         title="Notifications"
-        subtitle={unread > 0 ? `${unread} unread` : 'All caught up'}
+        subtitle={
+          notificationsState.status !== 'ready'
+            ? undefined
+            : unread > 0 ? `${unread} unread` : 'All caught up'
+        }
         action={
           <Pressable
             accessibilityRole="button"

@@ -8,7 +8,6 @@ export type HomeStackParamList = {
   /** "Your Balance" — funding actions plus Market Watch. */
   Balance: undefined
   Notifications: undefined
-  Signals: undefined
 }
 
 /** More tab: the account menu and everything it pushes. */
@@ -17,6 +16,7 @@ export type MoreStackParamList = {
   Activity: undefined
   Profile: undefined
   Settings: undefined
+  Signals: undefined
 }
 
 export type TabParamList = {

@@ -33,7 +33,12 @@ export function QueryStateView<T>({
 
   if (state.status === 'error') {
     return (
-      <StateCard title="Could not load this" message={state.error} action="Try again" onAction={onRetry} />
+      <StateCard
+        title="Could not load this"
+        message={state.error}
+        action="Try again"
+        onAction={onRetry ?? state.retry}
+      />
     )
   }
 

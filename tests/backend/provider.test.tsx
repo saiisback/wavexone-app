@@ -8,6 +8,7 @@ import {
   useBackend,
   useBackendQuery,
   useInvalidateQueries,
+  type QueryState,
 } from '../../src/backend/provider'
 
 /**
@@ -286,6 +287,44 @@ describe('useBackendQuery', () => {
 
     expect(readText()).toBe('error:The service is having trouble. Try again shortly.')
     expect(readText()).not.toContain('SQLSTATE')
+  })
+
+  it('reads a failed key again only when retry is asked for', async () => {
+    let calls = 0
+    const read = jest.fn(async () => {
+      calls += 1
+      if (calls === 1) throw new BackendError('network', 'offline')
+      return 'gold'
+    })
+    let latest!: QueryState<string>
+    function Probe() {
+      latest = useBackendQuery('retry-key', read)
+      return <Text>{latest.status}</Text>
+    }
+    let tree!: renderer.ReactTestRenderer
+    act(() => {
+      tree = renderer.create(
+        <BackendProvider backend={backendWith()}>
+          <Probe />
+        </BackendProvider>,
+      )
+    })
+    mounted.push(tree)
+    await flush()
+    await flush()
+
+    expect(latest.status).toBe('error')
+    expect(read).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      if (latest.status === 'error') latest.retry?.()
+    })
+    expect(latest.status).toBe('loading')
+    await flush()
+    await flush()
+
+    expect(latest).toMatchObject({ status: 'ready', data: 'gold' })
+    expect(read).toHaveBeenCalledTimes(2)
   })
 
   it('surfaces a blocked refusal verbatim, because that copy is ours', async () => {

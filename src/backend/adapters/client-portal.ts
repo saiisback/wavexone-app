@@ -76,7 +76,16 @@ export class ClientPortalAdapter {
   async fundingConfiguration(material: SessionMaterial, accountId: string) {
     return this.read(material, async () => {
       const response = await this.gate.call('redeemConfig', { query: { accountToken: accountId } })
-      return parseFundingConfiguration(response.json)
+      try {
+        return parseFundingConfiguration(response.json)
+      } catch (cause) {
+        // An empty method list lands here too, so the account sees reviewed
+        // copy rather than the generic fallback.
+        throw new BackendError('malformed', 'Funding configuration returned an unexpected shape.', {
+          endpoint: 'redeemConfig',
+          cause,
+        })
+      }
     })
   }
 

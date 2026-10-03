@@ -202,11 +202,14 @@ export function ActivityScreen() {
 
           <View style={styles.summaryBody}>
             <View style={styles.summaryLeft}>
-              <Text variant="body" color={colors.onInkMuted}>
+              <Text variant="caption" color={colors.onInkMuted}>
                 Net result
               </Text>
               <Text
-                variant="display"
+                variant="displaySm"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
                 color={
                   account.monthNetResult === undefined || account.monthNetResult >= 0
                     ? colors.greenOnInk
@@ -305,7 +308,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   summaryTitle: {
-    fontSize: 18,
+    fontSize: 16,
   },
   summaryBody: {
     flexDirection: 'row',
@@ -318,12 +321,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   summaryValue: {
-    fontSize: 30,
-    lineHeight: 38,
+    fontVariant: ['tabular-nums'],
   },
   summaryRight: {
-    width: 108,
-    gap: 10,
+    flexShrink: 0,
+    gap: 8,
   },
 
   tabs: {
@@ -331,7 +333,7 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
   groupHeader: {
-    fontSize: 19,
+    fontSize: 16,
     paddingBottom: 12,
     paddingTop: 6,
   },

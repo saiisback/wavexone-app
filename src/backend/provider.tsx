@@ -101,7 +101,16 @@ export function useInvalidateQueries(): (...prefixes: string[]) => void {
 export type QueryState<T> =
   | { status: 'loading'; data?: undefined; error?: undefined }
   | { status: 'ready'; data: T; error?: undefined }
-  | { status: 'error'; data?: undefined; error: string }
+  | {
+      status: 'error'
+      data?: undefined
+      error: string
+      /**
+       * Reads the key again. Reads only, and only when a person asks — the
+       * no-automatic-retry rule (guide §6.4) is about mutations.
+       */
+      retry?: () => void
+    }
 
 /**
  * Minimal read hook.
@@ -221,7 +230,14 @@ export function useBackendQuery<T>(
     }
   }, [key, context, generation])
 
+  // A failed read is never cached, so bumping the generation reads it afresh.
+  const retry = useCallback(() => {
+    setState({ status: 'loading', key })
+    setGeneration((value) => value + 1)
+  }, [key])
+
   // A result from the previous key is another instrument's numbers. Report
   // loading rather than showing them under the new heading.
-  return state.key === key ? state : { status: 'loading' }
+  if (state.key !== key) return { status: 'loading' }
+  return state.status === 'error' ? { ...state, retry } : state
 }

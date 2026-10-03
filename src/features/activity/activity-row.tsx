@@ -67,54 +67,36 @@ export function ActivityRow({
         </View>
 
         <View style={styles.identity}>
-          <Text variant="strong" style={styles.title}>
+          <Text variant="strong" numberOfLines={1}>
             {title}
           </Text>
-          <Text
-            variant="caption"
-            color={colors.textMuted}
-            style={styles.subtitle}
-            numberOfLines={1}
-          >
+          <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
             {subtitle}
           </Text>
         </View>
 
-        <View style={styles.when}>
+        <View style={styles.trailing}>
           <Text
-            variant="caption"
-            color={colors.textMuted}
-            style={styles.whenText}
+            variant="strong"
+            color={amount < 0 ? colors.red : colors.green}
+            style={styles.amount}
             numberOfLines={1}
           >
-            {date}
+            {formatSignedMoney(amount)}
           </Text>
-          <Text
-            variant="caption"
-            color={colors.textMuted}
-            style={styles.whenText}
-            numberOfLines={1}
-          >
-            {time}
+          <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+            {[date, time].filter(Boolean).join(' · ')}
           </Text>
         </View>
-
-        <Text
-          variant="strong"
-          color={amount < 0 ? colors.red : colors.green}
-          style={styles.amount}
-          numberOfLines={1}
-        >
-          {formatSignedMoney(amount)}
-        </Text>
 
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`More actions for ${title}`}
           hitSlop={10}
           onPress={() => onMenu(id)}
+          style={styles.more}
         >
-          <MoreVerticalIcon size={18} color={colors.text} />
+          <MoreVerticalIcon size={18} color={colors.textMuted} />
         </Pressable>
       </Card>
     </PressableScale>
@@ -125,37 +107,34 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    gap: 10,
+    paddingVertical: 12,
+    paddingLeft: 14,
+    paddingRight: 6,
     borderRadius: radius.card,
   },
   icon: {
-    width: 30,
+    width: 32,
     alignItems: 'center',
   },
   identity: {
     flex: 1,
     minWidth: 0,
-    gap: 3,
+    gap: 2,
   },
-  title: {
-    fontSize: 16,
-  },
-  subtitle: {
-    fontSize: 13,
-  },
-  when: {
-    width: 88,
+  trailing: {
     flexShrink: 0,
-    gap: 3,
-  },
-  whenText: {
-    fontSize: 13,
+    maxWidth: '45%',
+    alignItems: 'flex-end',
+    gap: 2,
   },
   amount: {
-    width: 82,
-    fontSize: 16,
-    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  more: {
+    minWidth: 28,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

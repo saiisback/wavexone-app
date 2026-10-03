@@ -15,6 +15,7 @@ import {
   Logo,
   LogoutIcon,
   MarketsIcon,
+  PositionsIcon,
   PressableScale,
   Screen,
   SettingsIcon,
@@ -72,15 +73,6 @@ export function AccountScreen() {
       ],
     })
 
-  const openFunds = () =>
-    showMenu({
-      title: 'Funds',
-      options: [
-        { label: 'Balance & funding', onSelect: () => openHomeScreen('Balance') },
-        { label: 'Transaction history', onSelect: () => navigate('Activity') },
-      ],
-    })
-
   const openClientPortal = () => openPortal({ title: 'Open the client portal?' })
 
   const confirmLogout = () =>
@@ -115,31 +107,26 @@ export function AccountScreen() {
     <Screen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Gutter style={styles.masthead}>
-          <Logo size={21} />
-          <Text variant="heading" style={styles.mastheadTitle}>
-            Account
-          </Text>
+          <Text variant="title">Account</Text>
+          <Logo size={18} />
         </Gutter>
 
         <Gutter>
           <PressableScale scaleTo={0.99} onPress={() => navigate('Profile')}>
             <Card style={styles.profile}>
-              <Avatar uri={profile.avatarUrl} size={76} />
+              <Avatar uri={profile.avatarUrl} size={56} />
               <View style={styles.profileIdentity}>
                 <View style={styles.profileName}>
-                  <Text variant="heading" style={styles.profileNameText}>
+                  <Text variant="strong" numberOfLines={1} style={styles.profileNameText}>
                     {profile.holder}
                   </Text>
-                  {profile.verified ? <VerifiedIcon size={20} /> : null}
+                  {profile.verified ? <VerifiedIcon size={18} /> : null}
                 </View>
-                <Text variant="body" color={colors.textMuted}>
-                  {account.mode} account
-                </Text>
-                <Text variant="body" color={colors.textMuted}>
-                  {account.number}
+                <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+                  {account.mode === 'DEMO' ? 'Demo' : 'Live'} account · {account.number}
                 </Text>
               </View>
-              <ChevronRightIcon size={22} color={colors.text} />
+              <ChevronRightIcon size={20} color={colors.textMuted} />
             </Card>
           </PressableScale>
         </Gutter>
@@ -148,8 +135,13 @@ export function AccountScreen() {
           <ListGroup>
             <ListRow
               icon={<WalletIcon size={24} color={colors.text} />}
-              label="Funds"
-              onPress={openFunds}
+              label="Balance & funding"
+              onPress={() => openHomeScreen('Balance')}
+            />
+            <ListRow
+              icon={<PositionsIcon size={24} color={colors.text} />}
+              label="Transaction history"
+              onPress={() => navigate('Activity')}
             />
             <ListRow
               icon={<UserIcon size={24} color={colors.text} />}
@@ -159,7 +151,7 @@ export function AccountScreen() {
             <ListRow
               icon={<MarketsIcon size={24} color={colors.text} filled />}
               label="Trading signals"
-              onPress={() => openHomeScreen('Signals')}
+              onPress={() => navigate('Signals')}
             />
             <ListRow
               icon={<ExternalLinkIcon size={24} color={colors.text} />}
@@ -230,23 +222,21 @@ export function AccountScreen() {
 const styles = StyleSheet.create({
   state: { paddingTop: 32 },
   content: {
-    paddingTop: 10,
+    paddingTop: 12,
     paddingBottom: TAB_BAR_CLEARANCE,
-    gap: 14,
+    gap: 16,
   },
   masthead: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingBottom: 2,
-  },
-  mastheadTitle: {
-    fontSize: 24,
+    justifyContent: 'space-between',
+    paddingBottom: 4,
   },
 
   profile: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
     padding: 16,
     borderRadius: radius.card,
   },
@@ -260,7 +250,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileNameText: {
-    fontSize: 20,
+    flexShrink: 1,
+    fontSize: 18,
+    lineHeight: 23,
   },
 
   support: {

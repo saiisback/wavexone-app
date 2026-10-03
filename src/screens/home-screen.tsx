@@ -28,7 +28,7 @@ import {
   spacing,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
-import { directionOf, formatMoney, formatPercent, formatSignedMoney } from '../data/format'
+import { formatMoney, formatPercent, formatSignedMoney, trendOf } from '../data/format'
 import { useSession } from '../data/store'
 import type { DetailedAccount, FundingMode, Instrument, Position, Profile } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
@@ -104,7 +104,12 @@ function HomeDashboard({
   // Same key as the Positions tab, so both screens share one request.
   const positions = useBackendQuery(`positions:${account.id}`, (backend) => backend.orders.list(account.id))
 
-  const unread = 0
+  // Same key as the Notifications screen; a failed read just shows no dot.
+  const notifications = useBackendQuery('notifications', (backend) => backend.engagement.notifications())
+  const read = useSession((state) => state.readNotifications)
+  const unread = notifications.status === 'ready'
+    ? notifications.data.filter((item) => !read.has(item.id)).length
+    : 0
   const pnlLabel = `${formatSignedMoney(account.floatingPnl)} (${formatPercent(account.changePercent)})`
 
   return (
@@ -180,7 +185,7 @@ function HomeDashboard({
                   <Text variant="caption" color={colors.onInkMuted}>
                     Open P&amp;L
                   </Text>
-                  <Delta label={pnlLabel} direction={directionOf(account.floatingPnl)} onInk size={14} />
+                  <Delta label={pnlLabel} direction={trendOf(account.floatingPnl)} onInk size={14} />
                 </View>
               </View>
             </PressableScale>

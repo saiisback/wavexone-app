@@ -16,7 +16,7 @@ import {
   spacing,
   type AssetIconKind,
 } from '../../design-system'
-import { directionOf, formatLots, formatPrice, formatSignedMoney } from '../../data/format'
+import { formatLots, formatPrice, formatSignedMoney, trendOf } from '../../data/format'
 
 export type PositionCardProps = {
   id: string
@@ -110,7 +110,7 @@ export function PositionCard({
           <Text variant="caption" color={colors.textMuted}>
             P&amp;L
           </Text>
-          <Delta label={formatSignedMoney(pnl)} direction={directionOf(pnl)} size={20} />
+          <Delta label={formatSignedMoney(pnl)} direction={trendOf(pnl)} size={20} />
         </View>
         <Text variant="strong" style={styles.lots}>
           {formatLots(lots)}

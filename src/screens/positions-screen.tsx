@@ -371,7 +371,7 @@ function FloatingPnl({
   return (
     <Text
       variant="display"
-      color={total < 0 ? colors.redOnInk : colors.greenOnInk}
+      color={Math.abs(total) < 0.005 ? colors.onInk : total < 0 ? colors.redOnInk : colors.greenOnInk}
       style={styles.summaryValue}
     >
       {formatSignedMoney(total)}

@@ -11,8 +11,8 @@ export function SignalsScreen() {
       <ScreenHeader title="Trading Signals" />
       <Gutter style={styles.content}>
         <UnavailableState
-          title="Trading signals unavailable"
-          message="WaveXOne has not supplied a confirmed signals endpoint. No fixture or generated signal is shown in a live session."
+          title="Trading signals are coming soon"
+          message="Signals will appear here as soon as they are available for your account."
         />
       </Gutter>
     </Screen>

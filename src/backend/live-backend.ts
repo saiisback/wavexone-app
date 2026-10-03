@@ -21,6 +21,14 @@ import type { PortalBootstrap } from './responses/portal'
 import { parseTradingAccounts } from './responses/trading'
 import { createSessionStore, type SessionMaterial, type SessionStore } from './secure-session-store'
 
+/**
+ * The trading API reports a `book` code ("a", "d", or a word) rather than the
+ * Live / Demo label people read. Only an explicit demo code maps to DEMO.
+ */
+function accountMode(book: string): 'LIVE' | 'DEMO' {
+  return /^d(emo)?$/i.test(book.trim()) ? 'DEMO' : 'LIVE'
+}
+
 function isLegacySwitchServerFailure(error: unknown): boolean {
   if (
     !(error instanceof BackendError) ||
@@ -103,7 +111,8 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       return {
         id: portalAccount.id,
         current: portalAccount.identifiers.includes(portalData.user.accountId),
-        mode: tradingAccount?.mode ?? (portalAccount.isDemo ? 'DEMO' : 'LIVE'),
+        // The portal's flag is authoritative; the trading `book` is a routing code.
+        mode: portalAccount.isDemo ? 'DEMO' : 'LIVE',
         number: portalAccount.number,
         currency: portalAccount.currency,
         leverage: portalAccount.leverage,
@@ -128,7 +137,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         current:
           tradingAccount.id === session.accountToken ||
           tradingAccount.databaseId === portalData.user.accountId,
-        mode: tradingAccount.mode,
+        mode: accountMode(tradingAccount.mode),
         number: tradingAccount.databaseId,
         balance: tradingAccount.balance,
         summaryAvailable: false as const,

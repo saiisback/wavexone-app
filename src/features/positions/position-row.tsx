@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native'
 
 import { AssetIcon, Delta, PressableScale, Text, colors } from '../../design-system'
-import { directionOf, formatLots, formatSignedMoney } from '../../data/format'
+import { formatLots, formatSignedMoney, trendOf } from '../../data/format'
 import { markPosition } from '../../data/live-quote'
 import type { Instrument, Position } from '../../data/types'
 import { useLiveQuote } from '../markets/use-live-quote'
@@ -51,7 +51,7 @@ export function PositionRow({
             {` · ${formatLots(marked.lots)}`}
           </Text>
         </View>
-        <Delta label={pnl} direction={directionOf(marked.pnl)} size={15} />
+        <Delta label={pnl} direction={trendOf(marked.pnl)} size={15} />
       </View>
     </PressableScale>
   )

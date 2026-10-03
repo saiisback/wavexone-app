@@ -18,3 +18,12 @@ it.each(['up', 'down'] as const)('keeps %s percentages readable on navy panels',
   expect(contrast).toBeGreaterThanOrEqual(4.5)
   act(() => { tree.unmount() })
 })
+
+it('draws an exact zero muted and without an arrow', () => {
+  let tree!: renderer.ReactTestRenderer
+  act(() => { tree = renderer.create(<Delta label="+$0.00" direction="flat" />) })
+  const label = tree.root.findByType(RNText)
+  expect(StyleSheet.flatten(label.props.style).color).toBe(colors.textMuted)
+  expect(tree.root.findAll((node) => node.props.direction === 'up' || node.props.direction === 'down')).toHaveLength(0)
+  act(() => { tree.unmount() })
+})

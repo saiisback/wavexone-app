@@ -36,7 +36,7 @@ const COPY: Record<FundingMode, { title: string; subtitle: string; cta: string }
   deposit: {
     title: 'Deposit',
     subtitle: 'Add funds to your trading account',
-    cta: 'Continue to payment',
+    cta: 'Submit deposit request',
   },
   withdraw: {
     title: 'Withdraw',
