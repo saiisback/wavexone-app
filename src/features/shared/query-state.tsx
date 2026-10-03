@@ -1,6 +1,6 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
-import { Button, ButtonText, Card, Text, colors } from '../../design-system'
+import { Button, ButtonText, Card, Text, colors, radius, spacing } from '../../design-system'
 import type { QueryState } from '../../backend/provider'
 
 type QueryStateViewProps<T> = {
@@ -22,8 +22,11 @@ export function QueryStateView<T>({
 }: QueryStateViewProps<T>) {
   if (state.status === 'loading') {
     return (
-      <View style={styles.loading} accessibilityLabel="Loading">
-        <ActivityIndicator color={colors.goldDeep} />
+      <View style={styles.loading} accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }}>
+        <View testID="loading-skeleton-block" style={[styles.block, styles.headingBlock]} />
+        <View testID="loading-skeleton-block" style={[styles.block, styles.panelBlock]} />
+        <View testID="loading-skeleton-block" style={[styles.block, styles.lineBlock]} />
+        <View testID="loading-skeleton-block" style={[styles.block, styles.shortLineBlock]} />
       </View>
     )
   }
@@ -76,8 +79,30 @@ function StateCard({
 const styles = StyleSheet.create({
   loading: {
     minHeight: 180,
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+  },
+  block: {
+    backgroundColor: colors.navySoft,
+    borderRadius: radius.sm,
+  },
+  headingBlock: {
+    width: '42%',
+    height: 20,
+  },
+  panelBlock: {
+    width: '100%',
+    height: 68,
+    borderRadius: radius.md,
+  },
+  lineBlock: {
+    width: '76%',
+    height: 14,
+  },
+  shortLineBlock: {
+    width: '54%',
+    height: 14,
   },
   card: {
     padding: 20,

@@ -9,6 +9,7 @@ import {
   StarIcon,
   Text,
   colors,
+  radius,
   type AssetIconKind,
 } from '../../design-system'
 import { directionOf, formatPercent, formatPrice } from '../../data/format'
@@ -80,7 +81,7 @@ export function MarketRow({
       scaleTo={0.985}
     >
       <Card style={styles.card}>
-        <AssetIcon kind={iconKind} label={iconLabel} tint={iconTint} size={40} />
+        <AssetIcon kind={iconKind} label={iconLabel ?? symbol} tint={iconTint} size={40} />
 
         <View style={styles.identity}>
           <View style={styles.symbolRow}>
@@ -125,7 +126,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: radius.card,
   },
   identity: {
     flex: 1,

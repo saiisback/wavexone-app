@@ -13,6 +13,7 @@ import {
   Text,
   colors,
   fonts,
+  spacing,
   shadow,
 } from '../design-system'
 import type { TabParamList } from './types'
@@ -22,7 +23,7 @@ import type { TabParamList } from './types'
  *
  * A native tab bar cannot produce this layout — the centre "Trade" control is
  * a circle that breaks out above the bar, and the selected states differ per
- * tab (filled glyph, inverted badge, gold dots). Everything else in the app
+ * tab (filled glyph, inverted badge, selected dots). Everything else in the app
  * uses native navigators.
  */
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -44,7 +45,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
         if (name === 'Trade') {
           return (
-            <PressableScale key={route.key} onPress={onPress} scaleTo={0.9} style={styles.item}>
+            <PressableScale key={route.key} accessibilityLabel={options.title ?? name} onPress={onPress} scaleTo={0.9} style={styles.item}>
               <View
                 accessibilityRole="tab"
                 accessibilityState={{ selected: focused }}
@@ -72,7 +73,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         }
 
         return (
-          <PressableScale key={route.key} onPress={onPress} scaleTo={0.9} style={styles.item}>
+          <PressableScale key={route.key} accessibilityLabel={options.title ?? name} onPress={onPress} scaleTo={0.9} style={styles.item}>
             <View
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
@@ -91,16 +92,17 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 function TabGlyph({ name, focused }: { name: keyof TabParamList; focused: boolean }) {
+  const tint = focused ? colors.navy : colors.textMuted
   switch (name) {
     case 'Home':
       // Drawn solid in every state, exactly as in the mockups.
-      return <HomeIcon size={25} color={colors.text} />
+      return <HomeIcon size={25} color={tint} />
     case 'Markets':
-      return <MarketsIcon size={25} color={colors.text} filled={focused} />
+      return <MarketsIcon size={25} color={tint} filled={focused} />
     case 'Positions':
-      return focused ? <PositionsIconFilled size={25} /> : <PositionsIcon size={25} color={colors.text} />
+      return focused ? <PositionsIconFilled size={25} /> : <PositionsIcon size={25} color={tint} />
     case 'More':
-      return <MoreIcon size={25} color={focused ? colors.goldDeep : colors.text} />
+      return <MoreIcon size={25} color={tint} />
     default:
       return null
   }
@@ -117,7 +119,7 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
-    paddingTop: 14,
+    paddingTop: spacing.lg,
   },
   item: {
     flex: 1,
@@ -125,6 +127,8 @@ const styles = StyleSheet.create({
   },
   glyph: {
     height: GLYPH_HEIGHT,
+    minWidth: 44,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   // Centres the disc on the glyph row, then lifts it clear of the label.
@@ -161,9 +165,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 13,
     lineHeight: 16,
-    color: colors.text,
+    color: colors.textMuted,
   },
   labelActive: {
     fontFamily: fonts.bold,
+    color: colors.navy,
   },
 })

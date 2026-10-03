@@ -53,15 +53,27 @@ export type Profile = {
   kycStatus: 'Verified' | 'In review' | 'Not started'
 }
 
-export type Account = {
+type AccountIdentity = {
   id: string
+  /** True when the remote portal session is currently linked to this account. */
+  current?: boolean
   /** "LIVE" or "DEMO". */
   mode: string
   number: string
+  balance: number
+}
+
+/** A linked account returned by the trading account list before its full portal summary is loaded. */
+export type LinkedAccount = AccountIdentity & {
+  summaryAvailable: false
+}
+
+/** An account joined to the portal summary and safe to use on trading/funding screens. */
+export type DetailedAccount = AccountIdentity & {
+  summaryAvailable?: true
   currency: string
   leverage: number
   equity: number
-  balance: number
   freeMargin: number
   changePercent: number
   /** Human date printed on the portfolio band. */
@@ -71,6 +83,12 @@ export type Account = {
   monthNetResult?: number
   monthTrades?: number
   monthWinRate?: number
+}
+
+export type Account = LinkedAccount | DetailedAccount
+
+export function hasAccountSummary(account: Account): account is DetailedAccount {
+  return account.summaryAvailable !== false
 }
 
 export type Position = {

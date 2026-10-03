@@ -25,6 +25,7 @@ import { directionOf, formatLots, formatMoney, formatPercent, formatPrice } from
 import { applyQuote } from '../data/live-quote'
 import { useTradeDraft, type OrderType } from '../data/trade-draft'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
@@ -56,6 +57,9 @@ export function TradeScreen() {
   const quote = useLiveQuote(listed?.id)
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    if (accountData.status === 'ready' && !accountData.data.account) {
+      return <Screen><Gutter style={styles.state}><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Gutter></Screen>
+    }
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return (
       <Screen>

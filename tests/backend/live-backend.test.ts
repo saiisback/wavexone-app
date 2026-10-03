@@ -317,12 +317,45 @@ describe('accounts', () => {
     await expect(backend.accounts.list()).resolves.toEqual([
       expect.objectContaining({
         id: 'account-1',
+        current: true,
         number: '10001',
         mode: 'LIVE',
         balance: 1250.5,
         equity: 1275.25,
         leverage: 500,
       }),
+    ])
+  })
+
+  it('keeps a linked demo returned by accountList when portal bootstrap omits it', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    scriptFetch({
+      body: JSON.stringify([
+        ...tradingAccountsResponse,
+        {
+          uid: 'user-1',
+          token: 'demo-token',
+          account_id: '20002',
+          balance: 100000,
+          book: 'DEMO',
+          account_type: 'standard',
+        },
+      ]),
+    })
+
+    await expect(backend.accounts.list()).resolves.toEqual([
+      expect.objectContaining({ id: 'account-1', mode: 'LIVE' }),
+      {
+        id: 'demo-token',
+        current: false,
+        mode: 'DEMO',
+        number: '20002',
+        balance: 100000,
+        summaryAvailable: false,
+      },
     ])
   })
 
@@ -387,6 +420,28 @@ describe('accounts', () => {
       backend.accounts.switchAccount({ accountId: 'account-2', idempotencyKey: 'switch-2' }),
     ).rejects.toMatchObject({ kind: 'rejected' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('validates the target with the existing user bearer when the legacy switch route returns 500', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    const fetchMock = scriptFetch(
+      { status: 500, body: 'internal server error' },
+      { body: '{"status":"success","data":{}}' },
+      { body: '{"status":"success"}' },
+    )
+
+    await expect(
+      backend.accounts.switchAccount({ accountId: 'demo-account', idempotencyKey: 'switch-demo' }),
+    ).resolves.toBeUndefined()
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(urls.some((url) => url.includes('collect=bearer'))).toBe(false)
+    expect(urls.some((url) => url.includes('collect=auth'))).toBe(true)
+    expect(urls.some((url) => url.includes('/switchAccount'))).toBe(true)
+    expect([...mockStore.values()].join()).toContain('raw.bearer')
   })
 })
 
@@ -463,6 +518,33 @@ describe('markets', () => {
     expect(marketFetch.mock.calls.map(([url]) => String(url))).not.toContainEqual(
       expect.stringContaining('getCurrentDayData'),
     )
+  })
+
+  it('resolves bundled marks without changing server tickers, IDs or prices', async () => {
+    const cases = [
+      ['NASDAQ:AAPL.OQ', 'apple'], ['TSLA', 'tesla'], ['NVDA', 'nvidia'],
+      ['MSFT', 'microsoft'], ['AMZN', 'amazon'], ['META', 'meta'],
+      ['GOOGL', 'google'], ['NFLX', 'netflix'], ['X:BTCUSD', 'bitcoin'],
+      ['ETHUSD', 'ethereum'], ['C:XAUUSD', 'gold'], ['XAGUSD', 'silver'],
+      ['EURUSD', 'euro'], ['USOIL', 'oil'], ['NASDAQ:ZETA.OQ', 'generic'],
+    ]
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    const plain = (ticker: string) => ticker.split(':').pop()!
+    scriptFetch(
+      { body: JSON.stringify({ stocks: cases.map(([ticker]) => ({ ticker, name: ticker, market: 'stocks' })) }) },
+      { body: JSON.stringify(Object.fromEntries(cases.map(([ticker]) => [plain(ticker), { decimal: 2, lot: 1, spread: 0.1 }]))) },
+    )
+    const pending = backend.markets.catalogue()
+    const { bars, ticks } = await feedSockets()
+    answerDayBars(bars, Object.fromEntries(cases.map(([ticker]) => [plain(ticker), { o: 10, h: 12, l: 9, c: 11 }])))
+    ticks.receive(Object.fromEntries(cases.map(([ticker]) => [plain(ticker), { p: 11, v: 1, b: 10, a: 12 }])))
+
+    const markets = await pending
+    expect(markets.map(({ icon }) => icon)).toEqual(cases.map(([, icon]) => icon))
+    expect(markets[0]).toMatchObject({ id: 'nasdaq:aapl.oq', symbol: 'AAPL.OQ', price: 11 })
+    expect(markets[14]).toMatchObject({ id: 'nasdaq:zeta.oq', symbol: 'ZETA.OQ', iconLabel: 'ZE' })
   })
 
   it('leaves out a market the feeds do not carry and keeps the rest', async () => {
@@ -682,6 +764,12 @@ describe('phase 3 account and funding routes', () => {
 
     expect(called(fetchMock, 'apiSubmitDeposit')).toHaveLength(1)
     expect(called(fetchMock, 'submitDemoDeposit')).toHaveLength(0)
+  })
+
+  it('refuses a transfer whose source and destination are the same account', async () => {
+    const { backend, fetchMock } = await signedIn()
+    await expect(backend.funds.transfer({ fromAccountId: 'account-1', toAccountId: 'account-1', amount: '50.00', idempotencyKey: 'same-account' })).rejects.toMatchObject({ kind: 'rejected' })
+    expect(called(fetchMock, 'apiTransfer')).toHaveLength(0)
   })
 
   it('saves the phone and resends the server-held name unchanged', async () => {

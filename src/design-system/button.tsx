@@ -3,7 +3,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import { colors } from './colors'
 import { PressableScale } from './pressable'
 import { Text } from './text'
-import { radius, shadow } from './tokens'
+import { radius, shadow, spacing } from './tokens'
 
 type Tone = 'ink' | 'gold' | 'track' | 'surface'
 
@@ -80,9 +80,9 @@ const styles = StyleSheet.create({
     minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     borderCurve: 'continuous',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     paddingVertical: 10,
     gap: 2,
   },

@@ -9,7 +9,7 @@ export type DeltaProps = {
   /** Pre-formatted, e.g. "+0.34%". */
   label: string
   direction: 'up' | 'down'
-  /** Dark cards use a brighter green than light ones. */
+  /** Dark cards use brighter semantic foregrounds than light ones. */
   onInk?: boolean
   size?: number
 }
@@ -17,7 +17,9 @@ export type DeltaProps = {
 /** Triangle plus signed percentage, the pairing used on every price surface. */
 export function Delta({ label, direction, onInk = false, size = 17 }: DeltaProps) {
   const tint =
-    direction === 'up' ? (onInk ? colors.greenOnInk : colors.green) : colors.red
+    direction === 'up'
+      ? (onInk ? colors.greenOnInk : colors.green)
+      : (onInk ? colors.redOnInk : colors.red)
 
   return (
     <View style={styles.row}>

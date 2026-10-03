@@ -1,8 +1,9 @@
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { BackendError, userMessageFor } from './errors'
-import { useBackend } from './provider'
+import { useBackend, useClearBackendQueries } from './provider'
 import type { WaveXBackend } from './contract'
+import { useSession } from '../data/store'
 
 export type AppSessionState =
   | 'restoring'
@@ -47,6 +48,15 @@ async function restoredSnapshot(backend: WaveXBackend): Promise<SessionSnapshot>
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const backend = useBackend()
+  const clearQueries = useClearBackendQueries()
+  const [sessionGeneration, setSessionGeneration] = useState(0)
+  const resetSessionData = useCallback(() => {
+    clearQueries()
+    useSession.setState(useSession.getInitialState())
+    // Also discard hook-local data if React batches logout and login without
+    // ever committing the signed-out gate. The backend itself stays alive.
+    setSessionGeneration((generation) => generation + 1)
+  }, [clearQueries])
   const [snapshot, setSnapshot] = useState<SessionSnapshot>({
     state: 'restoring',
     error: null,
@@ -63,24 +73,29 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true
     void restoredSnapshot(backend).then((next) => {
-      if (active) setSnapshot(next)
+      if (active) {
+        resetSessionData()
+        setSnapshot(next)
+      }
     })
     return () => {
       active = false
     }
-  }, [backend])
+  }, [backend, resetSessionData])
 
   const retryRestore = useCallback(async () => {
     setSnapshot({ state: 'restoring', error: null })
+    resetSessionData()
     const next = await restoredSnapshot(backend)
     if (mounted.current) setSnapshot(next)
-  }, [backend])
+  }, [backend, resetSessionData])
 
   const signIn = useCallback(
     async (identifier: string, password: string) => {
       if (signingIn.current) return
       signingIn.current = true
       setSnapshot({ state: 'restoring', error: null })
+      resetSessionData()
       try {
         const result = await backend.session.signIn(identifier, password)
         if (mounted.current) {
@@ -95,23 +110,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         signingIn.current = false
       }
     },
-    [backend],
+    [backend, resetSessionData],
   )
 
   const signOut = useCallback(async () => {
+    // Hide private screens and discard local data even if remote logout fails.
+    setSnapshot({ state: 'restoring', error: null })
+    resetSessionData()
     try {
       await backend.session.signOut()
     } finally {
       if (mounted.current) setSnapshot({ state: 'signed-out', error: null })
     }
-  }, [backend])
+  }, [backend, resetSessionData])
 
   const value = useMemo<AppSessionContextValue>(
     () => ({ ...snapshot, signIn, signOut, retryRestore }),
     [retryRestore, signIn, signOut, snapshot],
   )
 
-  return <SessionContext value={value}>{children}</SessionContext>
+  return <SessionContext key={sessionGeneration} value={value}>{children}</SessionContext>
 }
 
 export function useAppSession(): AppSessionContextValue {

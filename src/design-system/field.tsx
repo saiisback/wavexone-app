@@ -1,9 +1,10 @@
+import { useState } from 'react'
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native'
 
 import { colors } from './colors'
 import { Pressable } from './pressable'
 import { Text } from './text'
-import { fonts, radius } from './tokens'
+import { fonts, radius, spacing } from './tokens'
 
 export type FieldProps = TextInputProps & {
   label: string
@@ -15,14 +16,15 @@ export type FieldProps = TextInputProps & {
 }
 
 /** Labelled text input used by the funding and order sheets. */
-export function Field({ label, prefix, hint, invalid = false, style, ...rest }: FieldProps) {
+export function Field({ label, prefix, hint, invalid = false, style, onFocus, onBlur, ...rest }: FieldProps) {
+  const [focused, setFocused] = useState(false)
   return (
     <View style={styles.wrap}>
       <Text variant="caption" color={colors.textMuted}>
         {label}
       </Text>
 
-      <View style={[styles.box, invalid ? styles.boxInvalid : null]}>
+      <View style={[styles.box, focused ? styles.boxFocused : null, invalid ? styles.boxInvalid : null]}>
         {prefix ? (
           <Text variant="strong" color={colors.textMuted}>
             {prefix}
@@ -30,6 +32,11 @@ export function Field({ label, prefix, hint, invalid = false, style, ...rest }: 
         ) : null}
         <TextInput
           {...rest}
+          accessibilityLabel={rest.accessibilityLabel ?? label}
+          selectionColor={colors.navy}
+          cursorColor={colors.navy}
+          onFocus={(event) => { setFocused(true); onFocus?.(event) }}
+          onBlur={(event) => { setFocused(false); onBlur?.(event) }}
           placeholderTextColor={colors.textSubtle}
           style={[styles.input, style]}
         />
@@ -81,7 +88,7 @@ export function QuickPicks({
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: 8,
+    gap: spacing.sm,
   },
   box: {
     flexDirection: 'row',
@@ -89,7 +96,7 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 56,
     paddingHorizontal: 16,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     borderCurve: 'continuous',
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -97,6 +104,10 @@ const styles = StyleSheet.create({
   },
   boxInvalid: {
     borderColor: colors.red,
+  },
+  boxFocused: {
+    borderColor: colors.navy,
+    backgroundColor: colors.focusSurface,
   },
   input: {
     flex: 1,
@@ -111,7 +122,7 @@ const styles = StyleSheet.create({
   },
   pick: {
     flex: 1,
-    height: 42,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
@@ -119,7 +130,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.track,
   },
   pickActive: {
-    backgroundColor: colors.gold,
+    backgroundColor: colors.navy,
   },
   pickLabel: {
     fontFamily: fonts.medium,
@@ -128,5 +139,6 @@ const styles = StyleSheet.create({
   },
   pickLabelActive: {
     fontFamily: fonts.bold,
+    color: colors.onInk,
   },
 })

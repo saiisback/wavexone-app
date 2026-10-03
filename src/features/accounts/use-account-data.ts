@@ -2,11 +2,13 @@ import { useEffect } from 'react'
 
 import { useBackendQuery, type QueryState } from '../../backend/provider'
 import { useSession } from '../../data/store'
-import type { Account, Profile } from '../../data/types'
+import { hasAccountSummary, type Account, type DetailedAccount, type Profile } from '../../data/types'
 
 export type AccountData = {
   accounts: readonly Account[]
-  account: Account | null
+  /** Selected identity remains available even before its portal summary arrives. */
+  selectedAccount: Account | null
+  account: DetailedAccount | null
   profile: Profile
 }
 
@@ -22,8 +24,10 @@ export function useAccountData(): QueryState<AccountData> {
 
   useEffect(() => {
     if (accounts.status !== 'ready' || accounts.data.length === 0) return
-    if (!accountId || !accounts.data.some((account) => account.id === accountId)) {
-      selectAccount(accounts.data[0].id)
+    const selected = accounts.data.find((account) => account.id === accountId)
+    if (!selected) {
+      const fallback = accounts.data.find((account) => account.current) ?? accounts.data[0]
+      if (fallback) selectAccount(fallback.id)
     }
   }, [accountId, accounts, selectAccount])
 
@@ -31,11 +35,14 @@ export function useAccountData(): QueryState<AccountData> {
   if (profile.status === 'error') return profile
   if (accounts.status === 'loading' || profile.status === 'loading') return { status: 'loading' }
 
+  const selectedAccount = accounts.data.find((account) => account.id === accountId) ?? null
+
   return {
     status: 'ready',
     data: {
       accounts: accounts.data,
-      account: accounts.data.find((account) => account.id === accountId) ?? accounts.data[0] ?? null,
+      selectedAccount,
+      account: selectedAccount && hasAccountSummary(selectedAccount) ? selectedAccount : null,
       profile: profile.data,
     },
   }

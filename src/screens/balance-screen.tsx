@@ -4,7 +4,9 @@ import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
-  CardPlusIcon,
+  DepositIcon,
+  WithdrawIcon,
+  SwapIcon,
   CircleAction,
   Gutter,
   Input,
@@ -17,6 +19,8 @@ import {
   Watermark,
   colors,
   fonts,
+  radius,
+  spacing,
   useActionMenu,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
@@ -27,6 +31,7 @@ import { formatMoney } from '../data/format'
 import { useSession, type MarketPeriod } from '../data/store'
 import type { Instrument } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
@@ -154,17 +159,21 @@ function BalanceHeader({
         </Text>
 
         <View style={styles.actions}>
-          <CircleAction label="Deposit" onPress={() => openFunding('deposit')}>
-            <CardPlusIcon size={24} color={colors.onInk} />
+          <CircleAction label="Deposit" tone="gold" onPress={() => openFunding('deposit')}>
+            <DepositIcon size={24} color={colors.ink} />
           </CircleAction>
           <CircleAction label="Withdraw" onPress={() => openFunding('withdraw')}>
-            <CardPlusIcon size={24} color={colors.onInk} />
+            <WithdrawIcon size={24} color={colors.onInk} />
           </CircleAction>
-          <CircleAction label="Transfer" tone="gold" onPress={() => openFunding('transfer')}>
-            <CardPlusIcon size={24} color={colors.ink} />
+          <CircleAction label="Transfer" onPress={() => openFunding('transfer')}>
+            <SwapIcon size={24} color={colors.onInk} />
           </CircleAction>
         </View>
       </View>
+
+      {accountData.status === 'ready' && !account ? (
+        <Gutter><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Gutter>
+      ) : null}
 
       <Gutter style={styles.search}>
         <View style={styles.searchField}>
@@ -173,6 +182,7 @@ function BalanceHeader({
             value={query}
             onChangeText={onChangeQuery}
             placeholder="Search markets"
+            accessibilityLabel="Search markets"
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
             returnKeyType="search"
@@ -210,7 +220,7 @@ const styles = StyleSheet.create({
     paddingBottom: TAB_BAR_CLEARANCE,
   },
   separator: {
-    height: 14,
+    height: spacing.md,
   },
   header: {
     // Cancels the list's gutter so the dark panel can bleed edge to edge.
@@ -218,11 +228,11 @@ const styles = StyleSheet.create({
   },
   panel: {
     backgroundColor: colors.ink,
-    borderBottomLeftRadius: 34,
-    borderBottomRightRadius: 34,
+    borderBottomLeftRadius: radius.header,
+    borderBottomRightRadius: radius.header,
     borderCurve: 'continuous',
-    paddingHorizontal: 22,
-    paddingBottom: 22,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
     overflow: 'hidden',
   },
   logoRow: {
@@ -241,26 +251,26 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    marginTop: 22,
+    marginTop: spacing.xl,
     backgroundColor: colors.onInkPanel,
-    borderRadius: 28,
+    borderRadius: radius.card,
     borderCurve: 'continuous',
-    paddingVertical: 18,
-    paddingHorizontal: 8,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.sm,
   },
 
   search: {
-    marginTop: 22,
+    marginTop: spacing.xl,
   },
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     height: 56,
-    borderRadius: 28,
+    borderRadius: radius.md,
     borderCurve: 'continuous',
     backgroundColor: colors.surface,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
   },
   searchInput: {
     flex: 1,
@@ -272,8 +282,8 @@ const styles = StyleSheet.create({
   },
 
   sectionHeader: {
-    marginTop: 24,
-    marginBottom: 14,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.md,
   },
   empty: {
     paddingTop: 32,

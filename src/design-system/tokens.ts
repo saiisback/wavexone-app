@@ -11,7 +11,7 @@ export const radius = {
   md: 14,
   lg: 18,
   xl: 22,
-  card: 24,
+  card: 16,
   /** Big sweep on the full-bleed balance header. */
   header: 34,
   /** Anything pill shaped. */
@@ -65,7 +65,7 @@ export const type = {
 
 /** Soft lift used by the floating cards and the tab bar. */
 export const shadow = {
-  card: '0px 1px 2px rgba(16, 24, 40, 0.04)',
-  raised: '0px 8px 24px rgba(16, 24, 40, 0.10)',
-  fab: '0px 6px 16px rgba(0, 0, 0, 0.24)',
+  card: '0px 2px 6px rgba(30, 42, 94, 0.04)',
+  raised: '0px 8px 24px rgba(30, 42, 94, 0.10)',
+  fab: '0px 6px 16px rgba(30, 42, 94, 0.20)',
 } as const

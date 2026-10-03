@@ -24,6 +24,7 @@ import { formatLots, formatSignedMoney } from '../data/format'
 import { markPosition } from '../data/live-quote'
 import type { Instrument, Position } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useLiveQuote, useLiveQuotesVersion } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { AFTER_TRADE } from '../features/shared/query-keys'
@@ -58,6 +59,9 @@ export function PositionsScreen() {
   )
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    if (accountData.status === 'ready' && !accountData.data.account) {
+      return <Screen><Gutter style={styles.loading}><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Gutter></Screen>
+    }
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return <Screen><Gutter style={styles.loading}><QueryStateView state={state} render={() => null} /></Gutter></Screen>
   }
@@ -325,7 +329,7 @@ function FloatingPnl({
   return (
     <Text
       variant="display"
-      color={total < 0 ? colors.red : colors.greenOnInk}
+      color={total < 0 ? colors.redOnInk : colors.greenOnInk}
       style={styles.summaryValue}
     >
       {formatSignedMoney(total)}

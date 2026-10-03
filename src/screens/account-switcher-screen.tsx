@@ -12,11 +12,13 @@ import {
   Text,
   VerifiedIcon,
   colors,
+  radius,
+  spacing,
   useActionMenu,
 } from '../design-system'
-import { formatMoney, formatPercent, directionOf } from '../data/format'
+import { formatMoney, formatPercent, formatPrice, directionOf } from '../data/format'
 import { useSession } from '../data/store'
-import type { Account } from '../data/types'
+import { hasAccountSummary, type Account } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { QueryStateView } from '../features/shared/query-state'
 
@@ -38,11 +40,14 @@ export function AccountSwitcherScreen() {
         idempotencyKey: Crypto.randomUUID(),
       })
       select(accountId)
+      // Switching back (or reselecting a linked-only account) must load its
+      // current portal summary instead of retaining a prior partial snapshot.
+      invalidate('accounts:', 'profile:', 'funding:')
       goBack()
-    } catch {
+    } catch (error: unknown) {
       showMenu({
         title: 'Could not switch account',
-        message: 'Your previous account is still selected. Try again.',
+        message: mutationFailureMessage(error),
         options: [{ label: 'Got it' }],
       })
     }
@@ -122,8 +127,16 @@ function AccountCard({
   active: boolean
   onPress: (accountId: string) => void
 }) {
+  const summary = hasAccountSummary(account)
+    ? `Equity ${formatMoney(account.equity)}. Leverage 1:${account.leverage}. Month ${formatPercent(account.changePercent)}.`
+    : `Balance ${formatPrice(account.balance, 2)}. Select to load full account details.`
+
   return (
-    <PressableScale scaleTo={0.99} onPress={() => onPress(account.id)}>
+    <PressableScale
+      scaleTo={0.99}
+      accessibilityLabel={`Select ${account.mode} account ${account.number}${active ? ', selected' : ''}. ${summary}`}
+      onPress={() => onPress(account.id)}
+    >
       <Card style={[styles.card, active ? styles.cardActive : null]}>
         <View style={styles.header}>
           <Text variant="strong">{account.number}</Text>
@@ -131,31 +144,45 @@ function AccountCard({
           {active ? <VerifiedIcon size={18} /> : null}
         </View>
 
-        <View style={styles.figures}>
-          <View style={styles.figure}>
-            <Text variant="caption" color={colors.textMuted}>
-              Equity
-            </Text>
-            <Text variant="strong">{formatMoney(account.equity)}</Text>
+        {hasAccountSummary(account) ? (
+          <View style={styles.figures}>
+            <View style={styles.figure}>
+              <Text variant="caption" color={colors.textMuted}>
+                Equity
+              </Text>
+              <Text variant="strong">{formatMoney(account.equity)}</Text>
+            </View>
+            <View style={styles.figure}>
+              <Text variant="caption" color={colors.textMuted}>
+                Leverage
+              </Text>
+              <Text variant="strong">1:{account.leverage}</Text>
+            </View>
+            <View style={styles.figure}>
+              <Text variant="caption" color={colors.textMuted}>
+                Month
+              </Text>
+              <Text
+                variant="strong"
+                color={directionOf(account.changePercent) === 'down' ? colors.red : colors.green}
+              >
+                {formatPercent(account.changePercent)}
+              </Text>
+            </View>
           </View>
-          <View style={styles.figure}>
-            <Text variant="caption" color={colors.textMuted}>
-              Leverage
-            </Text>
-            <Text variant="strong">1:{account.leverage}</Text>
-          </View>
-          <View style={styles.figure}>
-            <Text variant="caption" color={colors.textMuted}>
-              Month
-            </Text>
-            <Text
-              variant="strong"
-              color={directionOf(account.changePercent) === 'down' ? colors.red : colors.green}
-            >
-              {formatPercent(account.changePercent)}
+        ) : (
+          <View style={styles.linkedSummary}>
+            <View style={styles.figure}>
+              <Text variant="caption" color={colors.textMuted}>
+                Balance
+              </Text>
+              <Text variant="strong">{formatPrice(account.balance, 2)}</Text>
+            </View>
+            <Text variant="caption" color={colors.textMuted} style={styles.linkedHint}>
+              Select to load full account details
             </Text>
           </View>
-        </View>
+        )}
       </Card>
     </PressableScale>
   )
@@ -163,30 +190,40 @@ function AccountCard({
 
 const styles = StyleSheet.create({
   card: {
-    padding: 16,
-    borderRadius: 20,
-    gap: 14,
+    padding: spacing.lg,
+    borderRadius: radius.card,
+    gap: spacing.lg,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   cardActive: {
-    borderColor: colors.gold,
+    borderColor: colors.navy,
+    backgroundColor: colors.navySoft,
+    boxShadow: 'none',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
   },
   figures: {
     flexDirection: 'row',
+  },
+  linkedSummary: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  linkedHint: {
+    flex: 2,
+    textAlign: 'right',
   },
   figure: {
     flex: 1,
     gap: 3,
   },
   add: {
-    padding: 18,
-    borderRadius: 20,
+    padding: spacing.xl,
+    borderRadius: radius.card,
     alignItems: 'center',
   },
 })

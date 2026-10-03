@@ -20,6 +20,7 @@ import {
 import { formatLots, formatMoney, formatPrice } from '../data/format'
 import { applyQuote } from '../data/live-quote'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
@@ -59,6 +60,9 @@ export function OrderTicketScreen() {
   const quote = useLiveQuote(params.instrumentId)
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    if (accountData.status === 'ready' && !accountData.data.account) {
+      return <Sheet title={`${side} order`}><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Sheet>
+    }
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return (
       <Sheet title={`${side} order`}>

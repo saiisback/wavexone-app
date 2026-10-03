@@ -1,7 +1,7 @@
 import type {
-  Account,
   ActivityEntry,
   ChartSeries,
+  DetailedAccount,
   Instrument,
   Notification,
   Position,
@@ -32,7 +32,7 @@ export const profile: Profile = {
   kycStatus: 'Verified',
 }
 
-export const accounts: readonly Account[] = [
+export const accounts: readonly DetailedAccount[] = [
   {
     id: 'wx012345',
     mode: 'LIVE',

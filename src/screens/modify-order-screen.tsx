@@ -22,6 +22,7 @@ import { useBackend, useBackendQuery, useInvalidateQueries } from '../backend/pr
 import { formatLots, formatPrice } from '../data/format'
 import { applyQuote, markPosition } from '../data/live-quote'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { AFTER_TRADE } from '../features/shared/query-keys'
@@ -64,6 +65,10 @@ export function ModifyOrderScreen() {
   // current values without copying them into state during render.
   const [stopLossInput, setStopLoss] = useState<string>()
   const [takeProfitInput, setTakeProfit] = useState<string>()
+
+  if (accountData.status === 'ready' && !accountData.data.account) {
+    return <Sheet title="Modify order"><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Sheet>
+  }
 
   if (positions.status !== 'ready' || catalogue.status !== 'ready') {
     const state = positions.status !== 'ready' ? positions : catalogue

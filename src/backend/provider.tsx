@@ -1,4 +1,4 @@
-import { createContext, use, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createBackend } from './index'
 import type { WaveXBackend } from './contract'
@@ -14,11 +14,23 @@ import { BackendError, userMessageFor } from './errors'
 
 type BackendContextValue = {
   backend: WaveXBackend
-  /** One promise per semantic query key, shared by every mounted consumer. */
-  queries: Map<string, { promise: Promise<unknown>; consumers: number }>
+  /** One promise per semantic query key, shared by mounted and recent consumers. */
+  queries: Map<string, QueryEntry<unknown>>
   /** Mounted queries, told when `useInvalidateQueries` drops their key. */
   listeners: Set<(prefixes: readonly string[]) => void>
 }
+
+type QueryEntry<T> = {
+  promise: Promise<T>
+  consumers: number
+  status: 'pending' | 'fulfilled' | 'rejected'
+  settledAt?: number
+  expiresAt?: number
+  expiryTimer?: ReturnType<typeof setTimeout>
+}
+
+const RETAIN_COMPLETED_MS = 30_000
+const disposedProviders = new WeakSet<BackendContextValue>()
 
 const BackendContext = createContext<BackendContextValue | null>(null)
 
@@ -35,6 +47,13 @@ export function BackendProvider({
     queries: new Map(),
     listeners: new Set(),
   }), [backend])
+  useEffect(() => {
+    disposedProviders.delete(value)
+    return () => {
+      disposedProviders.add(value)
+      value.queries.forEach((entry) => clearTimeout(entry.expiryTimer))
+    }
+  }, [value])
   return <BackendContext value={value}>{children}</BackendContext>
 }
 
@@ -42,6 +61,20 @@ export function useBackend(): WaveXBackend {
   const context = use(BackendContext)
   if (!context) throw new Error('useBackend must be used inside <BackendProvider>')
   return context.backend
+}
+
+/**
+ * Discards all reads at an authentication boundary. SessionProvider also
+ * removes the signed-in consumers, so unlike mutation invalidation this must
+ * not start background reads using credentials that are being replaced.
+ */
+export function useClearBackendQueries(): () => void {
+  const context = use(BackendContext)
+  if (!context) throw new Error('useClearBackendQueries must be used inside <BackendProvider>')
+  return useCallback(() => {
+    context.queries.forEach((entry) => clearTimeout(entry.expiryTimer))
+    context.queries.clear()
+  }, [context])
 }
 
 /**
@@ -56,7 +89,10 @@ export function useInvalidateQueries(): (...prefixes: string[]) => void {
   if (!context) throw new Error('useInvalidateQueries must be used inside <BackendProvider>')
   return (...prefixes) => {
     for (const key of [...context.queries.keys()]) {
-      if (prefixes.some((prefix) => key.startsWith(prefix))) context.queries.delete(key)
+      if (prefixes.some((prefix) => key.startsWith(prefix))) {
+        clearTimeout(context.queries.get(key)?.expiryTimer)
+        context.queries.delete(key)
+      }
     }
     context.listeners.forEach((listener) => listener(prefixes))
   }
@@ -116,16 +152,35 @@ export function useBackendQuery<T>(
     // that throws synchronously would otherwise escape the rejection handler
     // below and surface as an error thrown from the effect, which is the one
     // failure this hook exists to turn into a message.
-    let entry = context.queries.get(key) as
-      | { promise: Promise<T>; consumers: number }
-      | undefined
+    let entry = context.queries.get(key) as QueryEntry<T> | undefined
+    if (entry?.expiresAt !== undefined && entry.expiresAt <= Date.now()) {
+      clearTimeout(entry.expiryTimer)
+      context.queries.delete(key)
+      entry = undefined
+    }
     if (!entry) {
       entry = {
         promise: Promise.resolve().then(() => latestRead.current(context.backend)),
         consumers: 0,
+        status: 'pending',
       }
       context.queries.set(key, entry)
+      const created = entry
+      created.promise.then(
+        () => {
+          created.status = 'fulfilled'
+          created.settledAt = Date.now()
+        },
+        () => {
+          created.status = 'rejected'
+          created.settledAt = Date.now()
+          if (context.queries.get(key) === created) context.queries.delete(key)
+        },
+      )
     }
+    clearTimeout(entry.expiryTimer)
+    entry.expiryTimer = undefined
+    entry.expiresAt = undefined
     entry.consumers += 1
 
     entry.promise
@@ -152,7 +207,17 @@ export function useBackendQuery<T>(
       const current = context.queries.get(key)
       if (current !== entry) return
       current.consumers -= 1
-      if (current.consumers === 0) context.queries.delete(key)
+      if (current.consumers !== 0) return
+      if (current.status !== 'fulfilled' || disposedProviders.has(context)) {
+        context.queries.delete(key)
+        return
+      }
+      current.expiresAt = Date.now() + RETAIN_COMPLETED_MS
+      current.expiryTimer = setTimeout(() => {
+        if (context.queries.get(key) === current && current.consumers === 0) {
+          context.queries.delete(key)
+        }
+      }, RETAIN_COMPLETED_MS)
     }
   }, [key, context, generation])
 

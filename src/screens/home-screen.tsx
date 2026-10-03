@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 import {
   Avatar,
   BellIcon,
+  ChevronDownIcon,
   Delta,
   Gutter,
   Pressable,
@@ -14,19 +15,26 @@ import {
   Text,
   Watermark,
   colors,
+  radius,
+  spacing,
 } from '../design-system'
+import { useBackendQuery } from '../backend/provider'
 import { directionOf, formatMoney, formatPercent } from '../data/format'
+import type { DetailedAccount, Profile } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
+import { MarketRow } from '../features/markets/market-row'
+import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView, UnavailableState } from '../features/shared/query-state'
+import { SectionHeader } from '../features/shared/section-header'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 import type { HomeStackParamList } from '../navigation/types'
 
 type Navigation = NativeStackNavigationProp<HomeStackParamList, 'Dashboard'>
 
-/** Home tab: greeting, portfolio summary, two stat tiles and the signal feed. */
+/** Home tab: greeting, linked-account portfolio and a live three-market overview. */
 export function HomeScreen() {
   const { navigate } = useNavigation<Navigation>()
-  const { openTab } = useAppNavigation()
   const accountData = useAccountData()
 
   if (accountData.status !== 'ready' || !accountData.data.account) {
@@ -35,9 +43,7 @@ export function HomeScreen() {
         <Gutter style={styles.state}>
           <QueryStateView
             state={accountData}
-            isEmpty={(data) => data.account === null}
-            emptyTitle="No trading account"
-            render={() => null}
+            render={(data) => <AccountSummaryUnavailable account={data.selectedAccount} />}
           />
         </Gutter>
       </Screen>
@@ -45,6 +51,30 @@ export function HomeScreen() {
   }
 
   const { account, profile } = accountData.data
+
+  return <HomeDashboard account={account} profile={profile} onNotifications={() => navigate('Notifications')} />
+}
+
+function HomeDashboard({
+  account,
+  profile,
+  onNotifications,
+}: {
+  account: DetailedAccount
+  profile: Profile
+  onNotifications: () => void
+}) {
+  const { openAccountSwitcher, openHomeScreen, openInstrument, openTab } = useAppNavigation()
+  const { catalogue } = useMarketData()
+  const markets = catalogue.status === 'ready' ? catalogue.data.slice(0, 3) : []
+  const marketIds = markets.map((item) => item.id)
+  const sparks = useBackendQuery(
+    `home-sparks:${account.id}:${marketIds.join(',') || 'none'}`,
+    (backend) => marketIds.length > 0
+      ? backend.markets.sparklines(marketIds, 'Today')
+      : Promise.resolve(new Map<string, readonly number[]>()),
+  )
+  const sparkById = sparks.status === 'ready' ? sparks.data : undefined
   const unread = 0
 
   return (
@@ -67,7 +97,8 @@ export function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
               hitSlop={8}
-              onPress={() => navigate('Notifications')}
+              style={styles.notificationButton}
+              onPress={onNotifications}
             >
               <BellIcon size={26} color={colors.text} />
               {unread > 0 ? <View style={styles.bellDot} /> : null}
@@ -84,13 +115,28 @@ export function HomeScreen() {
         </Gutter>
 
         <Gutter>
-          <PressableScale onPress={() => navigate('Balance')} scaleTo={0.985}>
-            <View style={styles.portfolio}>
-              <View style={styles.portfolioBand}>
-                <Text variant="strong">Your Portfolio</Text>
-                <Text variant="body">{account.asOf}</Text>
-              </View>
+          <View style={styles.portfolio}>
+            <View style={styles.portfolioBand}>
+              <Text variant="strong" color={colors.onInk}>Your Portfolio</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Switch account, ${account.mode} ${account.number}`}
+                onPress={openAccountSwitcher}
+                hitSlop={6}
+                style={styles.accountPill}
+              >
+                <Text variant="strong" style={styles.accountPillLabel}>
+                  {account.mode} · {account.number}
+                </Text>
+                <ChevronDownIcon size={16} color={colors.onInk} />
+              </Pressable>
+            </View>
 
+            <PressableScale
+              accessibilityLabel={`Open balance. Total equity ${formatMoney(account.equity)}. Change ${formatPercent(account.changePercent)}.`}
+              onPress={() => openHomeScreen('Balance')}
+              scaleTo={0.985}
+            >
               <View style={styles.portfolioBody}>
                 <Watermark size={150} right={-24} bottom={-30} />
                 <View style={styles.portfolioMeta}>
@@ -107,15 +153,45 @@ export function HomeScreen() {
                   {formatMoney(account.equity)}
                 </Text>
               </View>
-            </View>
-          </PressableScale>
+            </PressableScale>
+          </View>
         </Gutter>
 
-        <Gutter>
-          <UnavailableState
-            title="Trading signals unavailable"
-            message="No confirmed trading-signal endpoint is available for this account."
+        <Gutter style={styles.marketSection}>
+          <SectionHeader
+            title="Market overview"
+            action="See all"
+            onPressAction={() => openTab('Markets')}
           />
+          {catalogue.status === 'ready' && markets.length === 0 ? (
+            <UnavailableState
+              title="Markets unavailable"
+              message="No live markets are available for this account right now."
+            />
+          ) : catalogue.status !== 'ready' ? (
+            <QueryStateView state={catalogue} render={() => null} />
+          ) : (
+            <View style={styles.marketRows}>
+              {markets.map((item) => (
+                <MarketRow
+                  key={item.id}
+                  id={item.id}
+                  symbol={item.symbol}
+                  name={item.name}
+                  price={item.price}
+                  precision={item.precision}
+                  changePercent={item.changePercent}
+                  changeBase={item.dayOpen}
+                  iconKind={item.icon}
+                  iconLabel={item.iconLabel}
+                  iconTint={item.iconTint}
+                  spark={sparkById?.get(item.id) ?? item.spark}
+                  sparkTone={sparkById?.has(item.id) ? undefined : item.sparkTone}
+                  onPress={openInstrument}
+                />
+              ))}
+            </View>
+          )}
         </Gutter>
       </ScrollView>
     </Screen>
@@ -127,7 +203,7 @@ const styles = StyleSheet.create({
   content: {
     paddingTop: 12,
     paddingBottom: TAB_BAR_CLEARANCE,
-    gap: 18,
+    gap: spacing.xxl,
   },
   greetingRow: {
     flexDirection: 'row',
@@ -143,6 +219,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
+  notificationButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bellDot: {
     position: 'absolute',
     top: -1,
@@ -154,27 +236,40 @@ const styles = StyleSheet.create({
   },
 
   portfolio: {
-    borderRadius: 24,
+    borderRadius: radius.card,
     borderCurve: 'continuous',
     backgroundColor: colors.navy,
     overflow: 'hidden',
   },
-  // Rounded on all four corners: the bottom pair reveals the dark card behind.
   portfolioBand: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.gold,
-    borderRadius: 24,
-    borderCurve: 'continuous',
-    paddingHorizontal: 20,
-    paddingVertical: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.onInkDivider,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  accountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    minHeight: 44,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.onInkPanel,
+  },
+  accountPillLabel: {
+    color: colors.onInk,
+    fontSize: 13,
+    lineHeight: 17,
   },
   portfolioBody: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 22,
-    gap: 6,
+    padding: spacing.xl,
+    gap: spacing.sm,
   },
   portfolioMeta: {
     flexDirection: 'row',
@@ -182,59 +277,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
 
-  tiles: {
-    flexDirection: 'row',
-    gap: 12,
+  marketSection: {
+    gap: spacing.md,
   },
-  tile: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 20,
-    gap: 8,
-  },
-  tileLabel: {
-    fontSize: 15,
-  },
-  tileHeadline: {
-    fontSize: 21,
-  },
-  tileValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  tileFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  tileFine: {
-    fontSize: 13,
+  marketRows: {
+    gap: spacing.md,
   },
 
-  section: {
-    paddingTop: 2,
-  },
-  signal: {
-    padding: 18,
-    borderRadius: 20,
-    gap: 14,
-  },
-  signalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  signalIdentity: {
-    gap: 3,
-  },
-  signalHeadline: {
-    fontSize: 19,
-    lineHeight: 26,
-    color: colors.text,
-  },
-  signalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
 })
