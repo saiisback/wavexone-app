@@ -24,6 +24,7 @@ export { Watermark } from './watermark'
 export { ListGroup, ListRow, type ListRowProps } from './list-row'
 export { Field, QuickPicks, type FieldProps } from './field'
 export { Input } from './input'
+export { SearchField } from './search-field'
 export { Sheet } from './sheet'
 export {
   ActionMenuProvider,

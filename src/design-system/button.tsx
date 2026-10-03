@@ -77,7 +77,7 @@ const labelColor: Record<Tone, string> = {
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 52,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
@@ -95,5 +95,10 @@ const tones = StyleSheet.create({
   ink: { backgroundColor: colors.ink },
   gold: { backgroundColor: colors.gold },
   track: { backgroundColor: colors.track },
-  surface: { backgroundColor: colors.surface, boxShadow: shadow.card },
+  surface: {
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    boxShadow: shadow.card,
+  },
 })

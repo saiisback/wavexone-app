@@ -1,12 +1,13 @@
 import { StyleSheet, View } from 'react-native'
 
-import { ChevronDownIcon, Pressable, Text, colors } from '../../design-system'
+import { ChevronDownIcon, ChevronRightIcon, Pressable, Text, colors, fonts } from '../../design-system'
 
 export type SectionHeaderProps = {
   title: string
   /** Right-hand affordance: "See more", "This month ⌄". */
   action?: string
-  withChevron?: boolean
+  /** `down` opens a picker ("This month ⌄"); `right` goes to another screen. */
+  withChevron?: boolean | 'right'
   onPressAction?: () => void
 }
 
@@ -23,12 +24,17 @@ export function SectionHeader({
       {action ? (
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={`${action}, ${title}`}
           onPress={onPressAction}
           hitSlop={8}
           style={styles.action}
         >
           <Text style={styles.actionLabel}>{action}</Text>
-          {withChevron ? <ChevronDownIcon size={18} color={colors.text} /> : null}
+          {withChevron === 'right' ? (
+            <ChevronRightIcon size={16} color={colors.textMuted} />
+          ) : withChevron ? (
+            <ChevronDownIcon size={18} color={colors.text} />
+          ) : null}
         </Pressable>
       ) : null}
     </View>
@@ -44,10 +50,12 @@ const styles = StyleSheet.create({
   action: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
+    minHeight: 44,
   },
   actionLabel: {
-    fontSize: 16,
-    color: colors.text,
+    fontFamily: fonts.medium,
+    fontSize: 14,
+    color: colors.textMuted,
   },
 })

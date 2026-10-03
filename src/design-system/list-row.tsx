@@ -103,8 +103,8 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   label: {
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 21,
     color: colors.text,
   },
   destructive: {

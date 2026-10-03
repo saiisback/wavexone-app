@@ -10,6 +10,7 @@ import {
   Text,
   WithdrawIcon,
   colors,
+  radius,
   type AssetIconKind,
 } from '../../design-system'
 import { formatSignedMoney } from '../../data/format'
@@ -127,7 +128,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 14,
     paddingHorizontal: 12,
-    borderRadius: 18,
+    borderRadius: radius.card,
   },
   icon: {
     width: 30,

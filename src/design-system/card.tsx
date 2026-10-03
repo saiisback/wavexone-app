@@ -29,6 +29,8 @@ const styles = StyleSheet.create({
 const tones = StyleSheet.create({
   surface: {
     backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     boxShadow: shadow.card,
   },
   ink: {

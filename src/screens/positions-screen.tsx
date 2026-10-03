@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import {
+  Button,
+  ButtonText,
+  Card,
   ChevronDownIcon,
   Gutter,
   Pressable,
@@ -40,13 +43,32 @@ const ACTION_LABEL: Record<Tab, string> = {
   Closed: 'View details',
 }
 
+/** Shorter copy for the half-width card button; menus keep `ACTION_LABEL`. */
+const CARD_ACTION_LABEL: Record<Tab, string> = {
+  Open: 'Close',
+  Pending: 'Cancel',
+  Closed: 'Details',
+}
+
+const EMPTY_TITLE: Record<Tab, string> = {
+  Open: 'No open positions',
+  Pending: 'No pending orders',
+  Closed: 'No closed trades yet',
+}
+
+const EMPTY_MESSAGE: Record<Tab, string> = {
+  Open: 'Positions you open on this account appear here with their live P&L.',
+  Pending: 'Limit orders waiting for their price appear here until they fill.',
+  Closed: 'Trades you close on this account appear here with their result.',
+}
+
 /** Positions tab: floating P&L, state filter, and the position cards. */
 export function PositionsScreen() {
   const [tab, setTab] = useState<Tab>('Open')
   const showMenu = useActionMenu()
   const backend = useBackend()
   const invalidate = useInvalidateQueries()
-  const { openInstrument, openAccountSwitcher, openModifyOrder } = useAppNavigation()
+  const { openInstrument, openAccountSwitcher, openModifyOrder, openTab } = useAppNavigation()
 
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
@@ -163,9 +185,13 @@ export function PositionsScreen() {
         instrument={instrument}
         streamed={instrumentsById.has(item.instrumentId)}
         actionLabel={
-          item.executing ? 'Executing…' : item.busy ? 'Closing…' : ACTION_LABEL[tab]
+          item.executing ? 'Executing…' : item.busy ? 'Closing…' : CARD_ACTION_LABEL[tab]
         }
+        entryLabel={tab === 'Pending' ? 'Order price' : 'Open'}
+        currentLabel={tab === 'Closed' ? 'Closed at' : 'Current'}
         onAction={confirmAction}
+        // A closed trade has nothing left to modify, nor does one in flight.
+        onModify={tab === 'Closed' || item.executing || item.busy ? undefined : openModifyOrder}
         onMenu={openRowMenu}
         onPress={() => openInstrument(item.instrumentId)}
       />
@@ -186,17 +212,17 @@ export function PositionsScreen() {
           onPress={openAccountSwitcher}
           style={styles.accountPill}
         >
-          <Text variant="body">
+          <Text variant="caption" weight="semibold">
             {account.mode} · {account.number}
           </Text>
-          <ChevronDownIcon size={20} color={colors.text} />
+          <ChevronDownIcon size={16} color={colors.text} />
         </Pressable>
       </Gutter>
 
       <Gutter>
         <View style={styles.summary}>
           <Watermark size={150} right={-26} bottom={-26} />
-          <Text variant="body" color={colors.onInk} style={styles.summaryLabel}>
+          <Text variant="caption" weight="medium" color={colors.onInkMuted}>
             Floating P&amp;L
           </Text>
           <FloatingPnl
@@ -204,7 +230,7 @@ export function PositionsScreen() {
             instrumentsById={instrumentsById}
             fallback={account.floatingPnl}
           />
-          <Text variant="body" color={colors.onInkMuted}>
+          <Text variant="caption" color={colors.onInkMuted}>
             {liveOpen ? liveOpen.length : openCount} open{' '}
             {(liveOpen ? liveOpen.length : openCount) === 1 ? 'position' : 'positions'}
           </Text>
@@ -225,11 +251,17 @@ export function PositionsScreen() {
         ListEmptyComponent={positionState.status !== 'ready' ? (
           <QueryStateView state={positionState} render={() => null} />
         ) : (
-          <View style={styles.empty}>
-            <Text variant="body" color={colors.textMuted}>
-              No {tab.toLowerCase()} positions on this account.
+          <Card style={styles.empty}>
+            <Text variant="strong">{EMPTY_TITLE[tab]}</Text>
+            <Text variant="caption" color={colors.textMuted} style={styles.emptyMessage}>
+              {EMPTY_MESSAGE[tab]}
             </Text>
-          </View>
+            {tab === 'Closed' ? null : (
+              <Button tone="track" onPress={() => openTab('Markets')} style={styles.emptyAction}>
+                <ButtonText tone="track">Explore markets</ButtonText>
+              </Button>
+            )}
+          </Card>
         )}
       />
     </Screen>
@@ -268,7 +300,10 @@ function LivePositionCard({
   instrument,
   streamed,
   actionLabel,
+  entryLabel,
+  currentLabel,
   onAction,
+  onModify,
   onMenu,
   onPress,
 }: {
@@ -277,7 +312,10 @@ function LivePositionCard({
   /** False for a stand-in instrument, whose lot size is unknown. */
   streamed: boolean
   actionLabel: string
+  entryLabel: string
+  currentLabel: string
   onAction: (id: string) => void
+  onModify?: (id: string) => void
   onMenu: (id: string) => void
   onPress: () => void
 }) {
@@ -298,8 +336,11 @@ function LivePositionCard({
       current={marked.current}
       precision={instrument.precision}
       pnl={marked.pnl}
+      entryLabel={entryLabel}
+      currentLabel={currentLabel}
       actionLabel={actionLabel}
       onAction={onAction}
+      onModify={onModify}
       onMenu={onMenu}
       onPress={onPress}
     />
@@ -353,33 +394,29 @@ const styles = StyleSheet.create({
   accountPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    height: 46,
-    paddingLeft: 18,
-    paddingRight: 14,
+    gap: 6,
+    height: 44,
+    paddingLeft: 14,
+    paddingRight: 10,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
 
   summary: {
     backgroundColor: colors.ink,
-    borderRadius: 24,
+    borderRadius: radius.card,
     borderCurve: 'continuous',
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingVertical: 18,
     overflow: 'hidden',
   },
-  summaryLabel: {
-    fontSize: 17,
-  },
   summaryValue: {
-    marginTop: 6,
-    marginBottom: 6,
-    fontSize: 38,
-    lineHeight: 46,
+    marginTop: 4,
+    marginBottom: 2,
+    fontVariant: ['tabular-nums'],
   },
 
   tabs: {
@@ -391,11 +428,17 @@ const styles = StyleSheet.create({
     paddingBottom: TAB_BAR_CLEARANCE,
   },
   separator: {
-    height: 14,
+    height: 12,
   },
   empty: {
-    paddingTop: 40,
-    paddingHorizontal: 24,
     alignItems: 'center',
+    gap: 4,
+  },
+  emptyMessage: {
+    textAlign: 'center',
+  },
+  emptyAction: {
+    marginTop: 12,
+    alignSelf: 'stretch',
   },
 })

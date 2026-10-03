@@ -4,7 +4,6 @@ import {
   AssetIcon,
   Button,
   ButtonSubText,
-  ButtonText,
   Card,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -13,12 +12,14 @@ import {
   Gutter,
   Pressable,
   PressableScale,
+  SCREEN_PADDING,
   Screen,
   SegmentedControl,
   TAB_BAR_CLEARANCE,
   Text,
   colors,
   radius,
+  spacing,
   useActionMenu,
 } from '../design-system'
 import { directionOf, formatLots, formatMoney, formatPercent, formatPrice } from '../data/format'
@@ -96,6 +97,8 @@ export function TradeScreen() {
         })
       : openOrderTicket(instrument.id, side, { lots, orderType })
 
+  const direction = directionOf(instrument.changePercent)
+
   return (
     <Screen>
       <Gutter style={styles.titleRow}>
@@ -106,10 +109,10 @@ export function TradeScreen() {
           onPress={openAccountSwitcher}
           style={styles.accountPill}
         >
-          <Text variant="body">
+          <Text variant="caption" weight="semibold">
             {account.mode} · {account.number}
           </Text>
-          <ChevronDownIcon size={18} color={colors.text} />
+          <ChevronDownIcon size={16} color={colors.text} />
         </Pressable>
       </Gutter>
 
@@ -123,34 +126,40 @@ export function TradeScreen() {
             scaleTo={0.99}
             onPress={openInstrumentPicker}
             onLongPress={() => openInstrument(instrument.id)}
+            accessibilityLabel={`${instrument.symbol}, ${formatPrice(instrument.price, instrument.precision)}, ${formatPercent(instrument.changePercent)}. Change market`}
           >
-            <Card style={styles.instrument}>
-              <AssetIcon
-                kind={instrument.icon}
-                label={instrument.iconLabel}
-                tint={instrument.iconTint}
-                symbol={instrument.symbol}
-                category={instrument.category}
-                size={42}
-              />
-              <View style={styles.instrumentIdentity}>
-                <Text variant="strong" numberOfLines={1}>
-                  {instrument.symbol}
-                </Text>
-                <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
-                  {instrument.description}
-                </Text>
-              </View>
-              <View style={styles.instrumentQuote}>
-                <Text variant="strong">{formatPrice(instrument.price, instrument.precision)}</Text>
-                <Delta
-                  label={formatPercent(instrument.changePercent)}
-                  direction={directionOf(instrument.changePercent)}
-                  size={15}
+            <View style={styles.hero}>
+              <View style={styles.heroIdentity}>
+                <AssetIcon
+                  kind={instrument.icon}
+                  label={instrument.iconLabel}
+                  tint={instrument.iconTint}
+                  symbol={instrument.symbol}
+                  category={instrument.category}
+                  size={32}
                 />
+                <View style={styles.instrumentIdentity}>
+                  <Text variant="strong" numberOfLines={1}>
+                    {instrument.symbol}
+                  </Text>
+                  <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+                    {instrument.description}
+                  </Text>
+                </View>
+                <View style={styles.changeMarket}>
+                  <Text variant="caption" weight="medium" color={colors.textMuted}>
+                    Change
+                  </Text>
+                  <ChevronRightIcon size={16} color={colors.textMuted} />
+                </View>
               </View>
-              <ChevronRightIcon size={20} color={colors.textSubtle} />
-            </Card>
+              <View style={styles.heroQuote}>
+                <Text variant="display" style={styles.heroPrice}>
+                  {formatPrice(instrument.price, instrument.precision)}
+                </Text>
+                <Delta label={formatPercent(instrument.changePercent)} direction={direction} size={15} />
+              </View>
+            </View>
           </PressableScale>
         </Gutter>
 
@@ -160,8 +169,8 @@ export function TradeScreen() {
 
         <Gutter>
           <Card style={styles.volume}>
-            <Text variant="body" color={colors.textMuted}>
-              Volume
+            <Text variant="caption" weight="medium" color={colors.textMuted}>
+              Quantity
             </Text>
             <View style={styles.stepper}>
               <Stepper
@@ -182,42 +191,61 @@ export function TradeScreen() {
         </Gutter>
 
         <Gutter>
-          <Card style={styles.summary}>
-            <SummaryRow
-              label="Required margin"
-              value={margin === null ? 'Unavailable' : formatMoney(margin)}
-            />
-            <Divider />
-            <SummaryRow label="Free margin" value={formatMoney(account.freeMargin)} />
-            <Divider />
-            <SummaryRow label="Spread" value={formatPrice(spread, instrument.precision)} />
-            <Divider />
-            <SummaryRow
-              label="Contract size"
-              value={`${instrument.contractSize.toLocaleString('en-US')} / lot`}
-            />
-            <Divider />
-            <SummaryRow
-              label="Leverage"
-              value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
-            />
+          <Card style={styles.protection}>
+            <View style={styles.protectionText}>
+              <Text variant="body" weight="medium">
+                Stop loss · Take profit
+              </Text>
+              <Text variant="caption" color={colors.textMuted}>
+                Optional. Set them on the confirmation step.
+              </Text>
+            </View>
           </Card>
         </Gutter>
 
         <Gutter>
-          <Text variant="caption" color={colors.textMuted} style={styles.disclaimer}>
+          <Card style={styles.summary}>
+            <View style={styles.summaryGrid}>
+              <SummaryCell
+                label="Required margin"
+                value={margin === null ? 'Unavailable' : formatMoney(margin)}
+              />
+              <SummaryCell label="Free margin" value={formatMoney(account.freeMargin)} />
+              <SummaryCell label="Spread" value={formatPrice(spread, instrument.precision)} />
+              <SummaryCell
+                label="Leverage"
+                value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
+              />
+            </View>
+            <Divider />
+            <View style={styles.summaryFooter}>
+              <Text variant="caption" color={colors.textMuted}>
+                Contract size
+              </Text>
+              <Text variant="caption" weight="semibold">
+                {`${instrument.contractSize.toLocaleString('en-US')} / lot`}
+              </Text>
+            </View>
+          </Card>
+        </Gutter>
+
+        <Gutter>
+          <Text variant="caption" color={colors.textSubtle} style={styles.disclaimer}>
             Every order passes through a confirmation step before it reaches the trading API.
           </Text>
         </Gutter>
       </ScrollView>
 
-      <Gutter style={styles.actions}>
+      <View style={styles.actionBar}>
         <Button
           tone="ink"
           style={styles.action}
           onPress={() => openTicket('Sell')}
+          accessibilityLabel={`Sell at ${formatPrice(instrument.bid, instrument.precision)}`}
         >
-          <ButtonText tone="ink">Sell</ButtonText>
+          <Text variant="caption" weight="semibold" color={colors.onInkMuted} style={styles.actionLabel}>
+            SELL
+          </Text>
           <ButtonSubText tone="ink">
             {formatPrice(instrument.bid, instrument.precision)}
           </ButtonSubText>
@@ -226,13 +254,16 @@ export function TradeScreen() {
           tone="gold"
           style={styles.action}
           onPress={() => openTicket('Buy')}
+          accessibilityLabel={`Buy at ${formatPrice(instrument.ask, instrument.precision)}`}
         >
-          <ButtonText tone="gold">Buy</ButtonText>
+          <Text variant="caption" weight="semibold" color={colors.ink} style={styles.actionLabel}>
+            BUY
+          </Text>
           <ButtonSubText tone="gold">
             {formatPrice(instrument.ask, instrument.precision)}
           </ButtonSubText>
         </Button>
-      </Gutter>
+      </View>
     </Screen>
   )
 }
@@ -258,13 +289,15 @@ function Stepper({
   )
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryCell({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.summaryRow}>
-      <Text variant="body" color={colors.textMuted}>
+    <View style={styles.summaryCell}>
+      <Text variant="caption" color={colors.textMuted}>
         {label}
       </Text>
-      <Text variant="strong">{value}</Text>
+      <Text variant="strong" numberOfLines={1} style={styles.summaryValue}>
+        {value}
+      </Text>
     </View>
   )
 }
@@ -276,44 +309,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   accountPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     height: 44,
-    paddingLeft: 16,
-    paddingRight: 12,
+    paddingLeft: 14,
+    paddingRight: 10,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   content: {
-    paddingBottom: 20,
-    gap: 14,
+    paddingBottom: spacing.xl,
+    gap: spacing.lg,
   },
-  instrument: {
+  hero: {
+    gap: spacing.md,
+    paddingTop: spacing.xs,
+  },
+  heroIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    padding: 14,
-    borderRadius: 20,
   },
   instrumentIdentity: {
     flex: 1,
-    gap: 3,
+    gap: 1,
   },
-  instrumentQuote: {
-    alignItems: 'flex-end',
-    gap: 5,
+  changeMarket: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    minHeight: 44,
+  },
+  heroQuote: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    columnGap: spacing.md,
+  },
+  heroPrice: {
+    fontVariant: ['tabular-nums'],
   },
   volume: {
-    padding: 16,
-    borderRadius: 20,
-    gap: 12,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   stepper: {
     flexDirection: 'row',
@@ -321,9 +366,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   stepperButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderCurve: 'continuous',
     backgroundColor: colors.track,
     alignItems: 'center',
@@ -331,26 +376,54 @@ const styles = StyleSheet.create({
   },
   lots: {
     fontSize: 24,
+    fontVariant: ['tabular-nums'],
+  },
+  protection: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  protectionText: {
+    gap: 2,
   },
   summary: {
-    padding: 16,
-    borderRadius: 20,
-    gap: 12,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
-  summaryRow: {
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: spacing.md,
+  },
+  summaryCell: {
+    width: '50%',
+    gap: 2,
+  },
+  summaryValue: {
+    fontVariant: ['tabular-nums'],
+  },
+  summaryFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   disclaimer: {
-    lineHeight: 20,
+    lineHeight: 18,
+    textAlign: 'center',
   },
-  actions: {
+  actionBar: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
+    paddingHorizontal: SCREEN_PADDING,
+    paddingTop: spacing.md,
     paddingBottom: TAB_BAR_CLEARANCE - 36,
+    backgroundColor: colors.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
   },
   action: {
     flex: 1,
+  },
+  actionLabel: {
+    letterSpacing: 1,
   },
 })

@@ -9,21 +9,20 @@ import {
   SwapIcon,
   CircleAction,
   Gutter,
-  Input,
   Logo,
   SCREEN_PADDING,
   Screen,
-  SearchIcon,
+  SearchField,
   TAB_BAR_CLEARANCE,
   Text,
   Watermark,
   colors,
-  fonts,
   radius,
   spacing,
   useActionMenu,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
+import { MarketGroupCell, MarketGroupSeparator } from '../features/markets/market-group'
 import { MarketRow } from '../features/markets/market-row'
 import { useMarketData } from '../features/markets/use-market-data'
 import { SectionHeader } from '../features/shared/section-header'
@@ -65,26 +64,30 @@ export function BalanceScreen() {
       )
     : catalogue
 
-  const renderItem = ({ item }: { item: Instrument }) => {
+  const renderItem = ({ item, index }: { item: Instrument; index: number }) => {
     const spark = sparkById?.get(item.id)
     // "Today" measures from the day's open; longer periods from their first close.
     const changeBase = period === 'Today' || !spark ? item.dayOpen : spark[0]
     return (
-      <MarketRow
-        id={item.id}
-        symbol={item.symbol}
-        name={item.name}
-        price={item.price}
-        precision={item.precision}
-        changePercent={item.changePercent}
-        changeBase={changeBase}
-        iconKind={item.icon}
-        iconLabel={item.iconLabel}
-        iconTint={item.iconTint}
-        spark={spark ?? item.spark}
-        sparkTone={spark ? undefined : item.sparkTone}
-        onPress={openInstrument}
-      />
+      <MarketGroupCell index={index} count={rows.length}>
+        <MarketRow
+          layout="row"
+          id={item.id}
+          symbol={item.symbol}
+          name={item.name}
+          price={item.price}
+          precision={item.precision}
+          changePercent={item.changePercent}
+          changeBase={changeBase}
+          iconKind={item.icon}
+          iconLabel={item.iconLabel}
+          iconTint={item.iconTint}
+          category={item.category}
+          spark={spark ?? item.spark}
+          sparkTone={spark ? undefined : item.sparkTone}
+          onPress={openInstrument}
+        />
+      </MarketGroupCell>
     )
   }
 
@@ -94,9 +97,9 @@ export function BalanceScreen() {
         data={rows}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        extraData={sparkById}
+        extraData={[sparkById, rows.length]}
         ListHeaderComponent={<BalanceHeader query={query} onChangeQuery={setQuery} />}
-        ItemSeparatorComponent={Separator}
+        ItemSeparatorComponent={MarketGroupSeparator}
         ListEmptyComponent={
           markets.status === 'ready' && markets.data.length > 0 ? (
             <Empty />
@@ -176,19 +179,7 @@ function BalanceHeader({
       ) : null}
 
       <Gutter style={styles.search}>
-        <View style={styles.searchField}>
-          <SearchIcon size={22} color={colors.text} />
-          <Input
-            value={query}
-            onChangeText={onChangeQuery}
-            placeholder="Search markets"
-            accessibilityLabel="Search markets"
-            placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-        </View>
+        <SearchField value={query} onChangeText={onChangeQuery} />
       </Gutter>
 
       <Gutter style={styles.sectionHeader}>
@@ -204,7 +195,6 @@ function BalanceHeader({
 }
 
 const keyExtractor = (item: Instrument) => item.id
-const Separator = () => <View style={styles.separator} />
 
 const Empty = () => (
   <View style={styles.empty}>
@@ -218,9 +208,6 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: SCREEN_PADDING,
     paddingBottom: TAB_BAR_CLEARANCE,
-  },
-  separator: {
-    height: spacing.md,
   },
   header: {
     // Cancels the list's gutter so the dark panel can bleed edge to edge.
@@ -261,24 +248,6 @@ const styles = StyleSheet.create({
 
   search: {
     marginTop: spacing.xl,
-  },
-  searchField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    height: 56,
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.xl,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: 17,
-    color: colors.text,
-    // Keeps the caret on the same baseline across platforms.
-    padding: 0,
   },
 
   sectionHeader: {

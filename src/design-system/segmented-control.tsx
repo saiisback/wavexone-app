@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 
 import { colors } from './colors'
 import { Text } from './text'
-import { fonts, radius } from './tokens'
+import { fonts, radius, shadow } from './tokens'
 
 export type SegmentedControlProps<T extends string> = {
   options: readonly T[]
@@ -11,7 +11,8 @@ export type SegmentedControlProps<T extends string> = {
 }
 
 /**
- * Navy segmented control used on Positions and Activity.
+ * Segmented control used on Positions, Activity and Trade: a raised white
+ * pill on the quiet track, so selection reads without another navy block.
  *
  * The mockups draw a hairline between neighbouring *inactive* segments only —
  * the selected pill swallows the separators on either side of it.
@@ -74,15 +75,16 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
   },
   segmentSelected: {
-    backgroundColor: colors.navy,
+    backgroundColor: colors.surface,
+    boxShadow: shadow.raised,
   },
   label: {
-    fontFamily: fonts.regular,
-    fontSize: 16,
-    color: colors.text,
+    fontFamily: fonts.medium,
+    fontSize: 15,
+    color: colors.textMuted,
   },
   labelSelected: {
-    fontFamily: fonts.bold,
-    color: colors.onInk,
+    fontFamily: fonts.semibold,
+    color: colors.text,
   },
 })

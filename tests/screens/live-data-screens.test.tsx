@@ -7,8 +7,9 @@ import { BackendProvider, useInvalidateQueries } from '../../src/backend/provide
 import { useSession } from '../../src/data/store'
 import { Button, Field, ListRow, QuickPicks, colors } from '../../src/design-system'
 import type { ActionMenuRequest } from '../../src/design-system/action-menu'
-import type { Account, Instrument, Profile } from '../../src/data/types'
+import type { Account, Instrument, Position, Profile } from '../../src/data/types'
 import { MarketRow } from '../../src/features/markets/market-row'
+import { PositionRow } from '../../src/features/positions/position-row'
 import { HomeScreen } from '../../src/screens/home-screen'
 import { FundingScreen } from '../../src/screens/funding-screen'
 import { AccountSwitcherScreen } from '../../src/screens/account-switcher-screen'
@@ -120,11 +121,15 @@ afterEach(() => {
 function backendWith(
   list: () => Promise<readonly Account[]>,
   readProfile: () => Promise<Profile> = async () => profile,
+  positions: readonly Position[] = [],
 ): WaveXBackend {
   return {
     accounts: {
       list,
       profile: readProfile,
+    },
+    orders: {
+      list: async () => positions,
     },
     markets: {
       catalogue: async () => markets,
@@ -252,16 +257,19 @@ describe('account-facing live screen states', () => {
     await flush()
     expect(renderedText(tree)).toContain('Example')
     expect(renderedText(tree)).toContain('1,275.25')
-    expect(renderedText(tree)).toContain('Market overview')
+    expect(renderedText(tree)).toContain('Watchlist')
     expect(renderedText(tree)).toContain('BTC/USD')
     expect(renderedText(tree)).toContain('AUD/CAD')
     expect(renderedText(tree)).toContain('XAU/USD')
     expect(renderedText(tree)).not.toContain('Trading signals')
+    // No favourites yet: the leading markets stand in.
     expect(tree.root.findAllByType(MarketRow).map((row) => row.props.id)).toEqual([
       'xauusd',
       'audcad',
       'btcusd',
+      'eurusd',
     ])
+    expect(renderedText(tree)).toContain('Star a market on the Markets tab to pin it here.')
 
     const switchAccount = tree.root.findByProps({ accessibilityLabel: 'Switch account, LIVE 10001' })
     for (let parent = switchAccount.parent; parent; parent = parent.parent) {
@@ -272,6 +280,75 @@ describe('account-facing live screen states', () => {
       switchAccount.props.onPress()
     })
     expect(mockOpenAccountSwitcher).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('home dashboard', () => {
+  const position = (id: string, instrumentId: string, side: 'Buy' | 'Sell', pnl: number): Position => ({
+    id, instrumentId, side, lots: 0.5, entry: 99, current: 100, pnl, state: 'Open',
+  })
+
+  it('labels the portfolio change as open P&L in money and percent', async () => {
+    useSession.setState({ accountId: account.id })
+    const tree = renderHome(backendWith(async () => [account]))
+    await flush()
+    await flush()
+    const text = renderedText(tree)
+    expect(text).toContain('Open P&L')
+    expect(text).toContain('+$24.75 (+1.98%)')
+  })
+
+  it('offers deposit, withdraw and transfer as quick actions', async () => {
+    useSession.setState({ accountId: account.id })
+    const tree = renderHome(backendWith(async () => [account]))
+    await flush()
+    await flush()
+    for (const label of ['Deposit', 'Withdraw', 'Transfer']) {
+      const action = tree.root.find((node) =>
+        node.props.delayLongPress !== undefined && node.props.accessibilityLabel === label,
+      )
+      expect(action.props.accessibilityRole).toBe('button')
+    }
+  })
+
+  it('pins favourites to the watchlist ahead of the other markets', async () => {
+    const backend = backendWith(async () => [account])
+    backend.markets.favorites = async () => ['eurusd', 'btcusd']
+    useSession.setState({ accountId: account.id })
+    const tree = renderHome(backend)
+    await flush()
+    await flush()
+    await flush()
+    expect(tree.root.findAllByType(MarketRow).map((row) => row.props.id)).toEqual(['btcusd', 'eurusd'])
+    expect(renderedText(tree)).not.toContain('Star a market')
+  })
+
+  it('summarises at most three open positions and counts the rest', async () => {
+    useSession.setState({ accountId: account.id })
+    const positions = [
+      position('p1', 'xauusd', 'Buy', 320),
+      position('p2', 'audcad', 'Sell', -137.3),
+      position('p3', 'btcusd', 'Buy', 12),
+      position('p4', 'eurusd', 'Buy', 4),
+      { ...position('p5', 'eurusd', 'Buy', 0), state: 'Pending' as const },
+    ]
+    const tree = renderHome(backendWith(async () => [account], undefined, positions))
+    await flush()
+    await flush()
+    expect(tree.root.findAllByType(PositionRow).map((row) => row.props.position.id)).toEqual(['p1', 'p2', 'p3'])
+    const text = renderedText(tree)
+    expect(text).toContain('+$320.00')
+    expect(text).toContain('-$137.30')
+    expect(text).toContain('1 more open')
+  })
+
+  it('invites the trader to explore markets when nothing is open', async () => {
+    useSession.setState({ accountId: account.id })
+    const tree = renderHome(backendWith(async () => [account]))
+    await flush()
+    await flush()
+    expect(renderedText(tree)).toContain('No open positions')
+    expect(renderedText(tree)).toContain('Explore markets')
   })
 })
 

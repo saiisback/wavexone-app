@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useDerivedValue } from 'react-native-reanim
 import { Stop } from 'react-native-svg'
 import { AnimatedText, LineChart } from 'react-native-wagmi-charts'
 
-import { Card, Text, colors, fonts } from '../../design-system'
+import { Card, Text, colors, fonts, radius } from '../../design-system'
 import { formatPrice } from '../../data/format'
 import type { ChartSeries } from '../../data/types'
 import { formatPercentWorklet, formatPriceWorklet, formatStampWorklet } from './worklet-format'
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
     paddingHorizontal: 14,
-    borderRadius: 24,
+    borderRadius: radius.card,
   },
   plotRow: {
     flex: 1,

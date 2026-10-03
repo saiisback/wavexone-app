@@ -14,6 +14,7 @@ import {
   Sheet,
   Text,
   colors,
+  radius,
   useActionMenu,
 } from '../design-system'
 import type { ModifyOrderRequest } from '../backend/contract'
@@ -242,7 +243,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 14,
-    borderRadius: 18,
+    borderRadius: radius.card,
   },
   identity: {
     flex: 1,
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
   },
   summary: {
     padding: 16,
-    borderRadius: 18,
+    borderRadius: radius.card,
     gap: 12,
   },
   summaryRow: {

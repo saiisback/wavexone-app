@@ -23,15 +23,15 @@ const labelColor: Record<BadgeTone, string> = {
 
 const styles = StyleSheet.create({
   base: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: radius.sm,
     borderCurve: 'continuous',
   },
   label: {
     fontFamily: fonts.semibold,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
   },
 })
 

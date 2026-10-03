@@ -6,14 +6,11 @@ import {
   AssetIcon,
   Delta,
   Divider,
-  Input,
   Pressable,
-  SearchIcon,
+  SearchField,
   Sheet,
   Text,
   colors,
-  fonts,
-  radius,
 } from '../design-system'
 import { directionOf, formatPercent, formatPrice } from '../data/format'
 import { applyQuote } from '../data/live-quote'
@@ -49,18 +46,7 @@ export function InstrumentPickerScreen() {
       {catalogue.status !== 'ready' ? (
         <QueryStateView state={catalogue} render={() => null} />
       ) : null}
-      <View style={styles.searchField}>
-        <SearchIcon size={20} color={colors.text} />
-        <Input
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search markets"
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-          autoCorrect={false}
-          returnKeyType="search"
-        />
-      </View>
+      <SearchField value={query} onChangeText={setQuery} />
 
       {rows.length === 0 ? (
         <Text variant="body" color={colors.textMuted} style={styles.empty}>
@@ -117,25 +103,6 @@ function PickerQuote({ instrument }: { instrument: Instrument }) {
 }
 
 const styles = StyleSheet.create({
-  searchField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    height: 50,
-    borderRadius: radius.pill,
-    borderCurve: 'continuous',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: 16,
-    color: colors.text,
-    padding: 0,
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

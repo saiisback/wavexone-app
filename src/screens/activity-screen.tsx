@@ -14,6 +14,7 @@ import {
   VerticalDivider,
   Watermark,
   colors,
+  radius,
   useActionMenu,
 } from '../design-system'
 import { ActivityRow } from '../features/activity/activity-row'
@@ -298,7 +299,7 @@ const styles = StyleSheet.create({
   loading: { paddingTop: 32 },
   summary: {
     backgroundColor: colors.ink,
-    borderRadius: 24,
+    borderRadius: radius.card,
     borderCurve: 'continuous',
     padding: 20,
     overflow: 'hidden',

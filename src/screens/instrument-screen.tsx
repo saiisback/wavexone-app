@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
 
   quote: {
     backgroundColor: colors.ink,
-    borderRadius: 24,
+    borderRadius: radius.card,
     borderCurve: 'continuous',
     paddingHorizontal: 18,
     paddingTop: 16,
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
 
   range: {
     flexDirection: 'row',
-    borderRadius: 20,
+    borderRadius: radius.card,
     paddingVertical: 12,
   },
   rangeCell: {

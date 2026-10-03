@@ -98,7 +98,6 @@ const styles = StyleSheet.create({
     width: MOVER_CARD_WIDTH,
     padding: 14,
     gap: 10,
-    borderRadius: 22,
   },
   top: {
     flexDirection: 'row',

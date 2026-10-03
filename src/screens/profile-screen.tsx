@@ -12,6 +12,7 @@ import {
   Text,
   VerifiedIcon,
   colors,
+  radius,
   useActionMenu,
 } from '../design-system'
 import { ScreenHeader } from '../features/shared/screen-header'
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     padding: 16,
-    borderRadius: 20,
+    borderRadius: radius.card,
   },
   name: {
     flex: 1,

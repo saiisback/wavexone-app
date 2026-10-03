@@ -4,21 +4,20 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 
 import {
   Gutter,
-  Input,
   Pressable,
   SCREEN_PADDING,
   Screen,
-  SearchIcon,
+  SearchField,
   StarIcon,
   TAB_BAR_CLEARANCE,
   Text,
   colors,
   fonts,
   radius,
-  shadow,
   useActionMenu,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
+import { MarketGroupCell, MarketGroupSeparator } from '../features/markets/market-group'
 import { MarketRow } from '../features/markets/market-row'
 import { MoverCard } from '../features/markets/mover-card'
 import { useSession } from '../data/store'
@@ -116,25 +115,28 @@ export function MarketsScreen() {
     })
   }
 
-  const renderItem = ({ item }: { item: Instrument }) => (
-    <MarketRow
-      id={item.id}
-      symbol={item.symbol}
-      name={item.name}
-      price={item.price}
-      precision={item.precision}
-      changePercent={item.changePercent}
-      changeBase={item.dayOpen}
-      iconKind={item.icon}
-      iconLabel={item.iconLabel}
-      iconTint={item.iconTint}
-      category={item.category}
-      spark={sparkById?.get(item.id) ?? item.spark}
-      sparkTone={sparkById?.has(item.id) ? undefined : item.sparkTone}
-      onPress={openInstrument}
-      onLongPress={openRowMenu}
-      showFavorite
-    />
+  const renderItem = ({ item, index }: { item: Instrument; index: number }) => (
+    <MarketGroupCell index={index} count={rows.length}>
+      <MarketRow
+        layout="row"
+        id={item.id}
+        symbol={item.symbol}
+        name={item.name}
+        price={item.price}
+        precision={item.precision}
+        changePercent={item.changePercent}
+        changeBase={item.dayOpen}
+        iconKind={item.icon}
+        iconLabel={item.iconLabel}
+        iconTint={item.iconTint}
+        category={item.category}
+        spark={sparkById?.get(item.id) ?? item.spark}
+        sparkTone={sparkById?.has(item.id) ? undefined : item.sparkTone}
+        onPress={openInstrument}
+        onLongPress={openRowMenu}
+        showFavorite
+      />
+    </MarketGroupCell>
   )
 
   return (
@@ -166,18 +168,7 @@ export function MarketsScreen() {
       </Gutter>
 
       <Gutter style={styles.search}>
-        <View style={styles.searchField}>
-          <SearchIcon size={22} color={colors.text} />
-          <Input
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search markets"
-            placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-        </View>
+        <SearchField value={query} onChangeText={setQuery} />
       </Gutter>
 
       <ScrollView
@@ -209,8 +200,8 @@ export function MarketsScreen() {
         data={rows}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        extraData={sparkById}
-        ItemSeparatorComponent={Separator}
+        extraData={[sparkById, rows.length]}
+        ItemSeparatorComponent={MarketGroupSeparator}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -274,7 +265,6 @@ export function MarketsScreen() {
 }
 
 const keyExtractor = (item: Instrument) => item.id
-const Separator = () => <View style={styles.separator} />
 
 const Empty = () => (
   <View style={styles.empty}>
@@ -320,37 +310,19 @@ const styles = StyleSheet.create({
   search: {
     marginTop: 16,
   },
-  searchField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    height: 52,
-    borderRadius: 26,
-    borderCurve: 'continuous',
-    backgroundColor: colors.surface,
-    boxShadow: shadow.card,
-    paddingHorizontal: 18,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: 17,
-    color: colors.text,
-    padding: 0,
-  },
 
   chipStrip: {
     flexGrow: 0,
-    marginTop: 16,
+    marginTop: 12,
   },
   chips: {
     paddingHorizontal: SCREEN_PADDING,
     gap: 8,
   },
   chip: {
-    height: 38,
+    height: 36,
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
     backgroundColor: colors.surface,
@@ -391,16 +363,13 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
   },
 
   list: {
     paddingHorizontal: SCREEN_PADDING,
-    paddingTop: 18,
+    paddingTop: 16,
     paddingBottom: TAB_BAR_CLEARANCE,
-  },
-  separator: {
-    height: 10,
   },
   empty: {
     paddingTop: 48,

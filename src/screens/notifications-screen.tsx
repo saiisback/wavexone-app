@@ -14,6 +14,7 @@ import {
   Text,
   TrendUpIcon,
   colors,
+  radius,
 } from '../design-system'
 import { ScreenHeader } from '../features/shared/screen-header'
 import { useBackend, useBackendQuery } from '../backend/provider'
@@ -156,7 +157,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
     padding: 14,
-    borderRadius: 18,
+    borderRadius: radius.card,
   },
   icon: {
     width: 26,

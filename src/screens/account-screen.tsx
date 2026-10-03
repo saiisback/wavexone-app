@@ -25,6 +25,7 @@ import {
   VerifiedIcon,
   WalletIcon,
   colors,
+  radius,
   useActionMenu,
 } from '../design-system'
 import { useAppSession } from '../backend/session-provider'
@@ -247,7 +248,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     padding: 16,
-    borderRadius: 20,
+    borderRadius: radius.card,
   },
   profileIdentity: {
     flex: 1,
@@ -268,7 +269,7 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    borderRadius: 20,
+    borderRadius: radius.card,
   },
   supportCopy: {
     flex: 1,

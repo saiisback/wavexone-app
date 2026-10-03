@@ -38,6 +38,11 @@ export type MarketRowProps = {
   onLongPress?: (id: string) => void
   /** Draws the favourite marker; off on Market Watch, on in the catalogue. */
   showFavorite?: boolean
+  /**
+   * `card` is a free-standing card; `row` is a flat, compact row for a list
+   * group, which supplies the surface and the dividers.
+   */
+  layout?: 'card' | 'row'
 }
 
 /**
@@ -65,6 +70,7 @@ export function MarketRow({
   onPress,
   onLongPress,
   showFavorite = false,
+  layout = 'card',
 }: MarketRowProps) {
   // Streamed inside the row, so a tick re-renders this row alone.
   const quote = useLiveQuote(id)
@@ -76,44 +82,59 @@ export function MarketRow({
       ? colors.green
       : colors.red
 
+  const compact = layout === 'row'
+  const body = (
+    <>
+      <View>
+        <AssetIcon
+          kind={iconKind}
+          label={iconLabel}
+          tint={iconTint}
+          symbol={symbol}
+          category={category}
+          size={compact ? 36 : 40}
+        />
+        {showFavorite ? <FavoriteMark id={id} /> : null}
+      </View>
+
+      <View style={styles.identity}>
+        <Text variant="strong" numberOfLines={1}>
+          {symbol}
+        </Text>
+        <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+          {name}
+        </Text>
+      </View>
+
+      {/* Keyed so a recycled row remounts rather than morphing from another market. */}
+      <Sparkline
+        key={id}
+        points={spark}
+        color={sparkColor}
+        width={compact ? 52 : 56}
+        height={compact ? 26 : 30}
+      />
+
+      <View style={styles.quote}>
+        <Text variant="strong" numberOfLines={1} style={styles.price}>
+          {formatPrice(price, precision)}
+        </Text>
+        <DeltaPill label={formatPercent(changePercent)} direction={direction} size={12} />
+      </View>
+    </>
+  )
+
   return (
     <PressableScale
       onPress={() => onPress(id)}
       onLongPress={onLongPress ? () => onLongPress(id) : undefined}
-      scaleTo={0.985}
+      scaleTo={compact ? 0.99 : 0.985}
     >
-      <Card style={styles.card}>
-        <View>
-          <AssetIcon
-            kind={iconKind}
-            label={iconLabel}
-            tint={iconTint}
-            symbol={symbol}
-            category={category}
-            size={42}
-          />
-          {showFavorite ? <FavoriteMark id={id} /> : null}
-        </View>
-
-        <View style={styles.identity}>
-          <Text variant="strong" numberOfLines={1}>
-            {symbol}
-          </Text>
-          <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
-            {name}
-          </Text>
-        </View>
-
-        {/* Keyed so a recycled row remounts rather than morphing from another market. */}
-        <Sparkline key={id} points={spark} color={sparkColor} width={56} height={32} />
-
-        <View style={styles.quote}>
-          <Text variant="strong" numberOfLines={1} style={styles.price}>
-            {formatPrice(price, precision)}
-          </Text>
-          <DeltaPill label={formatPercent(changePercent)} direction={direction} size={12} />
-        </View>
-      </Card>
+      {compact ? (
+        <View style={[styles.layout, styles.row]}>{body}</View>
+      ) : (
+        <Card style={[styles.layout, styles.card]}>{body}</Card>
+      )}
     </PressableScale>
   )
 }
@@ -133,17 +154,23 @@ function FavoriteMark({ id }: { id: string }) {
 }
 
 const styles = StyleSheet.create({
-  card: {
+  layout: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
+    gap: 12,
+  },
+  card: {
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 20,
+  },
+  row: {
+    minHeight: 60,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
   identity: {
     flex: 1,
-    gap: 2,
+    gap: 1,
   },
   favorite: {
     position: 'absolute',
@@ -160,7 +187,7 @@ const styles = StyleSheet.create({
   quote: {
     minWidth: 84,
     alignItems: 'flex-end',
-    gap: 6,
+    gap: 4,
   },
   price: {
     fontVariant: ['tabular-nums'],
