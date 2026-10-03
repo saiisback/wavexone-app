@@ -27,4 +27,4 @@ export function Switch({
   )
 }
 
-const TRACK = { false: colors.track, true: colors.gold }
+const TRACK = { false: colors.track, true: colors.navy }

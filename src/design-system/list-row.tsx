@@ -6,6 +6,7 @@ import { Divider } from './divider'
 import { ChevronRightIcon } from './icons'
 import { Pressable } from './pressable'
 import { Text } from './text'
+import { spacing } from './tokens'
 
 export type ListRowProps = {
   icon?: React.ReactNode
@@ -37,7 +38,7 @@ export function ListRow({
     <View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={[label, value, detail].filter(Boolean).join('. ')}
         disabled={!onPress}
         onPress={onPress}
         style={styles.row}
@@ -54,7 +55,7 @@ export function ListRow({
         </View>
 
         {value ? (
-          <Text variant="body" color={colors.textMuted} numberOfLines={1}>
+          <Text variant="body" color={colors.text} numberOfLines={1} style={styles.value}>
             {value}
           </Text>
         ) : null}
@@ -78,15 +79,14 @@ export function ListGroup({ children }: { children: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   group: {
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 52,
-    paddingVertical: 8,
-    gap: 16,
+    minHeight: 56,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
   },
   icon: {
     width: 26,
@@ -94,7 +94,13 @@ const styles = StyleSheet.create({
   },
   text: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
+  },
+  value: {
+    flexShrink: 1,
+    maxWidth: '60%',
+    textAlign: 'right',
   },
   label: {
     fontSize: 17,

@@ -1,5 +1,7 @@
+import { Image } from 'expo-image'
 import { Text as RNText } from 'react-native'
 import renderer, { act, type ReactTestInstance } from 'react-test-renderer'
+import Svg, { Path } from 'react-native-svg'
 
 import { createMockBackend } from '../../src/backend/mock-backend'
 import { BackendProvider } from '../../src/backend/provider'
@@ -7,6 +9,7 @@ import { MarketRow } from '../../src/features/markets/market-row'
 import { instruments } from '../../src/data/mock'
 import { useSession } from '../../src/data/store'
 import { colors } from '../../src/design-system/colors'
+import { AssetIcon, type AssetIconKind } from '../../src/design-system/asset-icon'
 
 /**
  * The Market Watch row is the most repeated component in the app and the one
@@ -78,6 +81,37 @@ beforeEach(() => {
 })
 
 describe('rendering', () => {
+  it.each(['apple', 'tesla', 'nvidia', 'microsoft', 'amazon', 'meta', 'google', 'netflix', 'bitcoin', 'ethereum', 'litecoin', 'cardano', 'polkadot', 'coinbase', 'oil'])(
+    'renders the bundled %s mark as local vector artwork', (kind) => {
+      const { tree } = renderRow({ iconKind: kind as AssetIconKind })
+      const mark = tree.root.findByType(AssetIcon)
+      expect(mark.findAllByType(Svg)).toHaveLength(1)
+      expect(mark.findAllByType(Path).length).toBeGreaterThan(0)
+    },
+  )
+
+  it.each([
+    ['forex', 'AUDCAD'],
+    ['index', 'US100'],
+    ['stock', '0001'],
+  ])('renders a legible %s badge for %s', (kind, label) => {
+    const { tree } = renderRow({ iconKind: kind as AssetIconKind, iconLabel: label })
+    const mark = tree.root.findByType(AssetIcon)
+    expect(mark.findAllByType(RNText).length).toBeGreaterThan(0)
+  })
+
+  it.each([
+    ['NASDAQ:ZETA.OQ', 'ZE'], [' xy/usd ', 'XY'], ['', '?'],
+  ])('derives a non-empty fallback for %s when icon metadata is missing', (symbol, monogram) => {
+    const { tree } = renderRow({ symbol, iconKind: 'generic', iconLabel: undefined })
+    const mark = tree.root.findByType(AssetIcon)
+    // A stock-shaped ticker tries remote artwork first; spend every source.
+    while (mark.findAllByType(Image).length > 0) {
+      act(() => mark.findAllByType(Image)[0].props.onError())
+    }
+    expect(mark.findAllByType(RNText).map(flatten)).toContain(monogram)
+  })
+
   it('shows the symbol and the long name', () => {
     const { texts } = renderRow()
     expect(texts).toContain(GOLD.symbol)

@@ -78,6 +78,8 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontSize: 15,
+    marginTop: 10,
+    textAlign: 'center',
   },
 })
 

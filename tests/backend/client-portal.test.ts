@@ -187,3 +187,54 @@ describe('withdrawal', () => {
     expect(bodyOf(submitCall!).withdrawAddress).toBe(bodyOf(otpCall!).withdrawAddress)
   })
 })
+
+describe('funding request contracts from the supplied collection', () => {
+  const details = { account: '12345678' }
+  const funding = { accountId: 'account-1', amount: '50.00', method: 'Bank transfer', idempotencyKey: 'funding-1' }
+  const cases = [
+    { route: 'apiSubmitDeposit', call: (portal: ClientPortalAdapter) => portal.deposit(MATERIAL, funding), encoding: 'multipart', body: { amount: '50.00', method: 'Bank transfer', targetAccountId: 'account-1' } },
+    { route: 'apiSendWithdrawOtp', call: (portal: ClientPortalAdapter) => portal.sendWithdrawalOtp(MATERIAL, { ...funding, details }), encoding: 'json', body: { sourceId: 'account-1', amount: '50.00', withdrawAddress: '{"account":"12345678"}' } },
+    { route: 'apiSubmitWithdraw', call: (portal: ClientPortalAdapter) => portal.withdraw(MATERIAL, { ...funding, details, otp: '123456' }), encoding: 'json', body: { sourceId: 'account-1', amount: '50.00', method: 'Bank transfer', withdrawAddress: '{"account":"12345678"}', otp: '123456' } },
+    { route: 'apiTransfer', call: (portal: ClientPortalAdapter) => portal.transfer(MATERIAL, { fromAccountId: 'account-1', toAccountId: 'account-2', amount: '50.00', idempotencyKey: 'transfer-1' }), encoding: 'json', body: { source: 'account-1', destination: 'account-2', amount: '50.00', memo: '' } },
+    { route: 'submitDemoDeposit', call: (portal: ClientPortalAdapter) => portal.demoDeposit(MATERIAL, funding), encoding: 'form', body: 'deposit_amount=50.00' },
+  ]
+
+  it.each(cases)('$route sends the exact POST body and deduplicates one confirmed intent', async ({ route, call, encoding, body }) => {
+    const portal = new ClientPortalAdapter(new Gate({ ...CONFIG, phase: 3 }))
+    await portal.establish(MATERIAL)
+    await Promise.all([call(portal), call(portal)])
+    await call(portal)
+    const requests = fetchMock.mock.calls.filter(([url]) => String(url).endsWith(route))
+    expect(requests).toHaveLength(1)
+    const [, init] = requests[0]
+    expect(init.method).toBe('POST')
+    expect(init.credentials).toBe('include')
+    expect(init.headers.Origin).toBe(CONFIG.portalOrigin)
+    if (encoding === 'multipart') {
+      expect(init.headers['Content-Type']).toBeUndefined()
+      expect(Object.fromEntries(init.body.entries())).toEqual(body)
+    } else if (encoding === 'json') {
+      expect(init.headers['Content-Type']).toBe('application/json')
+      expect(JSON.parse(init.body)).toEqual(body)
+    } else {
+      expect(init.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
+      expect(init.body).toBe(body)
+    }
+  })
+
+  it('includes the optional proof only when supplied', async () => {
+    const portal = new ClientPortalAdapter(new Gate({ ...CONFIG, phase: 3 }))
+    await portal.deposit(MATERIAL, { ...funding, proof: { uri: 'file:///proof.png', name: 'proof.png', mimeType: 'image/png', size: 1024 } })
+    const [, init] = fetchMock.mock.calls.find(([url]) => String(url).endsWith('apiSubmitDeposit'))!
+    expect(Array.from(init.body.keys())).toEqual(['amount', 'method', 'targetAccountId', 'proof'])
+  })
+
+  it.each(cases)('$route never retries an ambiguous network failure', async ({ route, call }) => {
+    const portal = new ClientPortalAdapter(new Gate({ ...CONFIG, phase: 3 }))
+    await portal.establish(MATERIAL)
+    fetchMock.mockRejectedValue(new TypeError('network disconnected'))
+    await expect(call(portal)).rejects.toMatchObject({ kind: 'blocked' })
+    await expect(call(portal)).rejects.toMatchObject({ kind: 'blocked' })
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith(route))).toHaveLength(1)
+  })
+})

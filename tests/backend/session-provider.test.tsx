@@ -3,7 +3,10 @@ import renderer, { act } from 'react-test-renderer'
 
 import type { WaveXBackend } from '../../src/backend/contract'
 import { BackendError, rejection } from '../../src/backend/errors'
-import { BackendProvider } from '../../src/backend/provider'
+import { BackendProvider, useBackendQuery } from '../../src/backend/provider'
+import { useSession } from '../../src/data/store'
+import type { DetailedAccount, Profile } from '../../src/data/types'
+import { useAccountData } from '../../src/features/accounts/use-account-data'
 import {
   SessionProvider,
   useAppSession,
@@ -11,6 +14,10 @@ import {
 } from '../../src/backend/session-provider'
 
 const mounted: renderer.ReactTestRenderer[] = []
+
+beforeEach(() => {
+  useSession.setState(useSession.getInitialState())
+})
 
 afterEach(() => {
   act(() => {
@@ -55,6 +62,85 @@ function renderSession(backend: WaveXBackend) {
 const flush = () => act(async () => void (await Promise.resolve()))
 
 describe('SessionProvider', () => {
+  it.each(['separate', 'batched'] as const)('does not reuse retained private data across %s logout/login updates', async (updates) => {
+    const account = (id: string): DetailedAccount => ({
+      id, mode: 'LIVE', number: id, currency: 'USD', leverage: 100,
+      equity: 1000, balance: 1000, freeMargin: 1000, changePercent: 0,
+      asOf: 'Current account snapshot', floatingPnl: 0, current: true,
+    })
+    const profile = (holder: string): Profile => ({
+      holder, avatarUrl: '', email: `${holder}@example.invalid`, phone: '',
+      country: '', verified: true, kycStatus: 'Verified',
+    })
+    let user = 'Alice'
+    const backend = {
+      ...sessionBackend({
+        restore: async () => true,
+        signIn: async (identifier) => {
+          user = identifier
+          return { kind: 'authenticated' }
+        },
+      }),
+      accounts: {
+        list: async () => [account(`${user}-account`)],
+        profile: async () => profile(user),
+      },
+    } as unknown as WaveXBackend
+    let session!: AppSessionContextValue
+
+    function SignedInData() {
+      const result = useAccountData()
+      const extra = useBackendQuery('unscoped-private-query', (api) => api.accounts.profile())
+      return <Text>{JSON.stringify({
+        account: result.data?.account?.id,
+        profile: result.data?.profile.holder,
+        extra: extra.data?.holder,
+      })}</Text>
+    }
+
+    function Gate() {
+      session = useAppSession()
+      return session.state === 'signed-in' ? <SignedInData /> : null
+    }
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => {
+      tree = renderer.create(<BackendProvider backend={backend}><SessionProvider><Gate /></SessionProvider></BackendProvider>)
+    })
+    mounted.push(tree)
+    await flush()
+    expect(JSON.parse(tree.root.findByType(Text).props.children)).toEqual({
+      account: 'Alice-account', profile: 'Alice', extra: 'Alice',
+    })
+    act(() => {
+      useSession.getState().replaceFavorites(['Alice-favorite'])
+      useSession.getState().markNotificationRead('Alice-notification')
+    })
+
+    const signOut = async () => {
+      await session.signOut()
+      expect(useSession.getState().accountId).toBeNull()
+      expect([...useSession.getState().favorites]).toEqual([])
+      expect([...useSession.getState().readNotifications]).toEqual([])
+    }
+    // No timer advance: Bob signs in inside the 30-second cache window.
+    if (updates === 'batched') {
+      await act(async () => {
+        await signOut()
+        await session.signIn('Bob', 'password')
+      })
+    } else {
+      await act(signOut)
+      await act(async () => session.signIn('Bob', 'password'))
+    }
+    await flush()
+
+    expect(JSON.parse(tree.root.findByType(Text).props.children)).toEqual({
+      account: 'Bob-account', profile: 'Bob', extra: 'Bob',
+    })
+    expect(useSession.getState().accountId).toBe('Bob-account')
+  })
+
   it('starts restoring and becomes signed in when restoration succeeds', async () => {
     const restore = jest.fn(async () => true)
     const { tree } = renderSession(sessionBackend({ restore }))

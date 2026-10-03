@@ -23,8 +23,10 @@ import {
 } from '../design-system'
 import { directionOf, formatLots, formatMoney, formatPercent, formatPrice } from '../data/format'
 import { applyQuote } from '../data/live-quote'
+import { estimateRequiredMargin } from '../data/margin'
 import { useTradeDraft, type OrderType } from '../data/trade-draft'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
@@ -56,6 +58,9 @@ export function TradeScreen() {
   const quote = useLiveQuote(listed?.id)
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    if (accountData.status === 'ready' && !accountData.data.account) {
+      return <Screen><Gutter style={styles.state}><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Gutter></Screen>
+    }
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return (
       <Screen>
@@ -71,7 +76,12 @@ export function TradeScreen() {
   if (!instrument) {
     return <Screen><Gutter style={styles.state}><Text>No markets available.</Text></Gutter></Screen>
   }
-  const margin = (instrument.price * instrument.contractSize * lots) / account.leverage
+  const margin = estimateRequiredMargin(
+    instrument.price,
+    instrument.contractSize,
+    lots,
+    account.leverage,
+  )
   const spread = instrument.ask - instrument.bid
 
   // The API's `type=stop` is a two-legged HFT order, not a stop entry, so
@@ -173,7 +183,10 @@ export function TradeScreen() {
 
         <Gutter>
           <Card style={styles.summary}>
-            <SummaryRow label="Required margin" value={formatMoney(margin)} />
+            <SummaryRow
+              label="Required margin"
+              value={margin === null ? 'Unavailable' : formatMoney(margin)}
+            />
             <Divider />
             <SummaryRow label="Free margin" value={formatMoney(account.freeMargin)} />
             <Divider />
@@ -184,7 +197,10 @@ export function TradeScreen() {
               value={`${instrument.contractSize.toLocaleString('en-US')} / lot`}
             />
             <Divider />
-            <SummaryRow label="Leverage" value={`1:${account.leverage}`} />
+            <SummaryRow
+              label="Leverage"
+              value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
+            />
           </Card>
         </Gutter>
 

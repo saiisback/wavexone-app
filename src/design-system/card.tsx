@@ -4,7 +4,7 @@ import { colors } from './colors'
 import { radius, shadow, spacing } from './tokens'
 
 export type CardProps = ViewProps & {
-  /** `surface` is the white card, `ink` the near-black one. */
+  /** `surface` is the white card, `ink` the navy one. */
   tone?: 'surface' | 'ink' | 'gold' | 'goldSoft'
   /** Set false when the card supplies its own padding (e.g. split layouts). */
   padded?: boolean

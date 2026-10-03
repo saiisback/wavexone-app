@@ -24,6 +24,7 @@ import { formatLots, formatSignedMoney } from '../data/format'
 import { type MarketPeriod } from '../data/store'
 import type { ActivityEntry, Position } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
@@ -57,6 +58,9 @@ export function ActivityScreen() {
   )
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    if (accountData.status === 'ready' && !accountData.data.account) {
+      return <Screen><Gutter style={styles.loading}><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Gutter></Screen>
+    }
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return <Screen><Gutter style={styles.loading}><QueryStateView state={state} render={() => null} /></Gutter></Screen>
   }
@@ -205,7 +209,7 @@ export function ActivityScreen() {
                 color={
                   account.monthNetResult === undefined || account.monthNetResult >= 0
                     ? colors.greenOnInk
-                    : colors.red
+                    : colors.redOnInk
                 }
                 style={styles.summaryValue}
               >

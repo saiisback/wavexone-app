@@ -5,6 +5,7 @@ import { activityGroup } from '../data/activity-dates'
 import type { MarketPeriod } from '../data/store'
 import { CHART_REQUESTS, buildChartSeries } from '../data/chart-series'
 import type { Account, ActivityEntry, Instrument, Position, Profile } from '../data/types'
+import { instrumentIconLabel, instrumentMark } from '../design-system/instrument-marks'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
 import { unwrapEnvelope } from './http'
@@ -19,6 +20,17 @@ import {
 import type { PortalBootstrap } from './responses/portal'
 import { parseTradingAccounts } from './responses/trading'
 import { createSessionStore, type SessionMaterial, type SessionStore } from './secure-session-store'
+
+function isLegacySwitchServerFailure(error: unknown): boolean {
+  if (
+    !(error instanceof BackendError) ||
+    error.kind !== 'blocked' ||
+    error.endpoint !== 'switchAccountTrading'
+  ) {
+    return false
+  }
+  return error.cause instanceof BackendError && error.cause.kind === 'server'
+}
 
 /**
  * The real backend.
@@ -78,9 +90,10 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       })
     }
 
-    return portalData.accounts.map((portalAccount) => {
+    const detailedAccounts = portalData.accounts.map((portalAccount) => {
       const tradingAccount = tradingAccounts.find((account) =>
-        portalAccount.identifiers.includes(account.id),
+        portalAccount.identifiers.includes(account.id) ||
+        portalAccount.identifiers.includes(account.databaseId),
       )
       const balance = tradingAccount?.balance ?? portalAccount.balance
       const floatingPnl = portalAccount.equity - balance
@@ -89,6 +102,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
 
       return {
         id: portalAccount.id,
+        current: portalAccount.identifiers.includes(portalData.user.accountId),
         mode: tradingAccount?.mode ?? (portalAccount.isDemo ? 'DEMO' : 'LIVE'),
         number: portalAccount.number,
         currency: portalAccount.currency,
@@ -101,6 +115,26 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         floatingPnl,
       }
     })
+
+    const linkedOnlyAccounts = tradingAccounts
+      .filter((tradingAccount) =>
+        !portalData.accounts.some((portalAccount) =>
+          portalAccount.identifiers.includes(tradingAccount.id) ||
+          portalAccount.identifiers.includes(tradingAccount.databaseId),
+        ),
+      )
+      .map((tradingAccount) => ({
+        id: tradingAccount.id,
+        current:
+          tradingAccount.id === session.accountToken ||
+          tradingAccount.databaseId === portalData.user.accountId,
+        mode: tradingAccount.mode,
+        number: tradingAccount.databaseId,
+        balance: tradingAccount.balance,
+        summaryAvailable: false as const,
+      }))
+
+    return [...detailedAccounts, ...linkedOnlyAccounts]
   }
 
   async function readProfile(): Promise<Profile> {
@@ -171,8 +205,8 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         symbol: formatSymbol(plainTicker),
         name: entry.name,
         description: entry.name,
-        icon: instrumentIcon(plainTicker),
-        iconLabel: plainTicker.slice(0, 1),
+        icon: instrumentMark(plainTicker, entry.category),
+        iconLabel: instrumentIconLabel(plainTicker),
         price,
         precision: metadata.precision,
         changePercent: open ? ((price - open) / open) * 100 : 0,
@@ -358,12 +392,29 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       list: readAccounts,
       async switchAccount(request) {
         const session = requireSession()
-        const tradingResponse = await gate.call('switchAccountTrading', {
-          query: { token: session.accountToken, switchtoken: request.accountId },
-          headers: trading.headers(session),
-          idempotencyKey: request.idempotencyKey,
-        })
-        unwrapEnvelope(tradingResponse, 'switchAccountTrading')
+        let switched = { ...session, accountToken: request.accountId, orderFingerprint: undefined }
+        try {
+          const tradingResponse = await gate.call('switchAccountTrading', {
+            query: { token: session.accountToken, switchtoken: request.accountId },
+            headers: trading.headers(session),
+            idempotencyKey: request.idempotencyKey,
+          })
+          unwrapEnvelope(tradingResponse, 'switchAccountTrading')
+        } catch (error) {
+          if (!isLegacySwitchServerFailure(error)) throw error
+
+          // The production legacy route currently returns 500 for linked demo
+          // accounts. Do not retry it. The documented collection uses one
+          // user-scoped bearer across sibling account tokens, so validate the
+          // target token with the existing session before changing local or
+          // portal state. Issuing a bearer here would pair the target token
+          // with the current account's secret and is correctly rejected.
+          if (!(await trading.isSessionValid(switched))) {
+            throw new BackendError('auth', 'The selected account could not be authenticated.', {
+              endpoint: 'switchAccountTrading',
+            })
+          }
+        }
 
         const portalResponse = await gate.call('switchAccountPortal', {
           body: { token: request.accountId },
@@ -371,12 +422,9 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         })
         unwrapEnvelope(portalResponse, 'switchAccountPortal')
 
-        invalidateAccountData()
-        await readBootstrap()
-
-        const switched = { ...session, accountToken: request.accountId, orderFingerprint: undefined }
         material = switched
         await store.write(switched)
+        invalidateAccountData()
         tradingEvents.reset()
       },
       profile: readProfile,
@@ -509,6 +557,9 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         invalidateAccountData()
       },
       async transfer(request) {
+        if (request.fromAccountId === request.toAccountId) {
+          throw new BackendError('rejected', 'Choose two different accounts for a transfer.')
+        }
         await portal.transfer(requireSession(), request)
         invalidateAccountData()
       },
@@ -567,14 +618,4 @@ function normalizeSymbolMap<T>(entries: ReadonlyMap<string, T>): Map<string, T> 
   return new Map(
     Array.from(entries, ([symbol, value]) => [apiSymbol(symbol).toUpperCase(), value]),
   )
-}
-
-function instrumentIcon(ticker: string): Instrument['icon'] {
-  if (ticker.startsWith('XAU')) return 'gold'
-  if (ticker.startsWith('XAG')) return 'silver'
-  if (ticker.startsWith('BTC')) return 'bitcoin'
-  if (ticker.startsWith('ETH')) return 'ethereum'
-  if (ticker.startsWith('EUR')) return 'euro'
-  if (ticker.includes('WTI') || ticker.includes('OIL')) return 'oil'
-  return 'generic'
 }

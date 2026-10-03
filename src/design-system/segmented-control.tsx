@@ -11,7 +11,7 @@ export type SegmentedControlProps<T extends string> = {
 }
 
 /**
- * Gold-pill segmented control used on Positions and Activity.
+ * Navy segmented control used on Positions and Activity.
  *
  * The mockups draw a hairline between neighbouring *inactive* segments only —
  * the selected pill swallows the separators on either side of it.
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
   },
   segmentSelected: {
-    backgroundColor: colors.gold,
+    backgroundColor: colors.navy,
   },
   label: {
     fontFamily: fonts.regular,
@@ -83,5 +83,6 @@ const styles = StyleSheet.create({
   },
   labelSelected: {
     fontFamily: fonts.bold,
+    color: colors.onInk,
   },
 })

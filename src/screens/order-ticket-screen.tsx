@@ -19,7 +19,9 @@ import {
 } from '../design-system'
 import { formatLots, formatMoney, formatPrice } from '../data/format'
 import { applyQuote } from '../data/live-quote'
+import { estimateRequiredMargin } from '../data/margin'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useLiveQuote } from '../features/markets/use-live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
@@ -59,6 +61,9 @@ export function OrderTicketScreen() {
   const quote = useLiveQuote(params.instrumentId)
 
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+    if (accountData.status === 'ready' && !accountData.data.account) {
+      return <Sheet title={`${side} order`}><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Sheet>
+    }
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return (
       <Sheet title={`${side} order`}>
@@ -77,8 +82,8 @@ export function OrderTicketScreen() {
   const marketPrice = side === 'Buy' ? instrument.ask : instrument.bid
   const limitValid = DECIMAL.test(limitPrice.trim()) && Number(limitPrice) > 0
   const price = isLimit && limitValid ? Number(limitPrice) : marketPrice
-  const margin = (price * instrument.contractSize * lots) / account.leverage
-  const exceedsMargin = margin > account.freeMargin
+  const margin = estimateRequiredMargin(price, instrument.contractSize, lots, account.leverage)
+  const exceedsMargin = margin !== null && margin > account.freeMargin
   const protectionValid = [stopLoss, takeProfit].every(
     (value) => value.trim() === '' || DECIMAL.test(value.trim()),
   )
@@ -204,18 +209,25 @@ export function OrderTicketScreen() {
         <Divider />
         <SummaryRow
           label="Required margin"
-          value={formatMoney(margin)}
+          value={margin === null ? 'Unavailable' : formatMoney(margin)}
           tint={exceedsMargin ? colors.red : undefined}
         />
         <Divider />
         <SummaryRow label="Free margin" value={formatMoney(account.freeMargin)} />
         <Divider />
-        <SummaryRow label="Leverage" value={`1:${account.leverage}`} />
+        <SummaryRow
+          label="Leverage"
+          value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
+        />
       </Card>
 
       {exceedsMargin ? (
         <Text variant="caption" color={colors.red}>
           This volume needs more margin than the account has free.
+        </Text>
+      ) : margin === null ? (
+        <Text variant="caption" color={colors.textMuted}>
+          Margin estimate unavailable. The broker will validate available margin when you confirm.
         </Text>
       ) : null}
     </Sheet>

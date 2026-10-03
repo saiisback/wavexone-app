@@ -29,6 +29,7 @@ import {
 } from '../design-system'
 import { useAppSession } from '../backend/session-provider'
 import { useAccountData } from '../features/accounts/use-account-data'
+import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { QueryStateView } from '../features/shared/query-state'
 import { useOpenClientPortal } from '../features/shared/use-client-portal'
 import { useAppNavigation } from '../navigation/use-app-navigation'
@@ -100,9 +101,7 @@ export function AccountScreen() {
         <Gutter style={styles.state}>
           <QueryStateView
             state={accountData}
-            isEmpty={(data) => data.account === null}
-            emptyTitle="No trading account"
-            render={() => null}
+            render={(data) => <AccountSummaryUnavailable account={data.selectedAccount} />}
           />
         </Gutter>
       </Screen>

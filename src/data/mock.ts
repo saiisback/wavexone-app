@@ -1,7 +1,7 @@
 import type {
-  Account,
   ActivityEntry,
   ChartSeries,
+  DetailedAccount,
   Instrument,
   Notification,
   Position,
@@ -32,7 +32,7 @@ export const profile: Profile = {
   kycStatus: 'Verified',
 }
 
-export const accounts: readonly Account[] = [
+export const accounts: readonly DetailedAccount[] = [
   {
     id: 'wx012345',
     mode: 'LIVE',
@@ -108,7 +108,8 @@ export const instruments: readonly Instrument[] = [
     symbol: 'EUR/USD',
     name: 'Euro / US Dollar',
     description: 'Euro / US Dollar',
-    icon: 'euro',
+    icon: 'forex',
+    iconLabel: 'EURUSD',
     price: 1.0842,
     precision: 4,
     changePercent: 0.18,
@@ -142,9 +143,8 @@ export const instruments: readonly Instrument[] = [
     symbol: 'GBP/USD',
     name: 'British Pound',
     description: 'British Pound / US Dollar',
-    icon: 'generic',
-    iconLabel: '£',
-    iconTint: '#1F3B73',
+    icon: 'forex',
+    iconLabel: 'GBPUSD',
     price: 1.2714,
     precision: 4,
     changePercent: -0.22,
@@ -161,9 +161,8 @@ export const instruments: readonly Instrument[] = [
     symbol: 'USD/JPY',
     name: 'US Dollar / Yen',
     description: 'US Dollar / Japanese Yen',
-    icon: 'generic',
-    iconLabel: '¥',
-    iconTint: '#BC002D',
+    icon: 'forex',
+    iconLabel: 'USDJPY',
     price: 156.42,
     precision: 2,
     changePercent: 0.41,

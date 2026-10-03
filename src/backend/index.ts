@@ -66,10 +66,10 @@ function configFromEnvironment(): BackendConfig {
 }
 
 /**
- * Phase 2 — sign-in, reads and trading — unless the environment says
- * otherwise. Funding mutations (phase 3) stay opt-in.
+ * Phase 3 — sign-in, reads, trading and funding — unless the environment
+ * selects a different delivery phase.
  */
 function readPhase(): Phase {
-  const raw = Number(process.env.EXPO_PUBLIC_WAVEX_PHASE || '2')
-  return raw === 1 || raw === 3 || raw === 4 ? raw : 2
+  const raw = Number(process.env.EXPO_PUBLIC_WAVEX_PHASE || '3')
+  return raw === 1 || raw === 2 || raw === 4 ? raw : 3
 }

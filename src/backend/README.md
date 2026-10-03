@@ -35,7 +35,7 @@ accept any password and show fixture data as if it were the user's.
 Optional overrides: `EXPO_PUBLIC_WAVEX_TRADING_URL`, `EXPO_PUBLIC_WAVEX_PORTAL_URL`,
 `EXPO_PUBLIC_WAVEX_PORTAL_ORIGIN`, `EXPO_PUBLIC_WAVEX_CHARTING_URL`, and:
 
-- `EXPO_PUBLIC_WAVEX_PHASE` (default `2`) — guide §8. Phase 1 is read-only,
+- `EXPO_PUBLIC_WAVEX_PHASE` (default `3`) — guide §8. Phase 1 is read-only,
   phase 2 adds trading, phase 3 adds funding mutations. Anything above the
   configured phase is refused before a request is made.
 

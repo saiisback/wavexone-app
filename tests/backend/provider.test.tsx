@@ -124,7 +124,7 @@ describe('useBackendQuery', () => {
     expect(tree.root.findByType(Text).props.children).toBe('ready:ready')
   })
 
-  it('drops cached account data after its final consumer unmounts', async () => {
+  it('retains a completed query across a short unmount and remount', async () => {
     const backend = backendWith()
     const read = jest.fn(async () => 'account-data')
 
@@ -148,7 +148,119 @@ describe('useBackendQuery', () => {
     act(() => tree.update(<Host visible />))
     await flush()
 
+    expect(read).toHaveBeenCalledTimes(1)
+  })
+
+  it('explicit invalidation bypasses retained data', async () => {
+    const backend = backendWith()
+    const read = jest.fn(async () => 'account-data')
+    let invalidate!: (...prefixes: string[]) => void
+
+    function Probe() {
+      useBackendQuery('account:one', read)
+      return null
+    }
+
+    function Host({ visible }: { visible: boolean }) {
+      function InvalidateHandle() {
+        invalidate = useInvalidateQueries()
+        return null
+      }
+      return <BackendProvider backend={backend}><InvalidateHandle />{visible ? <Probe /> : null}</BackendProvider>
+    }
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => { tree = renderer.create(<Host visible />) })
+    mounted.push(tree)
+    await flush()
+
+    act(() => tree.update(<Host visible={false} />))
+    act(() => invalidate('account:'))
+    act(() => tree.update(<Host visible />))
+    await flush()
+
     expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not share retained data across query keys', async () => {
+    const backend = backendWith()
+    const read = jest.fn(async () => 'account-data')
+
+    function Probe({ queryKey }: { queryKey: string }) {
+      useBackendQuery(queryKey, read)
+      return null
+    }
+
+    function Host({ queryKey }: { queryKey?: string }) {
+      return <BackendProvider backend={backend}>{queryKey ? <Probe queryKey={queryKey} /> : null}</BackendProvider>
+    }
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => { tree = renderer.create(<Host queryKey="account:one" />) })
+    mounted.push(tree)
+    await flush()
+
+    act(() => tree.update(<Host />))
+    act(() => tree.update(<Host queryKey="account:two" />))
+    await flush()
+
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retain a rejected read as fresh data', async () => {
+    const backend = backendWith()
+    const read = jest.fn(async () => { throw new Error('unavailable') })
+
+    function Probe() {
+      useBackendQuery('account:one', read)
+      return null
+    }
+
+    function Host({ visible }: { visible: boolean }) {
+      return <BackendProvider backend={backend}>{visible ? <Probe /> : null}</BackendProvider>
+    }
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => { tree = renderer.create(<Host visible />) })
+    mounted.push(tree)
+    await flush()
+
+    act(() => tree.update(<Host visible={false} />))
+    act(() => tree.update(<Host visible />))
+    await flush()
+
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('expires retained data after 30 seconds without consumers', async () => {
+    jest.useFakeTimers()
+    try {
+      const backend = backendWith()
+      const read = jest.fn(async () => 'account-data')
+
+      function Probe() {
+        useBackendQuery('account:one', read)
+        return null
+      }
+
+      function Host({ visible }: { visible: boolean }) {
+        return <BackendProvider backend={backend}>{visible ? <Probe /> : null}</BackendProvider>
+      }
+
+      let tree!: renderer.ReactTestRenderer
+      act(() => { tree = renderer.create(<Host visible />) })
+      mounted.push(tree)
+      await flush()
+
+      act(() => tree.update(<Host visible={false} />))
+      act(() => jest.advanceTimersByTime(30_000))
+      act(() => tree.update(<Host visible />))
+      await flush()
+
+      expect(read).toHaveBeenCalledTimes(2)
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   it('starts in the loading state', () => {
