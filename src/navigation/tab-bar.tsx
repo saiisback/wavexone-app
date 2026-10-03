@@ -145,7 +145,7 @@ function TradeDisc({ focused }: { focused: boolean }) {
     transform: [{ translateY: -3 * spin.get() }, { scale: 1 + 0.04 * spin.get() }],
   }))
   const glyph = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${180 * spin.get()}deg` }],
+    transform: [{ rotate: `${(180 * spin.get()).toFixed(2)}deg` }],
   }))
 
   return (

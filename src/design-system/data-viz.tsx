@@ -93,7 +93,7 @@ export function Donut({
   }, [total, sweep])
   const turning = useAnimatedStyle(() => ({
     opacity: sweep.get(),
-    transform: [{ rotate: `${-90 - 120 * (1 - sweep.get())}deg` }, { scale: 0.86 + 0.14 * sweep.get() }],
+    transform: [{ rotate: `${(-90 - 120 * (1 - sweep.get())).toFixed(2)}deg` }, { scale: 0.86 + 0.14 * sweep.get() }],
   }))
 
   let offset = 0

@@ -121,9 +121,9 @@ export const shadow = {
 export const motion = {
   fast: 160,
   base: 280,
-  reveal: 520,
+  reveal: 340,
   /** Delay between siblings revealed in sequence. */
-  stagger: 70,
+  stagger: 40,
   spring: { damping: 18, stiffness: 190, mass: 0.9 },
   /** A softer spring for things that travel: thumbs, indicators. */
   glide: { damping: 22, stiffness: 220, mass: 0.8 },

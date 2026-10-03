@@ -57,6 +57,9 @@ export type PriceChartProps = {
  * plot, transparent, rather than squeezing the line.
  */
 const LABEL_STRIP = 40
+/** How long a finger rests on the chart before the crosshair takes over. */
+const SCRUB_HOLD_MS = 160
+
 /** Space above the highest and below the lowest tick. */
 const Y_GUTTER = 16
 
@@ -143,7 +146,13 @@ export function PriceChart({ series, color: override, precision }: PriceChartPro
                   <LineChart.Dot at={last} color={color} size={4} hasPulse />
                 </LineChart.Path>
 
+                {/*
+                  Touch-and-hold to scrub, as in Apple Stocks. Activating on
+                  first contact swallowed every swipe that started on the
+                  chart — including the back swipe.
+                */}
                 <LineChart.CursorCrosshair
+                  minDurationMs={SCRUB_HOLD_MS}
                   color={color}
                   size={12}
                   outerSize={40}

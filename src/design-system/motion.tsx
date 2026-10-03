@@ -20,7 +20,7 @@ import { radius, motion } from './tokens'
  */
 export function Reveal({
   index = 0,
-  distance = 16,
+  distance = 10,
   style,
   children,
 }: {
@@ -68,11 +68,14 @@ export function TickFlash({
     flash.set(withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 720 })))
   }, [value, flash, rising])
 
-  const tint = useAnimatedStyle(() => ({
-    backgroundColor: rising.get() === 1
-      ? `rgba(22, 124, 59, ${0.14 * flash.get()})`
-      : `rgba(204, 48, 38, ${0.14 * flash.get()})`,
-  }))
+  const tint = useAnimatedStyle(() => {
+    // Fixed decimals: as the flash fades, a plain number can print as
+    // "1.04e-8", which is not a colour Reanimated can parse (it throws).
+    const alpha = (0.14 * flash.get()).toFixed(3)
+    return {
+      backgroundColor: rising.get() === 1 ? `rgba(22, 124, 59, ${alpha})` : `rgba(204, 48, 38, ${alpha})`,
+    }
+  })
 
   return <Animated.View style={[styles.flash, style, tint]}>{children}</Animated.View>
 }
@@ -83,20 +86,30 @@ const REVEAL = { duration: motion.reveal, easing: Easing.out(Easing.exp) }
 const SKIP_COUNT = process.env.NODE_ENV === 'test'
 
 /**
- * A number that rolls up to its value on mount and glides between values as
- * they change, eased out so it lands softly. `format` turns the in-between
+ * Figures roll up from zero only while the app is opening. A screen visited
+ * later — or returned to — shows its numbers at once and only glides when
+ * they change, so going back never feels like a reload.
+ */
+const LAUNCHED_AT = Date.now()
+const LAUNCH_WINDOW_MS = 4000
+
+/**
+ * A number that rolls up to its value when the app opens and glides between
+ * values as they change, eased out so it lands softly. `format` turns the in-between
  * values into display strings; render the result through `Amount` or `Text`.
  */
 export function useCountUp(value: number, { duration = 1100 }: { duration?: number } = {}) {
-  const [shown, setShown] = useState(0)
-  const from = useRef(0)
+  const [intro] = useState(() => Date.now() - LAUNCHED_AT < LAUNCH_WINDOW_MS)
+  const [shown, setShown] = useState(intro ? 0 : value)
+  const from = useRef(intro ? 0 : value)
   const still = SKIP_COUNT || !Number.isFinite(value)
 
   useEffect(() => {
     if (still) return
     const start = from.current
     const began = Date.now()
-    // Ticks are short glides; the first reveal takes the full duration.
+    if (start === value) return
+    // Ticks are short glides; the launch roll-up takes the full duration.
     const span = start === 0 ? duration : Math.min(duration, 420)
     let frame = 0
     const step = () => {

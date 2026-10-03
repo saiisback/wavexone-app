@@ -24,6 +24,8 @@ type QueryEntry<T> = {
   promise: Promise<T>
   consumers: number
   status: 'pending' | 'fulfilled' | 'rejected'
+  /** The settled data, so a screen returning to this key can render it at once. */
+  value?: T
   settledAt?: number
   expiresAt?: number
   expiryTimer?: ReturnType<typeof setTimeout>
@@ -128,9 +130,12 @@ export function useBackendQuery<T>(
   if (!context) throw new Error('useBackendQuery must be used inside <BackendProvider>')
   // The result carries the key it belongs to, so a stale one can be spotted
   // during render instead of being cleared by a second setState.
-  const [state, setState] = useState<QueryState<T> & { key: string }>({
-    status: 'loading',
-    key,
+  // A key still in the cache renders its data on the first frame: going
+  // back to a screen should never flash a loading state for data in memory.
+  const [state, setState] = useState<QueryState<T> & { key: string }>(() => {
+    const cached = context.queries.get(key) as QueryEntry<T> | undefined
+    const fresh = cached?.status === 'fulfilled' && (cached.expiresAt === undefined || cached.expiresAt > Date.now())
+    return fresh ? { status: 'ready', data: cached.value as T, key } : { status: 'loading', key }
   })
 
   // `read` is a fresh closure every render, so it cannot be a dependency
@@ -176,7 +181,8 @@ export function useBackendQuery<T>(
       context.queries.set(key, entry)
       const created = entry
       created.promise.then(
-        () => {
+        (value) => {
+          created.value = value
           created.status = 'fulfilled'
           created.settledAt = Date.now()
         },
@@ -238,6 +244,12 @@ export function useBackendQuery<T>(
 
   // A result from the previous key is another instrument's numbers. Report
   // loading rather than showing them under the new heading.
-  if (state.key !== key) return { status: 'loading' }
+  if (state.key !== key) {
+    // Switching back to a key still in the cache (a timeframe, an account)
+    // shows its data straight away rather than a loading state.
+    const cached = context.queries.get(key) as QueryEntry<T> | undefined
+    if (cached?.status === 'fulfilled' && 'value' in cached) return { status: 'ready', data: cached.value as T }
+    return { status: 'loading' }
+  }
   return state.status === 'error' ? { ...state, retry } : state
 }
