@@ -5,7 +5,7 @@ import { activityGroup } from '../data/activity-dates'
 import type { MarketPeriod } from '../data/store'
 import { CHART_REQUESTS, buildChartSeries } from '../data/chart-series'
 import type { Account, ActivityEntry, Instrument, Position, Profile } from '../data/types'
-import { instrumentMark, instrumentMonogram } from '../design-system/instrument-marks'
+import { instrumentIconLabel, instrumentMark } from '../design-system/instrument-marks'
 import { BackendError } from './errors'
 import { Gate, type BackendConfig } from './gate'
 import { unwrapEnvelope } from './http'
@@ -205,8 +205,8 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
         symbol: formatSymbol(plainTicker),
         name: entry.name,
         description: entry.name,
-        icon: instrumentMark(plainTicker),
-        iconLabel: instrumentMonogram(plainTicker),
+        icon: instrumentMark(plainTicker, entry.category),
+        iconLabel: instrumentIconLabel(plainTicker),
         price,
         precision: metadata.precision,
         changePercent: open ? ((price - open) / open) * 100 : 0,

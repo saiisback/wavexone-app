@@ -80,7 +80,7 @@ beforeEach(() => {
 })
 
 describe('rendering', () => {
-  it.each(['apple', 'tesla', 'nvidia', 'microsoft', 'amazon', 'meta', 'google', 'netflix', 'bitcoin', 'ethereum', 'oil'])(
+  it.each(['apple', 'tesla', 'nvidia', 'microsoft', 'amazon', 'meta', 'google', 'netflix', 'bitcoin', 'ethereum', 'litecoin', 'cardano', 'polkadot', 'coinbase', 'oil'])(
     'renders the bundled %s mark as local vector artwork', (kind) => {
       const { tree } = renderRow({ iconKind: kind as AssetIconKind })
       const mark = tree.root.findByType(AssetIcon)
@@ -88,6 +88,16 @@ describe('rendering', () => {
       expect(mark.findAllByType(Path).length).toBeGreaterThan(0)
     },
   )
+
+  it.each([
+    ['forex', 'AUDCAD'],
+    ['index', 'US100'],
+    ['stock', '0001'],
+  ])('renders a legible %s badge for %s', (kind, label) => {
+    const { tree } = renderRow({ iconKind: kind as AssetIconKind, iconLabel: label })
+    const mark = tree.root.findByType(AssetIcon)
+    expect(mark.findAllByType(RNText).length).toBeGreaterThan(0)
+  })
 
   it.each([
     ['NASDAQ:ZETA.OQ', 'ZE'], [' xy/usd ', 'XY'], ['', '?'],

@@ -526,7 +526,7 @@ describe('markets', () => {
       ['MSFT', 'microsoft'], ['AMZN', 'amazon'], ['META', 'meta'],
       ['GOOGL', 'google'], ['NFLX', 'netflix'], ['X:BTCUSD', 'bitcoin'],
       ['ETHUSD', 'ethereum'], ['C:XAUUSD', 'gold'], ['XAGUSD', 'silver'],
-      ['EURUSD', 'euro'], ['USOIL', 'oil'], ['NASDAQ:ZETA.OQ', 'generic'],
+      ['EURUSD', 'forex'], ['USOIL', 'oil'], ['NASDAQ:ZETA.OQ', 'stock'],
     ]
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
@@ -544,7 +544,7 @@ describe('markets', () => {
     const markets = await pending
     expect(markets.map(({ icon }) => icon)).toEqual(cases.map(([, icon]) => icon))
     expect(markets[0]).toMatchObject({ id: 'nasdaq:aapl.oq', symbol: 'AAPL.OQ', price: 11 })
-    expect(markets[14]).toMatchObject({ id: 'nasdaq:zeta.oq', symbol: 'ZETA.OQ', iconLabel: 'ZE' })
+    expect(markets[14]).toMatchObject({ id: 'nasdaq:zeta.oq', symbol: 'ZETA.OQ', iconLabel: 'ZETA' })
   })
 
   it('leaves out a market the feeds do not carry and keeps the rest', async () => {

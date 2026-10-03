@@ -1,5 +1,12 @@
 import { StyleSheet, View } from 'react-native'
 import Svg, { Circle, G, Path } from 'react-native-svg'
+import {
+  siAirbnb, siAirbus, siAmd, siAmericanexpress, siBmw, siCardano, siCisco, siCocacola,
+  siCoinbase, siDropbox, siEbay, siFerrari, siFord, siGodaddy, siHermes, siIntel,
+  siLitecoin, siLufthansa, siMastercard, siNike, siPaypal, siPinterest, siPolkadot,
+  siPorsche, siQualcomm, siShopify, siSiemens, siSnapchat, siStarbucks, siTripadvisor,
+  siUber, siVisa, siVolkswagen, siWix, siXiaomi, siZoom, type SimpleIcon,
+} from 'simple-icons'
 
 import { colors } from './colors'
 import { Text } from './text'
@@ -30,33 +37,6 @@ function Bullion({ size, tint }: { size: number; tint: string }) {
   )
 }
 
-/** Circle of twelve stars on the EU blue disc. */
-function EuroFlag({ size }: { size: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 48 48">
-      <Circle cx="24" cy="24" r="24" fill={colors.euBlue} />
-      <G fill={colors.euStar}>
-        {STAR_ANGLES.map((angle) => {
-          const rad = (angle * Math.PI) / 180
-          return (
-            <Path
-              key={angle}
-              d={STAR_PATH}
-              transform={`translate(${24 + 14.5 * Math.sin(rad)} ${24 - 14.5 * Math.cos(rad)})`}
-            />
-          )
-        })}
-      </G>
-    </Svg>
-  )
-}
-
-/** Twelve evenly spaced positions, clock-face order. */
-const STAR_ANGLES = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
-
-/** A five-pointed star with its centroid at the origin, radius ~3.2. */
-const STAR_PATH = 'M0 -3.2 0.94 -1 3.2 -1 1.4 0.4 2.1 2.6 0 1.3 -2.1 2.6 -1.4 0.4 -3.2 -1 -0.94 -1Z'
-
 /** Compact, bundled silhouettes; no remote image, font or per-row request. */
 const STOCK_PATHS: Record<StockMarkKind, readonly { d: string; fill: string }[]> = {
   apple: [{ fill: colors.ink, d: 'M29 8c.3 4-2.8 7-6 7-.3-3.6 2.6-6.7 6-7ZM32.5 25c0-4 3.3-6 3.5-6.1-2-3-5.2-3.5-6.4-3.5-2.8-.3-5.4 1.7-6.8 1.7-1.3 0-3.4-1.6-5.6-1.5-3 .1-5.8 1.8-7.3 4.4-3.2 5.6-.8 14 2.3 18.4 1.5 2.2 3.1 4.4 5.4 4.3 2.2-.1 3-1.4 5.7-1.4s3.5 1.4 5.8 1.3c2.4 0 3.8-2.2 5.2-4.4 1.7-2.4 2.4-4.7 2.5-4.8-4.7-2-4.3-8.4-4.3-8.4Z' }],
@@ -83,6 +63,50 @@ const STOCK_PATHS: Record<StockMarkKind, readonly { d: string; fill: string }[]>
     { fill: colors.brandRedDeep, d: 'M12 8h8v33l-8 1ZM28 8h8v34l-8-1Z' },
     { fill: colors.brandRed, d: 'M12 8h8l16 34-8-1Z' },
   ],
+  airbnb: [], airbus: [], amd: [], americanExpress: [], bmw: [], cisco: [], cocaCola: [],
+  coinbase: [], dropbox: [], ebay: [], ferrari: [], ford: [], goDaddy: [], hermes: [],
+  intel: [], lufthansa: [], mastercard: [], nike: [], paypal: [], pinterest: [], porsche: [],
+  qualcomm: [], shopify: [], siemens: [], snapchat: [], starbucks: [], tripadvisor: [],
+  uber: [], visa: [], volkswagen: [], wix: [], xiaomi: [], zoom: [],
+}
+
+const BRAND_ICONS: Partial<Record<AssetIconKind, SimpleIcon>> = {
+  airbnb: siAirbnb, airbus: siAirbus, amd: siAmd, americanExpress: siAmericanexpress,
+  bmw: siBmw, cisco: siCisco, cocaCola: siCocacola, coinbase: siCoinbase, dropbox: siDropbox,
+  ebay: siEbay, ferrari: siFerrari, ford: siFord, goDaddy: siGodaddy, hermes: siHermes,
+  intel: siIntel, lufthansa: siLufthansa, mastercard: siMastercard, nike: siNike,
+  paypal: siPaypal, pinterest: siPinterest, porsche: siPorsche, qualcomm: siQualcomm,
+  shopify: siShopify, siemens: siSiemens, snapchat: siSnapchat, starbucks: siStarbucks,
+  tripadvisor: siTripadvisor, uber: siUber, visa: siVisa, volkswagen: siVolkswagen,
+  wix: siWix, xiaomi: siXiaomi, zoom: siZoom,
+  litecoin: siLitecoin, cardano: siCardano, polkadot: siPolkadot,
+}
+
+function BrandIcon({ icon, size }: { icon: SimpleIcon; size: number }) {
+  return (
+    <View style={[styles.box, styles.stock, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Svg width={size * 0.66} height={size * 0.66} viewBox="0 0 24 24">
+        <Path d={icon.path} fill={`#${icon.hex}`} />
+      </Svg>
+    </View>
+  )
+}
+
+function PairBadge({ label, size }: { label: string; size: number }) {
+  const pair = label.toUpperCase().replace(/[^A-Z]/g, '')
+  const base = pair.slice(0, 3) || 'FX'
+  const quote = pair.slice(3, 6) || 'FX'
+  const coin = size * 0.66
+  return (
+    <View style={[styles.pair, { width: size, height: size }]}>
+      <View style={[styles.currencyDisc, styles.currencyBase, { width: coin, height: coin, borderRadius: coin / 2 }]}>
+        <Text style={[styles.currencyText, { fontSize: size * 0.18 }]}>{base}</Text>
+      </View>
+      <View style={[styles.currencyDisc, styles.currencyQuote, { width: coin, height: coin, borderRadius: coin / 2 }]}>
+        <Text style={[styles.currencyText, styles.currencyQuoteText, { fontSize: size * 0.18 }]}>{quote}</Text>
+      </View>
+    </View>
+  )
 }
 
 /**
@@ -90,7 +114,10 @@ const STOCK_PATHS: Record<StockMarkKind, readonly { d: string; fill: string }[]>
  * to a tinted disc with the instrument's initials.
  */
 export function AssetIcon({ kind, size = 44, label = '', tint }: AssetIconProps) {
-  if (Object.hasOwn(STOCK_PATHS, kind)) {
+  const brandIcon = BRAND_ICONS[kind]
+  if (brandIcon) return <BrandIcon icon={brandIcon} size={size} />
+
+  if (Object.hasOwn(STOCK_PATHS, kind) && STOCK_PATHS[kind as StockMarkKind].length > 0) {
     return (
       <View style={[styles.box, styles.stock, { width: size, height: size, borderRadius: size / 2 }]}>
         <Svg width={size * 0.8} height={size * 0.8} viewBox="0 0 48 48">
@@ -100,8 +127,15 @@ export function AssetIcon({ kind, size = 44, label = '', tint }: AssetIconProps)
     )
   }
 
-  if (kind === 'gold' || kind === 'silver') {
-    const bullionTint = tint ?? (kind === 'gold' ? colors.gold : colors.silver)
+  if (kind === 'gold' || kind === 'silver' || kind === 'copper' || kind === 'platinum' || kind === 'palladium') {
+    const metalTints = {
+      gold: colors.gold,
+      silver: colors.silver,
+      copper: '#B87333',
+      platinum: '#8D98A7',
+      palladium: '#697584',
+    } as const
+    const bullionTint = tint ?? metalTints[kind]
     return (
       <View style={[styles.box, { width: size, height: size }]}>
         <Bullion size={size * 0.94} tint={bullionTint} />
@@ -109,15 +143,15 @@ export function AssetIcon({ kind, size = 44, label = '', tint }: AssetIconProps)
     )
   }
 
-  if (kind === 'euro') {
+  if (kind === 'forex') {
     return (
       <View style={[styles.box, { width: size, height: size }]}>
-        <EuroFlag size={size} />
+        <PairBadge label={label} size={size} />
       </View>
     )
   }
 
-  if (kind === 'bitcoin' || kind === 'ethereum' || kind === 'oil') {
+  if (kind === 'bitcoin' || kind === 'ethereum' || kind === 'oil' || kind === 'gas') {
     const disc = kind === 'bitcoin' ? colors.bitcoin : kind === 'ethereum' ? colors.ethereum : colors.ink
     return (
       <Svg width={size} height={size} viewBox="0 0 48 48">
@@ -129,10 +163,29 @@ export function AssetIcon({ kind, size = 44, label = '', tint }: AssetIconProps)
             <Path fill={colors.onInk} d="M24 7 13 25l11 6 11-6Z" />
             <Path fill={colors.onInkMuted} d="m13 28 11 14 11-14-11 6Z" />
           </>
-        ) : (
+        ) : kind === 'oil' ? (
           <Path fill={colors.onInk} d="M24 7c-3 6-13 14-13 22a13 13 0 0 0 26 0c0-8-10-16-13-22Zm-7 23a7 7 0 0 0 7 7v-3a4 4 0 0 1-4-4Z" fillRule="evenodd" />
+        ) : (
+          <Path fill={colors.onInk} d="M27 5c2 8-5 10-2 16 2-3 5-5 8-6 4 5 7 10 7 16 0 9-7 14-16 14S8 39 8 30c0-8 5-14 11-20-1 7 1 10 4 12-1-8 2-13 4-17Zm-3 35c5 0 8-3 8-8 0-3-2-6-4-9 0 5-3 7-5 10-1-3-3-5-5-6-1 2-2 4-2 6 0 4 3 7 8 7Z" />
         )}
       </Svg>
+    )
+  }
+
+  if (kind === 'eos') {
+    return (
+      <View style={[styles.box, styles.cryptoWordmark, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Text style={[styles.badgeText, { fontSize: size * 0.22 }]}>EOS</Text>
+      </View>
+    )
+  }
+
+  if (kind === 'index' || kind === 'stock') {
+    const compact = label.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, kind === 'index' ? 5 : 4) || (kind === 'index' ? 'IDX' : 'STK')
+    return (
+      <View style={[styles.box, styles.marketBadge, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Text style={[styles.badgeText, { fontSize: size * (compact.length > 4 ? 0.16 : 0.2) }]}>{compact}</Text>
+      </View>
     )
   }
 
@@ -158,6 +211,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   stock: { backgroundColor: colors.surface },
+  pair: { justifyContent: 'center' },
+  currencyDisc: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  currencyBase: { left: 0, top: 2, backgroundColor: colors.navy },
+  currencyQuote: { right: 0, bottom: 2, backgroundColor: colors.gold },
+  currencyText: { fontFamily: fonts.bold, color: colors.onInk, includeFontPadding: false },
+  currencyQuoteText: { color: colors.navy },
+  marketBadge: { backgroundColor: colors.navy },
+  cryptoWordmark: { backgroundColor: colors.ink },
+  badgeText: { fontFamily: fonts.bold, color: colors.onInk, includeFontPadding: false },
   glyph: {
     fontFamily: fonts.bold,
     color: colors.navy,
