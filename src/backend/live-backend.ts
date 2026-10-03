@@ -59,6 +59,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
   /** In-memory copy of what the keychain holds, so reads are not async-chatty. */
   let material: SessionMaterial | null = null
   let bootstrap: PortalBootstrap | null = null
+  let tradingAccountIds = new Map<string, string>()
 
   const quotes = createQuoteFeed()
   const tradingEvents = createTradingEvents(() => material?.accountToken ?? null)
@@ -66,11 +67,46 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
   function invalidateSessionData(): void {
     bootstrap = null
     markets = null
+    tradingAccountIds = new Map()
     portal.reset()
   }
 
   function invalidateAccountData(): void {
     bootstrap = null
+    tradingAccountIds = new Map()
+  }
+
+  async function readTradingAccounts(session: SessionMaterial) {
+    const response = await gate.callJson('accountList', {
+      query: { token: session.accountToken },
+      headers: trading.headers(session),
+    })
+
+    try {
+      const accounts = parseTradingAccounts(response)
+      tradingAccountIds = new Map(accounts.map((account) => [account.id, account.databaseId]))
+      return accounts
+    } catch (cause) {
+      throw new BackendError('malformed', 'Account list returned an unexpected shape.', {
+        endpoint: 'accountList',
+        cause,
+      })
+    }
+  }
+
+  async function resolveOrderAccountId(accountToken: string): Promise<string> {
+    const known = tradingAccountIds.get(accountToken)
+    if (known) return known
+
+    const account = (await readTradingAccounts(requireSession())).find(
+      (item) => item.id === accountToken,
+    )
+    if (!account) {
+      throw new BackendError('rejected', 'That trading account is no longer available.', {
+        endpoint: 'accountList',
+      })
+    }
+    return account.databaseId
   }
 
   async function readBootstrap(): Promise<PortalBootstrap> {
@@ -83,20 +119,7 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
   async function readAccounts(): Promise<Account[]> {
     const session = requireSession()
     const portalData = await readBootstrap()
-    const response = await gate.callJson('accountList', {
-      query: { token: session.accountToken },
-      headers: trading.headers(session),
-    })
-
-    let tradingAccounts: ReturnType<typeof parseTradingAccounts>
-    try {
-      tradingAccounts = parseTradingAccounts(response)
-    } catch (cause) {
-      throw new BackendError('malformed', 'Account list returned an unexpected shape.', {
-        endpoint: 'accountList',
-        cause,
-      })
-    }
+    const tradingAccounts = await readTradingAccounts(session)
 
     const detailedAccounts = portalData.accounts.map((portalAccount) => {
       const tradingAccount = tradingAccounts.find((account) =>
@@ -300,11 +323,12 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
 
   async function orderFingerprint(): Promise<string> {
     const session = requireSession()
-    if (session.orderFingerprint?.endsWith(`_${session.accountToken}`)) {
+    const accountId = session.orderAccountId ?? await resolveOrderAccountId(session.accountToken)
+    if (session.orderFingerprint?.endsWith(`_${accountId}`)) {
       return session.orderFingerprint
     }
-    const fingerprint = await trading.issueOrderFingerprint(session, session.accountToken)
-    const updated = { ...session, orderFingerprint: fingerprint }
+    const fingerprint = await trading.issueOrderFingerprint(session, accountId)
+    const updated = { ...session, orderAccountId: accountId, orderFingerprint: fingerprint }
     material = updated
     await store.write(updated)
     return fingerprint
@@ -401,7 +425,13 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
       list: readAccounts,
       async switchAccount(request) {
         const session = requireSession()
-        let switched = { ...session, accountToken: request.accountId, orderFingerprint: undefined }
+        const orderAccountId = tradingAccountIds.get(request.accountId)
+        let switched = {
+          ...session,
+          accountToken: request.accountId,
+          orderAccountId,
+          orderFingerprint: undefined,
+        }
         try {
           const tradingResponse = await gate.call('switchAccountTrading', {
             query: { token: session.accountToken, switchtoken: request.accountId },

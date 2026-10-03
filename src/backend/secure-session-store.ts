@@ -17,6 +17,12 @@ import { Platform } from 'react-native'
 export type SessionMaterial = {
   /** Returned by `collect=check`. Identifies the trading account. */
   accountToken: string
+  /**
+   * Database id paired with `accountToken` by `collect=accountList`.
+   * `create_fingerprint` requires this value as `account_id`; it is not the
+   * trading token and linked demo accounts commonly use different values.
+   */
+  orderAccountId?: string
   /** Sent as the `Secretkey` header. */
   secretKey: string
   /**

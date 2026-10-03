@@ -34,7 +34,12 @@ import {
 } from '../design-system'
 import { directionOf, formatLots, formatMoney, formatPercent, formatPrice } from '../data/format'
 import { applyQuote } from '../data/live-quote'
-import { estimateRequiredMargin } from '../data/margin'
+import {
+  adjustOrderLots,
+  estimateRequiredMargin,
+  normalizeOrderLots,
+  tradingSpecification,
+} from '../data/margin'
 import { useTradeDraft, type OrderType } from '../data/trade-draft'
 import type { Instrument } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
@@ -47,9 +52,8 @@ import { LotStepper } from '../features/trade/ticket-parts'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 
 const ORDER_TYPES: readonly OrderType[] = ['Market', 'Limit', 'Stop']
-const LOT_STEP = 0.01
 /** One-tap volumes under the stepper. */
-const LOT_PICKS: readonly number[] = [0.01, 0.1, 0.5, 1]
+const LOT_PICKS: readonly number[] = [0.01, 0.1, 0.5, 1, 5, 10]
 /** The docked Sell / Buy bar: padding plus one button. */
 const DOCK_HEIGHT = 76
 
@@ -111,11 +115,14 @@ export function TradeScreen() {
       </PageScreen>
     )
   }
+  const terms = tradingSpecification(instrument.symbol, instrument.category)
+  const orderLots = normalizeOrderLots(lots, terms)
   const margin = estimateRequiredMargin(
     instrument.price,
     instrument.contractSize,
-    lots,
+    orderLots,
     account.leverage,
+    terms?.marginRate,
   )
 
   // The API's `type=stop` is a two-legged HFT order, not a stop entry, so
@@ -128,7 +135,7 @@ export function TradeScreen() {
             'The trading API has no confirmed single stop-entry order yet. Use Market or Limit for now.',
           options: [{ label: 'Got it' }],
         })
-      : openOrderTicket(instrument.id, side, { lots, orderType })
+      : openOrderTicket(instrument.id, side, { lots: orderLots, orderType })
 
   const explainProtection = () =>
     showMenu({
@@ -138,7 +145,8 @@ export function TradeScreen() {
       options: [{ label: 'Got it' }],
     })
 
-  const [lotCount, lotUnit] = formatLots(lots).split(' ')
+  const [lotCount, lotUnit] = formatLots(orderLots).split(' ')
+  const lotPicks = LOT_PICKS.filter((value) => value >= (terms?.minimumLots ?? 0.01))
   // The docked Sell / Buy bar floats above the tab bar; keep the form clear of it.
   const dockClearance = tabBarTop + DOCK_HEIGHT + spacing.xxl
   const marginShare = margin === null || account.freeMargin <= 0 ? null : margin / account.freeMargin
@@ -216,20 +224,20 @@ export function TradeScreen() {
               <View style={styles.builderHead}>
                 <Text variant="section">Quantity</Text>
                 <Text variant="caption" color={colors.textMuted}>
-                  {`Steps of ${LOT_STEP} lots`}
+                  {`Steps of ${formatLots(terms?.lotStep ?? 0.01)}`}
                 </Text>
               </View>
               <LotStepper
                 lots={lotCount}
                 unit={lotUnit}
-                onDecrease={() => setLots((previous) => previous - LOT_STEP)}
-                onIncrease={() => setLots((previous) => previous + LOT_STEP)}
+                onDecrease={() => setLots((previous) => adjustOrderLots(previous, -1, terms))}
+                onIncrease={() => setLots((previous) => adjustOrderLots(previous, 1, terms))}
               />
               <View style={styles.picks}>
                 <QuickPicks
-                  values={LOT_PICKS}
-                  selected={LOT_PICKS.includes(lots) ? lots : undefined}
-                  onSelect={(next) => setLots(() => next)}
+                  values={lotPicks}
+                  selected={lotPicks.includes(orderLots) ? orderLots : undefined}
+                  onSelect={(next) => setLots(() => normalizeOrderLots(next, terms))}
                   format={(next) => next.toFixed(2)}
                 />
               </View>
@@ -252,7 +260,7 @@ export function TradeScreen() {
             <View style={styles.statsSecondary}>
               <Stat
                 label="Leverage"
-                value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
+                value={terms ? `1:${terms.leverage}` : account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
                 small
               />
               <Stat

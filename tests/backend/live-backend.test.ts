@@ -692,6 +692,53 @@ describe('the methods that are not wired yet', () => {
 })
 
 describe('acknowledged mutations', () => {
+  it('creates a demo order fingerprint with the account database id, not its trading token', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend({ ...CONFIG, phase: 2 })
+    await backend.session.signIn('a@b.com', 'pw')
+
+    const linkedAccounts = [
+      ...tradingAccountsResponse,
+      {
+        uid: 'user-1',
+        token: 'demo-token',
+        account_id: '20002',
+        balance: 100000,
+        book: 'DEMO',
+        account_type: 'standard',
+      },
+    ]
+    const fetchMock = scriptFetch(
+      { body: JSON.stringify(linkedAccounts) },
+      { body: '{"status":"success"}' },
+      { body: '{"status":"success"}' },
+      { body: '0123456789abcdef0123456789abcdef_20002' },
+      { body: '{"status":"success"}' },
+    )
+
+    await backend.accounts.list()
+    await backend.accounts.switchAccount({
+      accountId: 'demo-token',
+      idempotencyKey: 'switch-demo',
+    })
+    await expect(
+      backend.orders.place({
+        instrumentId: 'c:xauusd',
+        side: 'Buy',
+        lots: '0.01',
+        idempotencyKey: 'place-demo-order',
+      }),
+    ).resolves.toBeUndefined()
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(urls).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('collect=create_fingerprint&token=demo-token&account_id=20002'),
+        expect.stringContaining('collect=placeorder&token=demo-token'),
+      ]),
+    )
+  })
+
   it('re-reads the portal bootstrap once a trade is acknowledged', async () => {
     // Bootstrap carries equity and margin; serving the cached copy after a
     // close would show the account as it was before the trade.
@@ -700,13 +747,14 @@ describe('acknowledged mutations', () => {
     await backend.session.signIn('a@b.com', 'pw')
 
     const fetchMock = scriptFetch(
+      { body: JSON.stringify([{ ...tradingAccountsResponse[0], token: 'acct-1', account_id: 'acct-1' }]) },
       { body: '0123456789abcdef0123456789abcdef_acct-1' },
       { body: '{"status":"success"}' },
     )
     await backend.orders.close({ positionId: 'order-open', idempotencyKey: 'close-1' })
     await backend.accounts.profile()
 
-    expect(fetchMock.mock.calls[1][0]).toContain('collect=squareoff')
+    expect(fetchMock.mock.calls[2][0]).toContain('collect=squareoff')
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('apiBootstrap'))).toBe(true)
   })
 
@@ -716,6 +764,7 @@ describe('acknowledged mutations', () => {
     await backend.session.signIn('a@b.com', 'pw')
 
     const fetchMock = scriptFetch(
+      { body: JSON.stringify([{ ...tradingAccountsResponse[0], token: 'acct-1', account_id: 'acct-1' }]) },
       { body: '0123456789abcdef0123456789abcdef_acct-1' },
       { body: '{"status":"fail","message":"market closed"}' },
     )

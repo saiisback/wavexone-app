@@ -443,4 +443,17 @@ describe('order mutations', () => {
     expect(url).toContain('clicked=yes')
     expect(url).toMatch(/trigger=(&|$)/)
   })
+
+  it('strips the catalogue namespace before sending the trading symbol', async () => {
+    const fetchMock = scriptFetch(ACK)
+    await phase2Adapter().placeOrder(
+      MATERIAL,
+      { instrumentId: 'c:xauusd', side: 'Buy', lots: '0.01', idempotencyKey: 'p-3' },
+      FINGERPRINT,
+    )
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('symbol=XAUUSD')
+    expect(url).not.toContain('symbol=C%3AXAUUSD')
+  })
 })

@@ -270,7 +270,7 @@ export class TradingApiAdapter {
         token: material.accountToken,
         type: request.limitPrice ? 'limit' : 'market',
         bs: request.side.toLowerCase(),
-        symbol: request.instrumentId.toUpperCase(),
+        symbol: request.instrumentId.replace(/^[^:]+:/, '').toUpperCase(),
         lot: request.lots,
         sl: request.stopLoss ?? '',
         target: request.takeProfit ?? '',

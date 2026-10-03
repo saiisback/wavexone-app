@@ -90,7 +90,7 @@ jest.mock('../../src/backend/provider', () => ({
 }))
 
 describe('order margin availability', () => {
-  it('keeps the order review available when the account has no configured leverage estimate', () => {
+  it('uses the LP specification when the account has no configured leverage', () => {
     let tree!: renderer.ReactTestRenderer
     act(() => {
       tree = renderer.create(<OrderTicketScreen />)
@@ -98,9 +98,78 @@ describe('order margin availability', () => {
 
     const orderButton = tree.root.findByType(Button)
     expect(orderButton.props.disabled).toBe(false)
-    expect(JSON.stringify(tree.toJSON())).toContain('Margin estimate unavailable')
+    expect(JSON.stringify(tree.toJSON())).toContain('$48.01')
+    expect(JSON.stringify(tree.toJSON())).not.toContain('Margin estimate unavailable')
     expect(JSON.stringify(tree.toJSON())).not.toContain('∞')
 
     act(() => tree.unmount())
+  })
+
+  it('uses the instrument margin requirement instead of account-wide leverage', () => {
+    mockAccount.leverage = 100
+    let tree!: renderer.ReactTestRenderer
+    act(() => {
+      tree = renderer.create(<OrderTicketScreen />)
+    })
+
+    // Gold is 2% in the supplied LP specification: 2400.5 × 100 × 0.01 × 2%.
+    expect(JSON.stringify(tree.toJSON())).toContain('$48.01')
+
+    act(() => tree.unmount())
+    mockAccount.leverage = 0
+  })
+
+  it('raises an equity order to the one-share minimum from the LP specification', () => {
+    mockInstrument.symbol = 'AAPL.OQ'
+    mockInstrument.category = 'Stocks'
+    mockInstrument.contractSize = 1
+    mockInstrument.price = 200
+    mockInstrument.bid = 199.9
+    mockInstrument.ask = 200.1
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => {
+      tree = renderer.create(<OrderTicketScreen />)
+    })
+
+    expect(JSON.stringify(tree.toJSON())).toContain('1.00')
+
+    act(() => tree.unmount())
+    Object.assign(mockInstrument, {
+      symbol: 'XAU/USD',
+      category: 'Metals',
+      contractSize: 100,
+      price: 2_400,
+      bid: 2_399.5,
+      ask: 2_400.5,
+    })
+  })
+
+  it('uses the stricter 1:5 leverage requirement for BTC', () => {
+    mockInstrument.symbol = 'BTC/USD'
+    mockInstrument.category = 'Crypto'
+    mockInstrument.contractSize = 1
+    mockInstrument.price = 68_000
+    mockInstrument.bid = 67_990
+    mockInstrument.ask = 68_000
+
+    let tree!: renderer.ReactTestRenderer
+    act(() => {
+      tree = renderer.create(<OrderTicketScreen />)
+    })
+
+    const rendered = JSON.stringify(tree.toJSON())
+    expect(rendered).toContain('1:5')
+    expect(rendered).toContain('$136.00')
+
+    act(() => tree.unmount())
+    Object.assign(mockInstrument, {
+      symbol: 'XAU/USD',
+      category: 'Metals',
+      contractSize: 100,
+      price: 2_400,
+      bid: 2_399.5,
+      ask: 2_400.5,
+    })
   })
 })

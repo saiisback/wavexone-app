@@ -28,7 +28,12 @@ import {
 } from '../design-system'
 import { formatLots, formatMoney, formatPrice } from '../data/format'
 import { applyQuote } from '../data/live-quote'
-import { estimateRequiredMargin } from '../data/margin'
+import {
+  adjustOrderLots,
+  estimateRequiredMargin,
+  normalizeOrderLots,
+  tradingSpecification,
+} from '../data/margin'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useLiveQuote } from '../features/markets/use-live-quote'
@@ -42,8 +47,6 @@ import type { RootStackParamList } from '../navigation/types'
 
 type OrderRoute = RouteProp<RootStackParamList, 'OrderTicket'>
 
-const LOT_STEP = 0.01
-const MIN_LOTS = 0.01
 const DECIMAL = /^\d+(\.\d+)?$/
 
 /**
@@ -90,9 +93,17 @@ export function OrderTicketScreen() {
   }
 
   const marketPrice = side === 'Buy' ? instrument.ask : instrument.bid
+  const terms = tradingSpecification(instrument.symbol, instrument.category)
+  const orderLots = normalizeOrderLots(lots, terms)
   const limitValid = DECIMAL.test(limitPrice.trim()) && Number(limitPrice) > 0
   const price = isLimit && limitValid ? Number(limitPrice) : marketPrice
-  const margin = estimateRequiredMargin(price, instrument.contractSize, lots, account.leverage)
+  const margin = estimateRequiredMargin(
+    price,
+    instrument.contractSize,
+    orderLots,
+    account.leverage,
+    terms?.marginRate,
+  )
   const exceedsMargin = margin !== null && margin > account.freeMargin
   const protectionValid = [stopLoss, takeProfit].every(
     (value) => value.trim() === '' || DECIMAL.test(value.trim()),
@@ -100,11 +111,11 @@ export function OrderTicketScreen() {
   const canPlace = !exceedsMargin && protectionValid && (!isLimit || limitValid)
 
   const step = (direction: 1 | -1) =>
-    setLots((previous) => Math.max(MIN_LOTS, round(previous + direction * LOT_STEP)))
+    setLots((previous) => adjustOrderLots(previous, direction, terms))
 
   const place = () =>
     showMenu({
-      title: `${side} ${formatLots(lots)} ${instrument.symbol}`,
+      title: `${side} ${formatLots(orderLots)} ${instrument.symbol}`,
       message: isLimit
         ? `Confirm this ${side.toLowerCase()} limit order at ${limitPrice.trim()}. It will be submitted once and is not automatically retried.`
         : `Confirm this ${side.toLowerCase()} order. It will be submitted once and is not automatically retried.`,
@@ -115,7 +126,7 @@ export function OrderTicketScreen() {
           void backend.orders.place({
             instrumentId: instrument.id,
             side,
-            lots: lots.toFixed(2),
+            lots: orderLots.toFixed(2),
             ...(isLimit ? { limitPrice: limitPrice.trim() } : {}),
             stopLoss: stopLoss.trim() || undefined,
             takeProfit: takeProfit.trim() || undefined,
@@ -132,7 +143,7 @@ export function OrderTicketScreen() {
       }],
     })
 
-  const [lotCount, lotUnit] = formatLots(lots).split(' ')
+  const [lotCount, lotUnit] = formatLots(orderLots).split(' ')
   const tone = side === 'Buy' ? 'brand' : 'night'
 
   return (
@@ -258,7 +269,7 @@ export function OrderTicketScreen() {
           <Divider />
           <KeyValueRow
             label="Leverage"
-            value={account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
+            value={terms ? `1:${terms.leverage}` : account.leverage > 0 ? `1:${account.leverage}` : 'Not configured'}
           />
           <KeyValueRow
             well
@@ -280,11 +291,6 @@ export function OrderTicketScreen() {
       ) : null}
     </Sheet>
   )
-}
-
-/** Keeps lot sizes free of binary floating-point drift in the display. */
-function round(value: number) {
-  return Math.round(value * 100) / 100
 }
 
 const styles = StyleSheet.create({
