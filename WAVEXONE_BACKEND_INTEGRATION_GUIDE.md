@@ -161,11 +161,11 @@ Several trading mutations are implemented as `GET` requests. The client must tre
 | Funding methods and limits | `apiRedeemConfig` |
 | Save withdrawal destination | `apiSaveWithdrawDetails` |
 | Withdrawal OTP | `apiSendWithdrawOtp` |
-| Submit withdrawal | `apiSubmitWithdraw` |
-| Submit deposit | `apiSubmitDeposit` |
-| Internal transfer | `apiTransfer` |
+| Submit withdrawal | `requestPayment` (`name=request`) |
+| Submit deposit | `requestPayment` (`name=deposit`) |
+| Internal transfer | Not exposed in the mobile app |
 
-Use the newer `api*` endpoints. Do not use `transferBalance`, `getPayoutInfo`, `getPayinInfo`, or other legacy variants unless the backend team explicitly approves them.
+Use the documented `requestPayment` trading endpoint for deposit and withdrawal requests. Do not use `transferBalance`, `getPayoutInfo`, `getPayinInfo`, or other legacy variants unless the backend team explicitly approves them.
 
 ### 4.8 Account and More
 
@@ -288,4 +288,3 @@ Backend integration is production-ready only when:
 - Live prices and chart data have a documented freshness policy.
 - Legacy and unsafe endpoints are blocked by the client module.
 - The backend team has approved the final endpoint list.
-

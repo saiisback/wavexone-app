@@ -685,7 +685,6 @@ describe('the methods that are not wired yet', () => {
   it.each([
     ['funds.deposit', () => backend().funds.deposit({ accountId: 'a', amount: '100', method: 'card', idempotencyKey: 'k' })],
     ['funds.requestWithdrawal', () => backend().funds.requestWithdrawal({ accountId: 'a', amount: '100', method: 'bank', idempotencyKey: 'k' })],
-    ['funds.transfer', () => backend().funds.transfer({ fromAccountId: 'a', toAccountId: 'b', amount: '100', idempotencyKey: 'k' })],
   ])('%s stays blocked or signed out in the default build', async (_name, call) => {
     await expect(call()).rejects.toThrow(/signed out|delivery phase 3/)
   })
@@ -837,18 +836,42 @@ describe('phase 3 account and funding routes', () => {
     expect(called(fetchMock, 'submitDemoDeposit')).toHaveLength(0)
   })
 
-  it('sends a live account deposit to apiSubmitDeposit', async () => {
+  it('sends a live deposit through the documented requestPayment form', async () => {
     const { backend, fetchMock } = await signedIn()
     await backend.funds.deposit({ accountId: 'account-1', amount: '100.00', method: 'Bank transfer', idempotencyKey: 'd-3' })
 
-    expect(called(fetchMock, 'apiSubmitDeposit')).toHaveLength(1)
+    const requests = called(fetchMock, 'collect=requestPayment')
+    expect(requests).toHaveLength(1)
+    const [, init] = requests[0]
+    const body = new URLSearchParams(String(init.body))
+    expect(body.get('name')).toBe('deposit')
+    expect(body.get('token')).toBe('acct-1')
+    expect(JSON.parse(body.get('data')!)).toEqual({ method: 'Bank transfer', wamount: '100.00' })
     expect(called(fetchMock, 'submitDemoDeposit')).toHaveLength(0)
   })
 
-  it('refuses a transfer whose source and destination are the same account', async () => {
+  it('sends an OTP-confirmed withdrawal through the documented requestPayment form', async () => {
     const { backend, fetchMock } = await signedIn()
-    await expect(backend.funds.transfer({ fromAccountId: 'account-1', toAccountId: 'account-1', amount: '50.00', idempotencyKey: 'same-account' })).rejects.toMatchObject({ kind: 'rejected' })
-    expect(called(fetchMock, 'apiTransfer')).toHaveLength(0)
+    await backend.funds.requestWithdrawal({
+      accountId: 'account-1',
+      amount: '50.00',
+      method: 'Bank transfer',
+      details: { account: '12345678' },
+      otp: '532235',
+      idempotencyKey: 'w-1',
+    })
+
+    const requests = called(fetchMock, 'collect=requestPayment')
+    expect(requests).toHaveLength(1)
+    const [, init] = requests[0]
+    const body = new URLSearchParams(String(init.body))
+    expect(body.get('name')).toBe('request')
+    expect(body.get('token')).toBe('acct-1')
+    expect(JSON.parse(body.get('data')!)).toEqual({
+      funds_withdraw_method: 'Bank transfer',
+      wamount: '50.00',
+      otp: '532235',
+    })
   })
 
   it('saves the phone and resends the server-held name unchanged', async () => {

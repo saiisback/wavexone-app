@@ -165,4 +165,4 @@ export type ChartSeries = {
 export type Timeframe = '1D' | '5D' | '1W' | '1M' | '3M' | '6M'
 
 /** Funding flows share one screen; this picks which copy and fields to show. */
-export type FundingMode = 'deposit' | 'withdraw' | 'transfer'
+export type FundingMode = 'deposit' | 'withdraw'

@@ -17,7 +17,6 @@ import {
   SCREEN_PADDING,
   SearchField,
   ShieldIcon,
-  SwapIcon,
   Text,
   TrendUpIcon,
   WalletIcon,
@@ -97,7 +96,7 @@ function BalanceOverview({ account }: { account: DetailedAccount }) {
       message: `${entry.subtitle} · ${entry.date} ${entry.time}`,
       options: entry.instrumentId
         ? [{ label: 'View chart', onSelect: () => openInstrument(entry.instrumentId as string) }]
-        : [{ label: 'Repeat this transfer', onSelect: () => openFunding('deposit') }],
+        : [{ label: 'Make a deposit', onSelect: () => openFunding('deposit') }],
     })
   }
 
@@ -129,7 +128,7 @@ function BalanceOverview({ account }: { account: DetailedAccount }) {
             <EmptyState
               icon={<WalletIcon size={22} color={colors.navy} />}
               title="No funding yet"
-              message="Deposits, withdrawals and transfers on this account appear here."
+              message="Deposits and withdrawals on this account appear here."
               action="Make a deposit"
               onAction={() => openFunding('deposit')}
             />
@@ -206,7 +205,6 @@ function BalanceCard({ account }: { account: DetailedAccount }) {
 const FUNDING_ACTIONS: readonly { mode: FundingMode; label: string; Icon: typeof DepositIcon }[] = [
   { mode: 'deposit', label: 'Deposit', Icon: DepositIcon },
   { mode: 'withdraw', label: 'Withdraw', Icon: WithdrawIcon },
-  { mode: 'transfer', label: 'Transfer', Icon: SwapIcon },
 ]
 
 /** A disc over its label. Deposit is the solid brand disc; the rest are white. */

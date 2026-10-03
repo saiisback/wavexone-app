@@ -274,7 +274,7 @@ export function BoltIcon({ size = DEFAULT, color = colors.gold }: IconProps) {
 /* Funding                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Card with a plus — Deposit / Withdraw / Transfer share this glyph. */
+/** Card with a plus — used for funding method choices. */
 export function CardPlusIcon({ size = DEFAULT, color = colors.white }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">

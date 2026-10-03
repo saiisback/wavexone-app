@@ -93,8 +93,8 @@ authorization and a staging environment before any trading mutation runs, and
 
 Needed once that exists: `collect=placeorder` (market and limit, success and
 failure), `collect=squareoff`, `collect=mobileapp_modifyorder`,
-`collect=create_fingerprint`, `apiSubmitWithdraw`, `apiSubmitDeposit`,
-`apiTransfer`.
+`collect=create_fingerprint` and `collect=requestPayment` for both deposit and
+OTP-confirmed withdrawal.
 
 `create_fingerprint` is worth calling out: every order mutation requires a
 `fingerprint` parameter distinct from the `footprint` used at sign-in, and its

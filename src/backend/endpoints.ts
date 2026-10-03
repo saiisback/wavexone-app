@@ -22,8 +22,7 @@ export type Phase = 1 | 2 | 3 | 4
 /**
  * How the request body is encoded. The two transports disagree, which is
  * exactly the kind of detail guide §5 says must not leak into a screen:
- * trading posts form fields, the portal's `api*` routes read a JSON document,
- * and `apiSubmitDeposit` is multipart because it carries a proof image.
+ * trading posts form fields, while the portal's `api*` routes read JSON.
  */
 export type BodyEncoding = 'form' | 'json' | 'multipart'
 
@@ -64,7 +63,7 @@ export const DENIED_ENDPOINTS: Readonly<Record<string, string>> = {
     'Blocked: SQL injection via payValue/getValue/paySymbol/getSymbol/markup/markupvalue/getlive/paylive, which are concatenated into ~8 UPDATE/INSERT statements with no escaping and no transaction (guide §6.5). Do not enable until the backend team confirms a fix.',
   sendnotification:
     'Blocked: notifications must not be sent from the client application (guide §6.6).',
-  transferBalance: 'Blocked legacy route — use `funds.transfer` (apiTransfer) instead (guide §4.7).',
+  transferBalance: 'Blocked legacy route — internal transfers are not exposed in the mobile app.',
   getPayoutInfo:
     'Blocked legacy route — use `funds.configuration` (apiRedeemConfig) instead (guide §4.7).',
   getPayinInfo:
@@ -318,30 +317,13 @@ export const ENDPOINTS = {
     ['sourceId', 'amount', 'withdrawAddress'],
     'json',
   ),
-  submitWithdraw: portal(
-    'apiSubmitWithdraw',
+  requestPayment: trading(
+    'requestPayment',
     'POST',
     true,
     3,
-    ['sourceId', 'amount', 'method', 'withdrawAddress', 'otp'],
-    'json',
-  ),
-  /** Multipart, because it carries an optional proof image (≤3MB, jpg/png/gif/webp). */
-  submitDeposit: portal(
-    'apiSubmitDeposit',
-    'POST',
-    true,
-    3,
-    ['amount', 'method', 'targetAccountId', 'proof'],
-    'multipart',
-  ),
-  transfer: portal(
-    'apiTransfer',
-    'POST',
-    true,
-    3,
-    ['source', 'destination', 'amount', 'memo'],
-    'json',
+    ['name', 'data', 'token'],
+    'form',
   ),
   submitDemoDeposit: portal('submitDemoDeposit', 'POST', true, 3, ['deposit_amount'], 'form'),
 

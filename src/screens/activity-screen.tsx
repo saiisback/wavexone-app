@@ -145,7 +145,7 @@ export function ActivityScreen() {
             onSelect: () => openInstrument(entry.instrumentId as string),
           },
         ]
-      : [{ label: 'Repeat this transfer', onSelect: () => openFunding('deposit') }]
+      : [{ label: 'Make a deposit', onSelect: () => openFunding('deposit') }]
 
     showMenu({
       title: entry.title,

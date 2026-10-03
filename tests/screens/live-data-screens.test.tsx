@@ -7,7 +7,7 @@ import { BackendProvider, useInvalidateQueries } from '../../src/backend/provide
 import { useSession } from '../../src/data/store'
 import { Button, Field, ListRow, QuickPicks, Sparkline, colors } from '../../src/design-system'
 import type { ActionMenuRequest } from '../../src/design-system/action-menu'
-import type { Account, Instrument, Position, Profile } from '../../src/data/types'
+import type { Account, FundingMode, Instrument, Position, Profile } from '../../src/data/types'
 import { MoverCard } from '../../src/features/markets/mover-card'
 import { PositionRow } from '../../src/features/positions/position-row'
 import { HomeScreen } from '../../src/screens/home-screen'
@@ -18,7 +18,7 @@ const mockOpenAccountSwitcher = jest.fn()
 const mockOpenInstrument = jest.fn()
 const mockGoBack = jest.fn()
 const mockShowMenu = jest.fn<void, [ActionMenuRequest]>()
-let mockFundingMode = 'deposit'
+let mockFundingMode: FundingMode = 'deposit'
 let mockUuid = 0
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => `intent-${++mockUuid}` }))
@@ -299,17 +299,18 @@ describe('home dashboard', () => {
     expect(text).toContain('+$24.75 (+1.98%)')
   })
 
-  it('offers deposit, withdraw and transfer as quick actions', async () => {
+  it('offers only deposit and withdraw as quick actions', async () => {
     useSession.setState({ accountId: account.id })
     const tree = renderHome(backendWith(async () => [account]))
     await flush()
     await flush()
-    for (const label of ['Deposit', 'Withdraw', 'Transfer']) {
+    for (const label of ['Deposit', 'Withdraw']) {
       const action = tree.root.find((node) =>
         node.props.delayLongPress !== undefined && node.props.accessibilityLabel === label,
       )
       expect(action.props.accessibilityRole).toBe('button')
     }
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel === 'Transfer')).toHaveLength(0)
   })
 
   it('pins favourites to the watchlist ahead of the other markets', async () => {
@@ -418,7 +419,7 @@ describe('progressive funding flow', () => {
   }
   const sibling = { ...account, id: 'account-2', number: '10002' }
 
-  async function funding(mode = 'deposit', options: { configuration?: Partial<FundingConfiguration>; accounts?: Account[]; selectedAccountId?: string } = {}) {
+  async function funding(mode: FundingMode = 'deposit', options: { configuration?: Partial<FundingConfiguration>; accounts?: Account[]; selectedAccountId?: string } = {}) {
     mockFundingMode = mode
     useSession.setState({ accountId: options.selectedAccountId ?? account.id })
     const listAccounts = jest.fn(async () => options.accounts ?? [account, sibling])
@@ -430,7 +431,6 @@ describe('progressive funding flow', () => {
       deposit: jest.fn<Promise<void>, [unknown]>().mockResolvedValue(undefined),
       sendWithdrawalOtp: jest.fn<Promise<void>, [unknown]>().mockResolvedValue(undefined),
       requestWithdrawal: jest.fn<Promise<void>, [unknown]>().mockResolvedValue(undefined),
-      transfer: jest.fn<Promise<void>, [unknown]>().mockResolvedValue(undefined),
       history: jest.fn().mockResolvedValue([]),
     }
     backend.funds = funds
@@ -465,61 +465,11 @@ describe('progressive funding flow', () => {
     expect(funds.deposit).not.toHaveBeenCalled()
   })
 
-  it.each(['deposit', 'withdraw'])('shows an unavailable state when %s has no valid methods', async (mode) => {
+  it.each(['deposit', 'withdraw'] as const)('shows an unavailable state when %s has no valid methods', async (mode) => {
     const { tree } = await funding(mode, { configuration: { depositMethods: ['', '  '], withdrawalMethods: [] } })
     expect(renderedText(tree)).toContain('No funding methods are available')
     change(tree, 'Amount', '100')
     expect(cta(tree).props.disabled).toBe(true)
-  })
-
-  it('requires two linked accounts for transfer', async () => {
-    const { tree, funds } = await funding('transfer', { accounts: [account] })
-    change(tree, 'Amount', '100')
-    expect(renderedText(tree)).toContain('Transfer requires two different accounts')
-    expect(cta(tree).props.disabled).toBe(true)
-    act(() => cta(tree).props.onPress())
-    expect(funds.transfer).not.toHaveBeenCalled()
-  })
-
-  it('offers only distinct transfer destinations and submits the reviewed pair', async () => {
-    const { tree, funds } = await funding('transfer')
-    const to = tree.root.findAllByType(ListRow).find((row) => row.props.label === 'To')!
-    act(() => to.props.onPress())
-    const choices = mockShowMenu.mock.calls.at(-1)![0].options
-    expect(choices).toHaveLength(1)
-    expect(choices[0].label).toContain('10002')
-    change(tree, 'Amount', '100')
-    confirm(tree)
-    await flush()
-    expect(funds.transfer).toHaveBeenCalledWith({ fromAccountId: 'account-1', toAccountId: 'account-2', amount: '100.00', idempotencyKey: expect.any(String) })
-    expect(mockGoBack).toHaveBeenCalledTimes(1)
-  })
-
-  it('changes the funding source through the backend account switcher before loading its context', async () => {
-    const third: Account = { id: 'account-3', number: '10003', mode: 'DEMO', balance: 321, summaryAvailable: false }
-    const { tree, backend, funds, switchAccount, listAccounts } = await funding('transfer', { accounts: [account, sibling, third] })
-    let finishSwitch!: () => void
-    switchAccount.mockImplementation(() => new Promise<void>((resolve) => { finishSwitch = resolve }))
-    const from = tree.root.findAllByType(ListRow).find((row) => row.props.label === 'From')!
-    act(() => from.props.onPress())
-    expect(mockOpenAccountSwitcher).toHaveBeenCalledTimes(1)
-    expect(useSession.getState().accountId).toBe(account.id)
-
-    // Present the route opened by From, retaining the funding sheet beneath it.
-    act(() => tree.update(<BackendProvider backend={backend}><FundingScreen /><AccountSwitcherScreen /></BackendProvider>))
-    await flush()
-    const choice = tree.root.find((node) => node.props.delayLongPress !== undefined && node.props.accessibilityLabel?.startsWith('Select DEMO account 10003'))
-    act(() => choice.props.onPress())
-    expect(switchAccount).toHaveBeenCalledWith({ accountId: third.id, idempotencyKey: expect.any(String) })
-    expect(useSession.getState().accountId).toBe(account.id)
-    expect(funds.configuration).not.toHaveBeenCalledWith(third.id)
-    listAccounts.mockResolvedValue([account, sibling, { ...account, id: third.id, mode: 'DEMO', number: third.number, current: true }])
-    await act(async () => finishSwitch())
-    await flush()
-    expect(useSession.getState().accountId).toBe(third.id)
-    expect(funds.configuration).toHaveBeenLastCalledWith(third.id)
-    expect(tree.root.findAllByType(ListRow).find((row) => row.props.label === 'From')!.props.value).toBe('DEMO · 10003')
-    expect(funds.transfer).not.toHaveBeenCalled()
   })
 
   it('withholds linked-only demo funding until reselecting loads that same account summary', async () => {
@@ -680,20 +630,6 @@ describe('progressive funding flow', () => {
     expect(funds.deposit).toHaveBeenCalledWith(expect.objectContaining({ amount: '200.00' }))
   })
 
-  it('invalidates an open transfer confirmation when its destination is removed', async () => {
-    const { tree, funds, refresh, listAccounts } = await funding('transfer')
-    change(tree, 'Amount', '100')
-    act(() => cta(tree).props.onPress())
-    const pending = mockShowMenu.mock.calls.at(-1)![0].options[0].onSelect!
-    listAccounts.mockResolvedValue([account])
-    act(() => refresh('accounts:'))
-    await flush()
-    act(() => pending())
-    await flush()
-    expect(funds.transfer).not.toHaveBeenCalled()
-    expect(cta(tree).props.disabled).toBe(true)
-  })
-
   it('keeps an open confirmation usable when a refresh returns unchanged eligibility', async () => {
     const { tree, funds, refresh } = await funding()
     change(tree, 'Amount', '100')
@@ -746,10 +682,10 @@ describe('progressive funding flow', () => {
     expect(mockGoBack).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['withdraw', 'transfer'])('blocks %s above available funds', async (mode) => {
-    const { tree } = await funding(mode)
+  it('blocks withdrawals above available funds', async () => {
+    const { tree } = await funding('withdraw')
     change(tree, 'Amount', '501')
-    if (mode === 'withdraw') change(tree, 'Bank account', '12345678')
+    change(tree, 'Bank account', '12345678')
     expect(cta(tree).props.disabled).toBe(true)
     expect(renderedText(tree)).toContain('Above the available')
   })

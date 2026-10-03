@@ -18,9 +18,8 @@ export type HttpRequest = {
    * Request body, already keyed by the API's own parameter names.
    *
    * The encoding is not a detail the caller gets to pick: the trading API
-   * reads form fields, the portal's `api*` routes parse a JSON document, and
-   * `apiSubmitDeposit` is multipart because it carries a proof image. Sending
-   * JSON to a route that calls `$this->input->post()` yields an empty body
+   * reads form fields, while the portal's `api*` routes parse a JSON document.
+   * Sending JSON to a route that calls `$this->input->post()` yields an empty body
    * and a confusing 400, so `encoding` comes off the endpoint spec.
    */
   body?: Record<string, unknown>

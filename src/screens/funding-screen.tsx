@@ -16,15 +16,12 @@ import {
   DepositIcon,
   Field,
   IconChip,
-  ListGroup,
-  ListRow,
   PopIn,
   PressableScale,
   QuickPicks,
   Reveal,
   SegmentedControl,
   Sheet,
-  SwapIcon,
   Text,
   WalletIcon,
   WithdrawIcon,
@@ -37,14 +34,13 @@ import {
 import type { FundingConfiguration, FundingRequest } from '../backend/contract'
 import { BackendError } from '../backend/errors'
 import { useBackend, useBackendQuery, useInvalidateQueries } from '../backend/provider'
-import { formatMoney, formatPrice } from '../data/format'
-import { hasAccountSummary, type Account, type DetailedAccount, type FundingMode } from '../data/types'
+import { formatMoney } from '../data/format'
+import type { DetailedAccount, FundingMode } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { AFTER_FUNDING } from '../features/shared/query-keys'
 import { QueryStateView } from '../features/shared/query-state'
 import type { RootStackParamList } from '../navigation/types'
-import { useAppNavigation } from '../navigation/use-app-navigation'
 
 type FundingRoute = RouteProp<RootStackParamList, 'Funding'>
 type FundingNavigation = NativeStackNavigationProp<RootStackParamList, 'Funding'>
@@ -55,14 +51,12 @@ const SHEET_TITLE = 'Move money'
 const MODES: readonly { mode: FundingMode; label: string }[] = [
   { mode: 'deposit', label: 'Deposit' },
   { mode: 'withdraw', label: 'Withdraw' },
-  { mode: 'transfer', label: 'Transfer' },
 ]
 const MODE_LABELS = MODES.map((item) => item.label)
 
 const MODE_ICON: Record<FundingMode, typeof DepositIcon> = {
   deposit: DepositIcon,
   withdraw: WithdrawIcon,
-  transfer: SwapIcon,
 }
 
 const COPY: Record<FundingMode, { title: string; subtitle: string; cta: string }> = {
@@ -76,17 +70,11 @@ const COPY: Record<FundingMode, { title: string; subtitle: string; cta: string }
     subtitle: 'Send funds to a saved destination',
     cta: 'Request withdrawal',
   },
-  transfer: {
-    title: 'Transfer',
-    subtitle: 'Move funds between your accounts',
-    cta: 'Review transfer',
-  },
 }
 
 /**
- * Deposit, withdraw and internal transfer share this sheet — the same three
- * inputs with different copy, mirroring `apiSubmitDeposit`,
- * `apiSubmitWithdraw` and `apiTransfer`.
+ * Deposit and withdraw share this sheet and submit through the documented
+ * trading API payment request.
  *
  * Every submission goes through a confirmation step, and runs only in a build
  * whose phase allows funding (guide §8). A refusal is explained in a menu.
@@ -117,7 +105,6 @@ export function FundingScreen() {
       key={`${mode}:${account.id}`}
       mode={mode}
       account={account}
-      accounts={accountData.data.accounts}
       configuration={configuration.data!}
     />
   )
@@ -126,10 +113,9 @@ export function FundingScreen() {
 type SubmissionState = 'idle' | 'submitting' | 'awaitingOtp' | 'succeeded'
 
 /** Account-scoped state prevents an OTP or confirmation surviving an account switch. */
-function FundingForm({ mode, account, accounts, configuration }: {
+function FundingForm({ mode, account, configuration }: {
   mode: FundingMode
   account: DetailedAccount
-  accounts: readonly Account[]
   configuration: FundingConfiguration
 }) {
   const copy = COPY[mode]
@@ -137,11 +123,9 @@ function FundingForm({ mode, account, accounts, configuration }: {
   const goBack = useSafeBack()
   const showMenu = useActionMenu()
   const backend = useBackend()
-  const { openAccountSwitcher } = useAppNavigation()
   const invalidate = useInvalidateQueries()
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('')
-  const [destinationId, setDestinationId] = useState('')
   const [otp, setOtp] = useState('')
   const [details, setDetails] = useState<Record<string, string>>({})
   const [submission, setSubmission] = useState<SubmissionState>('idle')
@@ -162,28 +146,21 @@ function FundingForm({ mode, account, accounts, configuration }: {
     .filter((option) => option.trim().length > 0)
   const quickAmounts = configuration.quickAmounts.filter((value) => Number.isFinite(value) && value > 0)
   const selectedMethod = withdrawal?.request.method ?? (methods.includes(method) ? method : methods[0] ?? '')
-  const selectedDestinationId =
-    destinationId || accounts.find((item) => item.id !== account.id)?.id || ''
-
   const validDecimal = /^\d+(?:\.\d{0,2})?$/.test(amount.trim())
   const parsed = validDecimal ? Number(amount) : 0
   const value = Number.isFinite(parsed) ? parsed : 0
   const minimum = mode === 'withdraw'
     ? configuration.minimumWithdrawal
-    : mode === 'deposit' ? configuration.minimumDeposit : 0
-  const exceedsBalance = mode !== 'deposit' && value > configuration.availableFund
+    : configuration.minimumDeposit
+  const exceedsBalance = mode === 'withdraw' && value > configuration.availableFund
   const withdrawalFields = mode === 'withdraw' ? withdrawal?.fields ?? configuration.withdrawalFields : []
   const destinationDetails = Object.fromEntries(
     withdrawalFields.map((field) => [field.name, (details[field.name] ?? '').trim()]),
   )
   const destinationComplete = withdrawalFields.every((field) => destinationDetails[field.name] !== '')
-  const destination = accounts.find((item) => item.id === selectedDestinationId)
-  const transferAvailable = Boolean(destination && destination.id !== account.id)
-  const unavailable = mode === 'transfer'
-    ? transferAvailable ? '' : 'Transfer requires two different accounts.'
-    : !selectedMethod
-      ? 'No funding methods are available for this account.'
-      : !methods.includes(selectedMethod) ? 'The selected method is no longer available. Close this sheet and review a new withdrawal.' : ''
+  const unavailable = !selectedMethod
+    ? 'No funding methods are available for this account.'
+    : !methods.includes(selectedMethod) ? 'The selected method is no longer available. Close this sheet and review a new withdrawal.' : ''
   const awaitingOtp = submission === 'awaitingOtp'
   const locked = submission !== 'idle'
   const submitting = submission === 'submitting'
@@ -195,10 +172,9 @@ function FundingForm({ mode, account, accounts, configuration }: {
   const confirmationEligibility = JSON.stringify([
     minimum,
     mode === 'deposit' ? null : configuration.availableFund,
-    mode === 'transfer' ? [] : methods,
+    methods,
     mode === 'withdraw' ? configuration.withdrawalFields : [],
-    accounts.map((item) => [item.id, item.mode, item.number]),
-    value, selectedMethod, selectedDestinationId, destinationDetails, otp,
+    value, selectedMethod, destinationDetails, otp,
   ])
   useLayoutEffect(() => {
     latestConfirmation.current += 1
@@ -209,19 +185,6 @@ function FundingForm({ mode, account, accounts, configuration }: {
       ? 'Request submitted'
       : mode === 'withdraw' && !awaitingOtp ? 'Send withdrawal code' : copy.cta
 
-  const pickAccount = (onPick: (id: string) => void, exclude?: string) =>
-    showMenu({
-      title: 'Choose account',
-      options: accounts
-        .filter((item) => item.id !== exclude)
-        .map((item) => ({
-          label: `${item.mode} · ${item.number} — ${
-            hasAccountSummary(item) ? formatMoney(item.equity) : formatPrice(item.balance, 2)
-          }`,
-          onSelect: () => onPick(item.id),
-        })),
-    })
-
   const submit = () => {
     if (!canSubmit || busy.current || !mounted.current) return
     const confirmation = ++latestConfirmation.current
@@ -229,7 +192,7 @@ function FundingForm({ mode, account, accounts, configuration }: {
     let consumed = false
     showMenu({
       title: `${copy.title} ${formatMoney(value)}`,
-      message: `${account.mode} · ${account.number}${mode === 'transfer' ? ` → ${destination?.mode} · ${destination?.number}` : ` · ${selectedMethod}`}. Confirm this request. It is submitted once and is not automatically retried.`,
+      message: `${account.mode} · ${account.number} · ${selectedMethod}. Confirm this request. It is submitted once and is not automatically retried.`,
       options: [{
         label: `Confirm ${copy.title.toLowerCase()}`,
         destructive: mode !== 'deposit',
@@ -244,8 +207,6 @@ function FundingForm({ mode, account, accounts, configuration }: {
               const amountValue = value.toFixed(2)
               if (mode === 'deposit') {
                 await backend.funds.deposit({ accountId: account.id, amount: amountValue, method: selectedMethod, idempotencyKey })
-              } else if (mode === 'transfer') {
-                await backend.funds.transfer({ fromAccountId: account.id, toAccountId: selectedDestinationId, amount: amountValue, idempotencyKey })
               } else if (awaitingOtp) {
                 await backend.funds.requestWithdrawal({ ...withdrawal!.request, otp: otp.trim(), idempotencyKey })
               } else {
@@ -352,7 +313,7 @@ function FundingForm({ mode, account, accounts, configuration }: {
           hint={
             exceedsBalance
               ? `Above the available ${formatMoney(configuration.availableFund)}`
-              : mode === 'transfer' ? 'Enter an amount to transfer' : `Minimum ${formatMoney(minimum)}`
+              : `Minimum ${formatMoney(minimum)}`
           }
         />
 
@@ -368,34 +329,18 @@ function FundingForm({ mode, account, accounts, configuration }: {
 
       <Reveal index={4} style={styles.group}>
         <Text variant="overline" color={colors.textSubtle}>
-          {mode === 'transfer' ? 'Route' : mode === 'withdraw' ? 'Withdraw to' : 'Pay with'}
+          {mode === 'withdraw' ? 'Withdraw to' : 'Pay with'}
         </Text>
-        {mode === 'transfer' ? (
-          <ListGroup variant="card">
-            <ListRow
-              label="From"
-              value={`${account.mode} · ${account.number}`}
-              onPress={locked || !transferAvailable ? undefined : openAccountSwitcher}
-            />
-            <ListRow
-              label="To"
-              value={destination ? `${destination.mode} · ${destination.number}` : 'No other account'}
-              divider={false}
-              onPress={locked || !transferAvailable ? undefined : () => pickAccount(setDestinationId, account.id)}
-            />
-          </ListGroup>
-        ) : (
-          methods.map((option) => (
-            <OptionCard
-              key={option}
-              label={option}
-              detail={mode === 'withdraw' ? 'Saved destination' : 'Funding method'}
-              selected={option === selectedMethod}
-              disabled={locked}
-              onPress={() => setMethod(option)}
-            />
-          ))
-        )}
+        {methods.map((option) => (
+          <OptionCard
+            key={option}
+            label={option}
+            detail={mode === 'withdraw' ? 'Saved destination' : 'Funding method'}
+            selected={option === selectedMethod}
+            disabled={locked}
+            onPress={() => setMethod(option)}
+          />
+        ))}
         {unavailable ? <Text variant="caption" color={colors.textMuted}>{unavailable}</Text> : null}
       </Reveal>
 

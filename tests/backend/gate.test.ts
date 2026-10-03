@@ -49,7 +49,7 @@ describe('denied endpoints', () => {
   )
 
   it('allows a route that is not on the list', () => {
-    expect(() => Gate.assertAllowed('apiTransfer')).not.toThrow()
+    expect(() => Gate.assertAllowed('futureDocumentedRoute')).not.toThrow()
   })
 })
 
@@ -95,7 +95,7 @@ describe('mutations', () => {
   it('checks body parameters as well as query parameters', async () => {
     const gate = gateWith()
     await expect(
-      gate.call('transfer', { body: { from: 'a', to: 'b' }, idempotencyKey: 'a' }),
+      gate.call('requestPayment', { body: { from: 'a', to: 'b' }, idempotencyKey: 'a' }),
     ).rejects.toThrow(/does not accept from, to/)
   })
 

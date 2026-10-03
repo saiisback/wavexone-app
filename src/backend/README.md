@@ -54,9 +54,9 @@ Two things that transcription settled, both of which were previously wrong:
   is server-issued per account by `create_fingerprint`, formatted
   `<hex>_<accountId>`, and required by every order mutation. They are separate
   fields on `SessionMaterial` so one cannot be sent where the other belongs.
-- **The two transports encode bodies differently.** Trading reads form fields;
-  the portal's `api*` routes parse a JSON document; `apiSubmitDeposit` is
-  multipart. The encoding comes off the endpoint spec, because sending JSON to
+- **The two transports encode bodies differently.** Trading reads form fields,
+  while the portal's `api*` routes parse a JSON document. The encoding comes
+  off the endpoint spec, because sending JSON to
   a route calling `$this->input->post()` yields an empty body and a confusing
   400.
 
@@ -102,7 +102,7 @@ Every existing trading and funding control is wired to its mutation:
   and the SL/TP sheet (`mobileapp_modifyorder` for open positions,
   `mobileapp_modifypendingorder` with the unchanged trigger for pending ones).
   Emptying a level sends `0`, which those routes read as "remove".
-- Funding: deposit, transfer, and withdrawal with the configured destination
+- Funding: deposit and OTP-confirmed withdrawal with the configured destination
   fields. The OTP request and the submission encode that destination
   identically. A deposit to a demo account goes to `submitDemoDeposit`
   (virtual funds), and only for the account the session is on, because that

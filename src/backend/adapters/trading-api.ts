@@ -15,7 +15,7 @@ import {
   parseSymbolMetadata,
 } from '../responses/trading'
 import type { SessionMaterial } from '../secure-session-store'
-import type { CloseOrderRequest, ModifyOrderRequest, PlaceOrderRequest } from '../contract'
+import type { CloseOrderRequest, FundingRequest, ModifyOrderRequest, PlaceOrderRequest } from '../contract'
 
 /**
  * `/api-v1/v1.php?collect=…` — the trading API.
@@ -322,6 +322,36 @@ export class TradingApiAdapter {
       idempotencyKey: request.idempotencyKey,
     })
     assertAcknowledged(response.json, 'bulkCancelPending')
+  }
+
+  async submitDepositRequest(material: SessionMaterial, request: FundingRequest) {
+    const response = await this.gate.call('requestPayment', {
+      body: {
+        name: 'deposit',
+        data: JSON.stringify({ method: request.method, wamount: request.amount }),
+        token: material.accountToken,
+      },
+      headers: this.headers(material),
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertAcknowledged(response.json, 'requestPayment')
+  }
+
+  async submitWithdrawalRequest(material: SessionMaterial, request: FundingRequest) {
+    const response = await this.gate.call('requestPayment', {
+      body: {
+        name: 'request',
+        data: JSON.stringify({
+          funds_withdraw_method: request.method,
+          wamount: request.amount,
+          otp: request.otp ?? '',
+        }),
+        token: material.accountToken,
+      },
+      headers: this.headers(material),
+      idempotencyKey: request.idempotencyKey,
+    })
+    assertAcknowledged(response.json, 'requestPayment')
   }
 
   /**

@@ -587,19 +587,12 @@ export function createLiveBackend(config: BackendConfig): WaveXBackend {
             idempotencyKey: request.idempotencyKey,
           })
         } else {
-          await portal.deposit(session, request)
+          await trading.submitDepositRequest(session, request)
         }
         invalidateAccountData()
       },
       async requestWithdrawal(request) {
-        await portal.withdraw(requireSession(), request)
-        invalidateAccountData()
-      },
-      async transfer(request) {
-        if (request.fromAccountId === request.toAccountId) {
-          throw new BackendError('rejected', 'Choose two different accounts for a transfer.')
-        }
-        await portal.transfer(requireSession(), request)
+        await trading.submitWithdrawalRequest(requireSession(), request)
         invalidateAccountData()
       },
       history: readFundingHistory,

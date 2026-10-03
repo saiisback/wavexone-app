@@ -119,7 +119,6 @@ export function createMockBackend(): WaveXBackend {
       sendWithdrawalOtp: async () => unavailable('Sending a withdrawal OTP'),
       deposit: async () => unavailable('Submitting a deposit'),
       requestWithdrawal: async () => unavailable('Requesting a withdrawal'),
-      transfer: async () => unavailable('Transferring funds'),
       history: () => settle(activity),
     },
 

@@ -18,7 +18,6 @@ export type {
   SignInResult,
   SetFavoriteRequest,
   SwitchAccountRequest,
-  TransferRequest,
   WithdrawalOtpRequest,
   LiveQuote,
   TradingEvent,

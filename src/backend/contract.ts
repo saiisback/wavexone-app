@@ -98,7 +98,6 @@ export type FundingRequest = {
   method: string
   details?: Readonly<Record<string, string>>
   otp?: string
-  proof?: { uri: string; name: string; mimeType: string; size: number }
   idempotencyKey: string
 }
 
@@ -120,13 +119,6 @@ export type SaveProfileRequest = { phone: string; idempotencyKey: string }
 export type OpenAccountRequest = {
   /** `demo` opens one immediately; `live` asks the broker to open one. */
   kind: 'demo' | 'live'
-  idempotencyKey: string
-}
-
-export type TransferRequest = {
-  fromAccountId: string
-  toAccountId: string
-  amount: string
   idempotencyKey: string
 }
 
@@ -180,7 +172,6 @@ export interface WaveXBackend {
     /** On a demo account this adds virtual funds instead of a payment request. */
     deposit(request: FundingRequest): Promise<void>
     requestWithdrawal(request: FundingRequest): Promise<void>
-    transfer(request: TransferRequest): Promise<void>
     history(accountId: string): Promise<readonly ActivityEntry[]>
   }
 

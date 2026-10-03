@@ -149,53 +149,11 @@ describe('reset', () => {
   })
 })
 
-describe('withdrawal', () => {
-  function phase3Adapter() {
-    return new ClientPortalAdapter(new Gate({ ...CONFIG, phase: 3 }))
-  }
-
-  function bodyOf(call: unknown[]) {
-    return JSON.parse((call[1] as { body: string }).body) as Record<string, string>
-  }
-
-  it('describes the destination identically for the OTP and the submission', async () => {
-    // An OTP issued for one address and a withdrawal naming another is the
-    // failure this pins.
-    const portal = phase3Adapter()
-    const details = { account: '12345678' }
-
-    await portal.sendWithdrawalOtp(MATERIAL, {
-      accountId: 'account-1',
-      amount: '50.00',
-      details,
-      idempotencyKey: 'otp-1',
-    })
-    await portal.withdraw(MATERIAL, {
-      accountId: 'account-1',
-      amount: '50.00',
-      method: 'Bank transfer',
-      details,
-      otp: '123456',
-      idempotencyKey: 'withdraw-1',
-    })
-
-    const otpCall = fetchMock.mock.calls.find(([url]) => String(url).includes('apiSendWithdrawOtp'))
-    const submitCall = fetchMock.mock.calls.find(([url]) => String(url).includes('apiSubmitWithdraw'))
-    expect(otpCall).toBeDefined()
-    expect(submitCall).toBeDefined()
-    expect(bodyOf(otpCall!).withdrawAddress).toBe(JSON.stringify(details))
-    expect(bodyOf(submitCall!).withdrawAddress).toBe(bodyOf(otpCall!).withdrawAddress)
-  })
-})
-
 describe('funding request contracts from the supplied collection', () => {
   const details = { account: '12345678' }
   const funding = { accountId: 'account-1', amount: '50.00', method: 'Bank transfer', idempotencyKey: 'funding-1' }
   const cases = [
-    { route: 'apiSubmitDeposit', call: (portal: ClientPortalAdapter) => portal.deposit(MATERIAL, funding), encoding: 'multipart', body: { amount: '50.00', method: 'Bank transfer', targetAccountId: 'account-1' } },
     { route: 'apiSendWithdrawOtp', call: (portal: ClientPortalAdapter) => portal.sendWithdrawalOtp(MATERIAL, { ...funding, details }), encoding: 'json', body: { sourceId: 'account-1', amount: '50.00', withdrawAddress: '{"account":"12345678"}' } },
-    { route: 'apiSubmitWithdraw', call: (portal: ClientPortalAdapter) => portal.withdraw(MATERIAL, { ...funding, details, otp: '123456' }), encoding: 'json', body: { sourceId: 'account-1', amount: '50.00', method: 'Bank transfer', withdrawAddress: '{"account":"12345678"}', otp: '123456' } },
-    { route: 'apiTransfer', call: (portal: ClientPortalAdapter) => portal.transfer(MATERIAL, { fromAccountId: 'account-1', toAccountId: 'account-2', amount: '50.00', idempotencyKey: 'transfer-1' }), encoding: 'json', body: { source: 'account-1', destination: 'account-2', amount: '50.00', memo: '' } },
     { route: 'submitDemoDeposit', call: (portal: ClientPortalAdapter) => portal.demoDeposit(MATERIAL, funding), encoding: 'form', body: 'deposit_amount=50.00' },
   ]
 
@@ -210,23 +168,13 @@ describe('funding request contracts from the supplied collection', () => {
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('include')
     expect(init.headers.Origin).toBe(CONFIG.portalOrigin)
-    if (encoding === 'multipart') {
-      expect(init.headers['Content-Type']).toBeUndefined()
-      expect(Object.fromEntries(init.body.entries())).toEqual(body)
-    } else if (encoding === 'json') {
+    if (encoding === 'json') {
       expect(init.headers['Content-Type']).toBe('application/json')
       expect(JSON.parse(init.body)).toEqual(body)
     } else {
       expect(init.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
       expect(init.body).toBe(body)
     }
-  })
-
-  it('includes the optional proof only when supplied', async () => {
-    const portal = new ClientPortalAdapter(new Gate({ ...CONFIG, phase: 3 }))
-    await portal.deposit(MATERIAL, { ...funding, proof: { uri: 'file:///proof.png', name: 'proof.png', mimeType: 'image/png', size: 1024 } })
-    const [, init] = fetchMock.mock.calls.find(([url]) => String(url).endsWith('apiSubmitDeposit'))!
-    expect(Array.from(init.body.keys())).toEqual(['amount', 'method', 'targetAccountId', 'proof'])
   })
 
   it.each(cases)('$route never retries an ambiguous network failure', async ({ route, call }) => {

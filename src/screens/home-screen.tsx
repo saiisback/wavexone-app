@@ -32,7 +32,6 @@ import {
   Screen,
   SparkleIcon,
   Sparkline,
-  SwapIcon,
   Text,
   TrendUpIcon,
   WalletIcon,
@@ -330,12 +329,11 @@ function EquityFigure({ value }: { value: number }) {
 const FUNDING_ACTIONS: readonly { mode: FundingMode; label: string; Icon: typeof DepositIcon }[] = [
   { mode: 'deposit', label: 'Deposit', Icon: DepositIcon },
   { mode: 'withdraw', label: 'Withdraw', Icon: WithdrawIcon },
-  { mode: 'transfer', label: 'Transfer', Icon: SwapIcon },
 ]
 
 /**
- * Money in, out and between accounts: a Liquid Glass disc over a label.
- * Deposit is the blue-tinted glass; the others are clear.
+ * Money in and out: a Liquid Glass disc over a label. Deposit is the
+ * blue-tinted glass; withdrawal is clear.
  */
 function HeroAction({
   label,

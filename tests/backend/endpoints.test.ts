@@ -95,9 +95,7 @@ describe('phase gating (guide §8)', () => {
     // Guide §8 phase 3 is funding; §2 says real-money funding stays disabled
     // until then. A phase-1 build cannot reach any of these.
     for (const key of [
-      'submitWithdraw',
-      'submitDeposit',
-      'transfer',
+      'requestPayment',
       'saveWithdrawDetails',
       'sendWithdrawOtp',
       'submitDemoDeposit',
@@ -164,11 +162,9 @@ describe('mutation safety', () => {
   })
 
   it('sends the portal api* routes JSON and its legacy routes form fields', () => {
-    expect(ENDPOINTS.transfer.encoding).toBe('json')
     expect(ENDPOINTS.markNotificationsRead.encoding).toBe('json')
     expect(ENDPOINTS.saveProfile.encoding).toBe('json')
-    // Multipart, because it carries a proof image.
-    expect(ENDPOINTS.submitDeposit.encoding).toBe('multipart')
+    expect(ENDPOINTS.requestPayment.encoding).toBe('form')
     // Pre-api routes still read form fields.
     expect(ENDPOINTS.setPortalSession.encoding).toBe('form')
     expect(ENDPOINTS.switchAccountPortal.encoding).toBe('form')
