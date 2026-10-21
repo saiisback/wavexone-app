@@ -42,7 +42,7 @@ src/features/        composite pieces tied to one domain (market row, position c
 src/screens/         one file per screen
 src/navigation/      navigators, param lists, the custom tab bar
 src/data/            fixtures, domain types, session store, and hoisted Intl formatters
-src/backend/         the network seam — see src/backend/README.md
+src/backend/         the network seam — contract.ts defines the interface
 tests/               jest specs, mirroring the src/ tree they cover
 ```
 
