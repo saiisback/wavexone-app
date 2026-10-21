@@ -26,6 +26,12 @@ export type SessionMaterial = {
   /** Sent as the `Secretkey` header. */
   secretKey: string
   /**
+   * Server session created by `collect=check`. The trading API calls this
+   * `sid`; demo-account fingerprint registration needs it to bind the
+   * selected account to the authenticated login session.
+   */
+  sessionId?: string
+  /**
    * The whole body of `collect=bearer`, which is a raw token rather than
    * JSON (guide §3.1 step 4).
    */
@@ -42,8 +48,8 @@ export type SessionMaterial = {
   /**
    * Server-issued, per-account, required by every order mutation
    * (`placeorder`, `squareoff`, `modify`, the bulk closes). Comes from
-   * `collect=create_fingerprint&token=…&account_id=…` and is formatted
-   * `<hex>_<accountId>`.
+   * `collect=create_fingerprint&token=…&account_id=…` and must be treated as
+   * an opaque value owned by the service.
    *
    * Absent until an order mutation needs one, which is why it is optional:
    * a phase-1 build never asks for it.

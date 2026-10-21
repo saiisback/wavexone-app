@@ -4,7 +4,7 @@ import type { BrandMarkKind, CoinMarkKind, FlagCode } from './artwork.generated'
 
 /** Stocks with a hand-drawn multi-colour mark in `asset-icon.tsx`. */
 export type DrawnStockKind =
-  | 'apple' | 'tesla' | 'nvidia' | 'microsoft' | 'amazon' | 'meta' | 'google' | 'netflix'
+  | 'microsoft' | 'amazon'
 
 export type StockMarkKind = DrawnStockKind | BrandMarkKind
 

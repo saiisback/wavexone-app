@@ -1,8 +1,9 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { createContext, useContext } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import { Card } from './card'
-import { colors } from './colors'
 import { Divider } from './divider'
 import { ChevronRightIcon } from './icons'
 import { Pressable } from './pressable'
@@ -10,16 +11,16 @@ import { Text } from './text'
 import { fonts, radius, spacing } from './tokens'
 
 /** Soft fills for a row's icon tile; `navy` is the brand tint. */
-const TILE_FILL = {
+const themeTILE_FILL = (colors: Palette) => ({
   navy: colors.brandTint,
   blue: colors.tintBlue,
   violet: colors.tintViolet,
   amber: colors.tintAmber,
   mint: colors.tintMint,
   rose: colors.tintRose,
-} as const
+} as const)
 
-export type ListRowTone = keyof typeof TILE_FILL
+export type ListRowTone = keyof ReturnType<typeof themeTILE_FILL>
 
 export type ListRowProps = {
   icon?: React.ReactNode
@@ -59,6 +60,10 @@ export function ListRow({
   destructive = false,
   compact = false,
 }: ListRowProps) {
+  const colors = useColors()
+  const TILE_FILL = useThemeStyles(themeTILE_FILL)
+  const styles = useThemeStyles(themeStyles)
+
   const inset = useContext(GroupInset)
   const fill = TILE_FILL[tone ?? (destructive ? 'rose' : 'navy')]
 
@@ -129,6 +134,9 @@ export function ListGroup({
   title?: string
   children: React.ReactNode
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View>
       {title ? (
@@ -150,7 +158,7 @@ export function ListGroup({
 /** The rounded tile a row's icon sits on. */
 const ICON_TILE = 40
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   group: {
     paddingVertical: spacing.xs,
   },
@@ -209,4 +217,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontVariant: ['tabular-nums'],
   },
-})
+}))

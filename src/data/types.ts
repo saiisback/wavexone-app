@@ -99,6 +99,10 @@ export type Position = {
   entry: number
   current: number
   pnl: number
+  /** Valuation inputs retained so account totals can follow the live quote stream. */
+  contractSize?: number
+  swap?: number
+  commission?: number
   state: 'Open' | 'Pending' | 'Closed'
   /** Absent when the order carries none. */
   stopLoss?: number
@@ -156,6 +160,9 @@ export type ChartSeries = {
   step: number
   /** Per-point opens, so touching the chart can read any bar. */
   opens?: readonly number[]
+  /** Actual candle wicks from the broker; never inferred from closes. */
+  highs?: readonly number[]
+  lows?: readonly number[]
   /** Per-point bar times (epoch ms), for the scrubbing read-out. */
   times?: readonly number[]
   /** Digits on the price axis; whole numbers when absent. */
@@ -163,6 +170,7 @@ export type ChartSeries = {
 }
 
 export type Timeframe = '1D' | '5D' | '1W' | '1M' | '3M' | '6M'
+export type CandleInterval = '1m' | '5m' | '15m' | '1h' | '4h' | '1D'
 
 /** Funding flows share one screen; this picks which copy and fields to show. */
 export type FundingMode = 'deposit' | 'withdraw'

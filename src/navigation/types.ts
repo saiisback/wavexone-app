@@ -17,6 +17,7 @@ export type MoreStackParamList = {
   Profile: undefined
   Settings: undefined
   Signals: undefined
+  ManagedAccounts: undefined
 }
 
 export type TabParamList = {

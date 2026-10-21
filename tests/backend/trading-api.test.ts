@@ -73,6 +73,7 @@ describe('signIn', () => {
         accountToken: 'acct-1',
         secretKey: 'sk-1',
         footprint: 'server-fp',
+        sessionId: 'session-1',
       },
     })
     expect(JSON.stringify(outcome)).not.toContain('echoed-secret')
@@ -299,6 +300,46 @@ describe('setFavorite', () => {
 })
 
 describe('closedOrders', () => {
+  it('accepts the documented No Results response without a data field as an empty page', async () => {
+    scriptFetch({ body: '{"status":"fail","message":"No Results"}' })
+    await expect(adapter().closedOrders(MATERIAL, { page: 3 })).resolves.toEqual({
+      orders: [], info: { page: 1, total: 0, count: 0 },
+    })
+  })
+
+  it('does not turn a different business failure into empty history', async () => {
+    scriptFetch({ body: '{"status":"fail","message":"Permission denied"}' })
+    await expect(adapter().closedOrders(MATERIAL)).rejects.toThrow()
+  })
+
+  it('does not hide contradictory data in a No Results failure', async () => {
+    scriptFetch({ body: '{"status":"fail","message":"No Results","data":[{"id":"unexpected"}]}' })
+    await expect(adapter().closedOrders(MATERIAL)).rejects.toThrow()
+  })
+
+  it('preserves HTTP failures even when their body says No Results', async () => {
+    scriptFetch({ status: 503, body: '{"status":"fail","message":"No Results"}' })
+    await expect(adapter().closedOrders(MATERIAL)).rejects.toMatchObject({ kind: 'server' })
+  })
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid page %s before making a request', async (page) => {
+    const fetchMock = scriptFetch()
+    await expect(adapter().closedOrders(MATERIAL, { page })).rejects.toMatchObject({ kind: 'blocked' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('requests the selected history page rather than repeating page one', async () => {
+    const fetchMock = scriptFetch({
+      body: JSON.stringify({ info: { page: 2, total: 2, count: 21 }, data: [] }),
+    })
+
+    await adapter().closedOrders(MATERIAL, { page: 2, filter: '24hr' })
+
+    const url = new URL(fetchMock.mock.calls[0][0])
+    expect(url.searchParams.get('page')).toBe('2')
+    expect(url.searchParams.get('filter')).toBe('24hr')
+  })
+
   it('uses the documented closed-history filter values', async () => {
     const fetchMock = scriptFetch({
       body: JSON.stringify({ info: { page: 1, total: 0, count: 0 }, data: [] }),
@@ -336,6 +377,17 @@ describe('order fingerprint', () => {
     expect(url).not.toContain('footprint')
   })
 
+  it('binds the order fingerprint to the authenticated session', async () => {
+    const fetchMock = scriptFetch({ body: FINGERPRINT })
+    await phase2Adapter().issueOrderFingerprint(
+      { ...MATERIAL, sessionId: 'session-1' },
+      '8',
+    )
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('sid=session-1')
+  })
+
   it('reads the value out of an envelope when it gets one', async () => {
     // The collection captured no response for this route, so both a bare
     // body and a wrapped one have to be survivable.
@@ -343,9 +395,20 @@ describe('order fingerprint', () => {
     await expect(phase2Adapter().issueOrderFingerprint(MATERIAL, '22')).resolves.toBe('abc_22')
   })
 
-  it('refuses a value that is not for the account it asked about', async () => {
-    // Handing the wrong fingerprint to `placeorder` is worse than failing.
-    scriptFetch({ body: 'abc_999' })
+  it('accepts the server-issued top-level fingerprint as an opaque value', async () => {
+    // Production returns this top-level shape. The API reference does not
+    // promise that the opaque value contains or ends with the account id.
+    scriptFetch({
+      body: '{"status":"success","fingerprint":"server-issued-opaque-value"}',
+    })
+
+    await expect(phase2Adapter().issueOrderFingerprint(MATERIAL, '22')).resolves.toBe(
+      'server-issued-opaque-value',
+    )
+  })
+
+  it('refuses a fingerprint that is not a string', async () => {
+    scriptFetch({ body: '{"status":"success","fingerprint":{"value":"abc"}}' })
     await expect(phase2Adapter().issueOrderFingerprint(MATERIAL, '8')).rejects.toMatchObject({
       kind: 'malformed',
     })
@@ -467,7 +530,7 @@ describe('order mutations', () => {
     expect(url).toMatch(/trigger=(&|$)/)
   })
 
-  it('strips the catalogue namespace before sending the trading symbol', async () => {
+  it('preserves the catalogue namespace required by placeorder', async () => {
     const fetchMock = scriptFetch(ACK)
     await phase2Adapter().placeOrder(
       MATERIAL,
@@ -476,7 +539,22 @@ describe('order mutations', () => {
     )
 
     const [url] = fetchMock.mock.calls[0]
-    expect(url).toContain('symbol=XAUUSD')
-    expect(url).not.toContain('symbol=C%3AXAUUSD')
+    expect(url).toContain('symbol=C%3AXAUUSD')
+  })
+
+  it('reports an HTTP 200 order rejection as a rejected mutation', async () => {
+    scriptFetch({ body: '{"status":"fail","message":"Market is closed"}' })
+
+    await expect(
+      phase2Adapter().placeOrder(
+        MATERIAL,
+        { instrumentId: 'c:audcad', side: 'Buy', lots: '0.01', idempotencyKey: 'p-4' },
+        FINGERPRINT,
+      ),
+    ).rejects.toMatchObject({
+      kind: 'rejected',
+      endpoint: 'placeOrder',
+      serverMessage: 'Market is closed',
+    })
   })
 })

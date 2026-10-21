@@ -1,3 +1,5 @@
+import { useColors } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -11,7 +13,6 @@ import {
   PressableScale,
   Text,
   WithdrawIcon,
-  colors,
   fonts,
   radius,
   spacing,
@@ -41,11 +42,11 @@ export type ActivityRowProps = {
 
 const TILE = 44
 
-const TAG: Record<ActivityRowProps['kind'], { label: string; fill: string; ink: string }> = {
+const themeTAG = (colors: Palette): Record<ActivityRowProps['kind'], { label: string; fill: string; ink: string }> => ({
   trade: { label: 'Trade', fill: colors.tintBlue, ink: colors.tintBlueInk },
   deposit: { label: 'Deposit', fill: colors.tintMint, ink: colors.tintMintInk },
   withdrawal: { label: 'Withdrawal', fill: colors.tintRose, ink: colors.tintRoseInk },
-}
+})
 
 /**
  * One line of history in the reference transaction style: a tinted icon
@@ -68,7 +69,9 @@ export function ActivityRow({
   showDate = true,
   onMenu,
 }: ActivityRowProps) {
-  const { tag, detail } = metaOf(kind, title, subtitle)
+  const colors = useColors()
+
+  const { tag, detail } = metaOf(kind, title, subtitle, colors)
   const when = [showDate ? shortDate(date) : '', time].filter(Boolean).join(' · ')
   const flat = Math.abs(amount) < 0.005
 
@@ -144,7 +147,7 @@ export function ActivityRow({
         onPress={() => onMenu(id)}
         style={styles.more}
       >
-        <MoreVerticalIcon size={18} color={colors.textSubtle} />
+        <MoreVerticalIcon size={18} color={colors.textMuted} />
       </Pressable>
     </View>
   )
@@ -157,7 +160,8 @@ type Tag = { label: string; fill: string; ink: string }
  * side ("Buy" · 0.50 lots), pending orders with "Pending", and funding rows
  * whose title already names the kind lead with their status instead.
  */
-function metaOf(kind: ActivityRowProps['kind'], title: string, subtitle: string): { tag: Tag; detail: string } {
+function metaOf(kind: ActivityRowProps['kind'], title: string, subtitle: string, colors: Palette): { tag: Tag; detail: string } {
+  const TAG = themeTAG(colors)
   if (kind === 'trade') {
     const pending = /^Pending\s*•\s*/.exec(subtitle)
     if (pending) {

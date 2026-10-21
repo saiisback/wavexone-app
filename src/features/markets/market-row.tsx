@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -9,7 +11,6 @@ import {
   StarIcon,
   Text,
   TickFlash,
-  colors,
   radius,
   type AssetIconKind,
 } from '../../design-system'
@@ -77,6 +78,9 @@ export function MarketRow({
   layout = 'card',
   accessibilityLabel,
 }: MarketRowProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   // Streamed inside the row, so a tick re-renders this row alone.
   const quote = useLiveQuote(id)
   const price = quote?.price ?? snapshotPrice
@@ -155,6 +159,9 @@ export function MarketRow({
  * Subscribes to a single id rather than the whole favourites set.
  */
 function FavoriteMark({ id }: { id: string }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const isFavorite = useSession((state) => state.favorites.has(id))
   if (!isFavorite) return null
   return (
@@ -164,7 +171,7 @@ function FavoriteMark({ id }: { id: string }) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   layout: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -221,4 +228,4 @@ const styles = StyleSheet.create({
   price: {
     fontVariant: ['tabular-nums'],
   },
-})
+}))

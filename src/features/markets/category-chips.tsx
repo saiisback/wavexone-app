@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { useEffect } from 'react'
 import { ScrollView, StyleSheet } from 'react-native'
 import Animated, {
@@ -8,7 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 
-import { Pressable, SCREEN_PADDING, colors, fonts, motion, radius, shadow } from '../../design-system'
+import { Pressable, SCREEN_PADDING, fonts, motion, radius, shadow } from '../../design-system'
 
 /**
  * A horizontal strip of category pills. White at rest; the selected pill
@@ -24,6 +26,8 @@ export function CategoryChips<T extends string>({
   value: T
   onChange: (value: T) => void
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <ScrollView
       horizontal
@@ -39,6 +43,9 @@ export function CategoryChips<T extends string>({
 }
 
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const on = useSharedValue(selected ? 1 : 0)
   const bump = useSharedValue(1)
   useEffect(() => {
@@ -50,11 +57,11 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
   }, [selected, on, bump])
 
   const fill = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(on.get(), [0, 1], [colors.surface, colors.text]),
+    backgroundColor: interpolateColor(on.get(), [0, 1], [colors.surface, colors.gold]),
     transform: [{ scale: bump.get() }],
   }))
   const ink = useAnimatedStyle(() => ({
-    color: interpolateColor(on.get(), [0, 1], [colors.textMuted, colors.white]),
+    color: interpolateColor(on.get(), [0, 1], [colors.textMuted, colors.homePanel]),
   }))
 
   return (
@@ -65,14 +72,16 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
       onPress={onPress}
       hitSlop={4}
     >
-      <Animated.View style={[styles.chip, selected ? styles.chipSelected : styles.chipRest, fill]}>
+      <Animated.View
+        style={[styles.chip, selected ? styles.chipSelected : styles.chipRest, fill, selected ? styles.selectedFill : null]}
+      >
         <Animated.Text style={[styles.label, selected ? styles.labelSelected : null, ink]}>{label}</Animated.Text>
       </Animated.View>
     </Pressable>
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   scroller: {
     flexGrow: 0,
   },
@@ -94,6 +103,9 @@ const styles = StyleSheet.create({
   chipSelected: {
     boxShadow: '0px 8px 18px rgba(20, 24, 43, 0.24)',
   },
+  selectedFill: {
+    backgroundColor: colors.gold,
+  },
   label: {
     fontFamily: fonts.medium,
     fontSize: 14,
@@ -101,5 +113,6 @@ const styles = StyleSheet.create({
   },
   labelSelected: {
     fontFamily: fonts.semibold,
+    color: colors.homePanel,
   },
-})
+}))

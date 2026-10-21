@@ -1,6 +1,8 @@
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
-import { Amount, Text, colors, radius, spacing } from '../../design-system'
+import { Amount, Text, radius, spacing } from '../../design-system'
 import { formatSignedMoney } from '../../data/format'
 
 /**
@@ -8,6 +10,9 @@ import { formatSignedMoney } from '../../data/format'
  * day's count and net on the right, styled like an inset sticky header.
  */
 export function ActivityDayHeader({ title, count, total }: { title: string; count: number; total?: number }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.header} accessibilityRole="header">
       <View style={styles.headerPill}>
@@ -41,6 +46,8 @@ export function ActivityGroupCell({
   last: boolean
   children: React.ReactNode
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={[styles.cell, first ? styles.first : null, last ? styles.last : null]}>
       {children}
@@ -52,7 +59,7 @@ export function ActivityGroupCell({
 /** Matches the hairline ring in `shadow.card`. */
 const EDGE = 'rgba(20, 24, 43, 0.06)'
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -95,4 +102,4 @@ const styles = StyleSheet.create({
     marginRight: spacing.lg,
     backgroundColor: colors.divider,
   },
-})
+}))

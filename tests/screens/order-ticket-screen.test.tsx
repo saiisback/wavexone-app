@@ -1,15 +1,22 @@
 import renderer, { act } from 'react-test-renderer'
 
-import { Button } from '../../src/design-system'
+import { Button, Field } from '../../src/design-system'
 import { OrderTicketScreen } from '../../src/screens/order-ticket-screen'
+import { ModifyOrderScreen } from '../../src/screens/modify-order-screen'
 import type { Account, Instrument, Profile } from '../../src/data/types'
+import { useSession } from '../../src/data/store'
 
 const mockShowMenu = jest.fn()
+const mockPlace = jest.fn()
+const mockModify = jest.fn()
+const mockGoBack = jest.fn()
+const mockInvalidate = jest.fn()
+let mockOrderType = 'Market'
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ goBack: jest.fn(), canGoBack: () => true }),
+  useNavigation: () => ({ goBack: mockGoBack, canGoBack: () => true }),
   useRoute: () => ({
-    params: { instrumentId: 'xauusd', side: 'Buy', orderType: 'Market', lots: 0.01 },
+    params: { instrumentId: 'xauusd', positionId: 'order-1', side: 'Buy', orderType: mockOrderType, lots: 0.01 },
   }),
 }))
 
@@ -85,9 +92,110 @@ jest.mock('../../src/features/markets/use-live-quote', () => ({
 }))
 
 jest.mock('../../src/backend/provider', () => ({
-  useBackend: () => ({ orders: { place: jest.fn() } }),
-  useInvalidateQueries: () => jest.fn(),
+  useBackend: () => ({ orders: { place: mockPlace, modify: mockModify } }),
+  useBackendQuery: () => ({ status: 'ready', data: [{ id: 'order-1', instrumentId: 'xauusd', state: 'Open', side: 'Buy', lots: 0.01, entry: 2400, current: 2400, pnl: 0 }] }),
+  useInvalidateQueries: () => mockInvalidate,
 }))
+
+it('shows modify progress and consumes a confirmation only once even after a rejection', async () => {
+  jest.clearAllMocks()
+  let reject!: (error: unknown) => void
+  mockModify.mockReturnValue(new Promise<void>((_, fail) => { reject = fail }))
+  let tree!: renderer.ReactTestRenderer
+  act(() => { tree = renderer.create(<ModifyOrderScreen />) })
+  act(() => tree.root.findAllByType(Field).find((field) => field.props.label === 'Stop loss')!.props.onChangeText('2300'))
+  act(() => tree.root.findByType(Button).props.onPress())
+  const confirm = mockShowMenu.mock.lastCall[0].options[0].onSelect
+  act(() => { confirm(); confirm() })
+  expect(mockModify).toHaveBeenCalledTimes(1)
+  expect(tree.root.findByType(Button).props.loading).toBe(true)
+  await act(async () => { reject(new Error('offline')); await Promise.resolve() })
+  act(() => confirm())
+  expect(mockModify).toHaveBeenCalledTimes(1)
+  expect(tree.root.findByType(Button).props.loading).toBe(false)
+  act(() => tree.unmount())
+})
+
+describe('order acknowledgement', () => {
+  afterEach(() => { mockOrderType = 'Market' })
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useSession.setState(useSession.getInitialState(), true)
+    mockOrderType = 'Market'
+    mockPlace.mockResolvedValue(undefined)
+  })
+
+  it('announces a confirmed buy and records an unread notification only after acknowledgement', async () => {
+    let resolve!: () => void
+    mockPlace.mockReturnValue(new Promise<void>((done) => { resolve = done }))
+    let tree!: renderer.ReactTestRenderer
+    act(() => { tree = renderer.create(<OrderTicketScreen />) })
+    act(() => tree.root.findByType(Button).props.onPress())
+    act(() => mockShowMenu.mock.calls[0][0].options[0].onSelect())
+    expect(useSession.getState().localNotifications).toEqual([])
+    expect(mockGoBack).not.toHaveBeenCalled()
+    await act(async () => { resolve(); await Promise.resolve() })
+    expect(mockShowMenu.mock.lastCall[0].title).toBe('Buy confirmed')
+    act(() => mockShowMenu.mock.lastCall[0].options[0].onSelect())
+    expect(mockGoBack).toHaveBeenCalledTimes(1)
+    const [notice] = useSession.getState().localNotifications
+    expect(notice).toMatchObject({ kind: 'order', title: 'Buy confirmed' })
+    expect(notice.body).toContain('XAU/USD')
+    expect(notice.body).toContain('0.01 lots')
+    expect(useSession.getState().readNotifications.has(notice.id)).toBe(false)
+    expect(mockInvalidate).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), expect.anything(), 'notifications')
+    act(() => tree.unmount())
+  })
+
+  it('does not announce or record a successful buy when the server rejects it', async () => {
+    mockPlace.mockRejectedValue(new Error('Rejected'))
+    let tree!: renderer.ReactTestRenderer
+    act(() => { tree = renderer.create(<OrderTicketScreen />) })
+    act(() => tree.root.findByType(Button).props.onPress())
+    await act(async () => { mockShowMenu.mock.calls[0][0].options[0].onSelect(); await Promise.resolve() })
+    expect(mockShowMenu.mock.lastCall[0].title).toBe('Order not confirmed')
+    expect(useSession.getState().localNotifications).toEqual([])
+    expect(mockGoBack).not.toHaveBeenCalled()
+    act(() => tree.unmount())
+  })
+
+  it('submits a confirmation only once while the order is pending', async () => {
+    mockPlace.mockReturnValue(new Promise(() => {}))
+    let tree!: renderer.ReactTestRenderer
+    act(() => { tree = renderer.create(<OrderTicketScreen />) })
+    act(() => tree.root.findByType(Button).props.onPress())
+    const confirm = mockShowMenu.mock.calls[0][0].options[0].onSelect
+    act(() => { confirm(); confirm() })
+    expect(mockPlace).toHaveBeenCalledTimes(1)
+    expect(tree.root.findByType(Button).props.disabled).toBe(true)
+    act(() => tree.unmount())
+  })
+
+  it('does not let a retained confirmation create a new order intent after rejection', async () => {
+    mockPlace.mockRejectedValue(new Error('offline'))
+    let tree!: renderer.ReactTestRenderer
+    act(() => { tree = renderer.create(<OrderTicketScreen />) })
+    act(() => tree.root.findByType(Button).props.onPress())
+    const confirm = mockShowMenu.mock.calls[0][0].options[0].onSelect
+    await act(async () => { confirm(); await Promise.resolve() })
+    await act(async () => { confirm(); await Promise.resolve() })
+    expect(mockPlace).toHaveBeenCalledTimes(1)
+    act(() => tree.unmount())
+  })
+
+  it('describes an accepted limit order as placed, not bought', async () => {
+    mockOrderType = 'Limit'
+    let tree!: renderer.ReactTestRenderer
+    act(() => { tree = renderer.create(<OrderTicketScreen />) })
+    act(() => tree.root.findAllByType(Field).find((field) => field.props.label === 'Limit price')!.props.onChangeText('2300'))
+    act(() => tree.root.findByType(Button).props.onPress())
+    await act(async () => { mockShowMenu.mock.calls[0][0].options[0].onSelect(); await Promise.resolve() })
+    expect(mockShowMenu.mock.lastCall[0].title).toBe('Limit order placed')
+    expect(useSession.getState().localNotifications[0].body).toContain('pending')
+    act(() => tree.unmount())
+    mockOrderType = 'Market'
+  })
+})
 
 describe('order margin availability', () => {
   it('uses the LP specification when the account has no configured leverage', () => {
@@ -98,6 +206,7 @@ describe('order margin availability', () => {
 
     const orderButton = tree.root.findByType(Button)
     expect(orderButton.props.disabled).toBe(false)
+    expect(orderButton.props.tone).toBe('gold')
     expect(JSON.stringify(tree.toJSON())).toContain('$48.01')
     expect(JSON.stringify(tree.toJSON())).not.toContain('Margin estimate unavailable')
     expect(JSON.stringify(tree.toJSON())).not.toContain('∞')

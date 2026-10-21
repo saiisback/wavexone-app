@@ -1,5 +1,6 @@
 import { Text } from 'react-native'
 import renderer, { act } from 'react-test-renderer'
+import { useEffect } from 'react'
 
 import type { WaveXBackend } from '../../src/backend/contract'
 import { BackendError } from '../../src/backend/errors'
@@ -101,6 +102,23 @@ describe('useBackend', () => {
 })
 
 describe('useBackendQuery', () => {
+  it('does not repeat consumer effects when an unrelated render leaves the read unchanged', async () => {
+    const backend = backendWith()
+    let readyEffects = 0
+    function Probe({ version }: { version: number }) {
+      const result = useBackendQuery('stable-result', async () => ['gold'])
+      useEffect(() => { if (result.status === 'ready') readyEffects += 1 }, [result])
+      return <Text>{version}</Text>
+    }
+    let tree!: renderer.ReactTestRenderer
+    const host = (version: number) => <BackendProvider backend={backend}><Probe version={version} /></BackendProvider>
+    act(() => { tree = renderer.create(host(0)); mounted.push(tree) })
+    await flush()
+    expect(readyEffects).toBe(1)
+    act(() => tree.update(host(1)))
+    expect(readyEffects).toBe(1)
+  })
+
   it('deduplicates one query key across concurrent consumers', async () => {
     const read = jest.fn(async () => 'shared')
 
@@ -415,6 +433,38 @@ describe('useBackendQuery', () => {
 })
 
 describe('useInvalidateQueries', () => {
+  it('marks refresh immediately, retains data after failure, and retries only on request', async () => {
+    let latest!: QueryState<string>
+    let invalidate!: (...prefixes: string[]) => void
+    let rejectRefresh!: (error: unknown) => void
+    let calls = 0
+    const read = () => {
+      calls += 1
+      if (calls === 1) return Promise.resolve('saved balance')
+      if (calls === 2) return new Promise<string>((_, reject) => { rejectRefresh = reject })
+      return Promise.resolve('updated balance')
+    }
+    function Probe() {
+      latest = useBackendQuery('balance:one', read)
+      invalidate = useInvalidateQueries()
+      return null
+    }
+    act(() => { mounted.push(renderer.create(<BackendProvider backend={backendWith()}><Probe /></BackendProvider>)) })
+    await flush()
+    act(() => invalidate('balance:'))
+    expect(latest).toMatchObject({ status: 'ready', data: 'saved balance', refreshing: true })
+    await flush()
+    await act(async () => rejectRefresh(new BackendError('network', 'offline')))
+    expect(latest).toMatchObject({ status: 'ready', data: 'saved balance', refreshing: false })
+    expect(latest.status === 'ready' && latest.refreshError).toBeTruthy()
+    await flush()
+    expect(calls).toBe(2)
+    act(() => { if (latest.status === 'ready') latest.retry?.() })
+    expect(latest).toMatchObject({ status: 'ready', data: 'saved balance', refreshing: true })
+    await flush()
+    expect(latest).toMatchObject({ status: 'ready', data: 'updated balance' })
+  })
+
   /** Two reads under different keys, plus a handle on the invalidator. */
   function renderPair(readPositions: () => Promise<string>, readMarkets: () => Promise<string>) {
     let invalidate!: (...prefixes: string[]) => void

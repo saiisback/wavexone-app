@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import * as Crypto from 'expo-crypto'
@@ -25,7 +27,6 @@ import {
   Text,
   WalletIcon,
   WithdrawIcon,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -41,6 +42,7 @@ import { AccountSummaryUnavailable } from '../features/accounts/account-summary-
 import { AFTER_FUNDING } from '../features/shared/query-keys'
 import { QueryStateView } from '../features/shared/query-state'
 import type { RootStackParamList } from '../navigation/types'
+import { useAppNavigation } from '../navigation/use-app-navigation'
 
 type FundingRoute = RouteProp<RootStackParamList, 'Funding'>
 type FundingNavigation = NativeStackNavigationProp<RootStackParamList, 'Funding'>
@@ -118,9 +120,13 @@ function FundingForm({ mode, account, configuration }: {
   account: DetailedAccount
   configuration: FundingConfiguration
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const copy = COPY[mode]
   const navigation = useNavigation<FundingNavigation>()
   const goBack = useSafeBack()
+  const { openAccountSwitcher } = useAppNavigation()
   const showMenu = useActionMenu()
   const backend = useBackend()
   const invalidate = useInvalidateQueries()
@@ -221,7 +227,6 @@ function FundingForm({ mode, account, configuration }: {
               }
               if (mounted.current) setSubmission('succeeded')
               invalidate(...AFTER_FUNDING)
-              if (mounted.current) goBack()
             } catch (error: unknown) {
               busy.current = false
               if (!mounted.current) return
@@ -240,14 +245,42 @@ function FundingForm({ mode, account, configuration }: {
     if (next && next !== mode && !locked) navigation.setParams({ mode: next })
   }
 
+  if (submission === 'succeeded') {
+    return (
+      <Sheet
+        title={SHEET_TITLE}
+        footer={
+          <Button tone="gold" onPress={goBack} accessibilityLabel="Done">
+            <ButtonText tone="gold">Done</ButtonText>
+          </Button>
+        }
+      >
+        <View style={styles.success}>
+          <View style={styles.successMark}>
+            <CheckIcon size={32} color={colors.royal} />
+          </View>
+          <Text variant="heading" style={styles.centred}>{`${copy.title} request sent`}</Text>
+          <Text variant="body" color={colors.textMuted} style={styles.centred}>
+            Track its progress in Activity. We will update the request status as soon as it changes.
+          </Text>
+          <Card tone="tint" lifted={false} style={styles.successSummary}>
+            <Text variant="caption" color={colors.textMuted}>Request</Text>
+            <Amount variant="displaySm">{formatMoney(value)}</Amount>
+            <Text variant="caption" color={colors.textMuted}>{`${account.mode} · ${account.number} · ${selectedMethod}`}</Text>
+          </Card>
+        </View>
+      </Sheet>
+    )
+  }
+
   return (
     <Sheet
       title={SHEET_TITLE}
       footer={
-        <Button tone="ink" disabled={!canSubmit} onPress={submit}>
+        <Button tone="gold" disabled={!canSubmit} loading={submitting} onPress={submit}>
           <ButtonRow>
-            <ButtonText tone="ink">{cta}</ButtonText>
-            {submission === 'idle' || awaitingOtp ? <ArrowRightIcon size={18} color={colors.white} /> : null}
+            <ButtonText tone="gold">{cta}</ButtonText>
+            {submission === 'idle' || awaitingOtp ? <ArrowRightIcon size={18} color={colors.homePanel} /> : null}
           </ButtonRow>
         </Button>
       }
@@ -294,6 +327,14 @@ function FundingForm({ mode, account, configuration }: {
             <Amount variant="strong" style={styles.tabular}>
               {formatMoney(configuration.availableFund)}
             </Amount>
+            <PressableScale
+              accessibilityLabel="Change funding account"
+              onPress={openAccountSwitcher}
+              disabled={locked}
+              scaleTo={0.96}
+            >
+              <Text variant="caption" weight="semibold" color={colors.brand}>Change</Text>
+            </PressableScale>
           </View>
         </Card>
       </Reveal>
@@ -396,6 +437,9 @@ function OptionCard({
   disabled: boolean
   onPress: () => void
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <PressableScale
       onPress={onPress}
@@ -416,7 +460,7 @@ function OptionCard({
           </Text>
         </View>
         <View style={[styles.radio, selected ? styles.radioOn : null]}>
-          {selected ? <CheckIcon size={13} color={colors.white} /> : null}
+          {selected ? <CheckIcon size={13} color={colors.homePanel} /> : null}
         </View>
       </View>
     </PressableScale>
@@ -433,11 +477,31 @@ function fundingFailureMessage(error: unknown): string {
   return 'We could not confirm this request. Check your account activity before making another attempt.'
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   intro: {
     alignItems: 'center',
     gap: spacing.xs,
     paddingBottom: spacing.sm,
+  },
+  success: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingTop: spacing.xxl,
+  },
+  successMark: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+    backgroundColor: colors.goldSoft,
+  },
+  successSummary: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.lg,
   },
   discRing: {
     padding: 8,
@@ -451,7 +515,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.brand,
+    backgroundColor: colors.royal,
     boxShadow: '0px 10px 22px rgba(20, 24, 43, 0.25)',
   },
   centred: {
@@ -494,8 +558,8 @@ const styles = StyleSheet.create({
     boxShadow: '0px 0px 0px 1px rgba(20, 24, 43, 0.04), 0px 8px 22px rgba(20, 24, 43, 0.05)',
   },
   optionSelected: {
-    borderColor: colors.brand,
-    backgroundColor: colors.brandTint,
+    borderColor: colors.goldDeep,
+    backgroundColor: colors.goldSoft,
   },
   optionText: {
     flex: 1,
@@ -513,11 +577,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glass,
   },
   radioOn: {
-    borderColor: colors.brand,
-    backgroundColor: colors.brand,
+    borderColor: colors.goldDeep,
+    backgroundColor: colors.gold,
   },
   note: {
     lineHeight: 20,
     textAlign: 'center',
   },
-})
+}))

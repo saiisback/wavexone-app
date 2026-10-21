@@ -102,7 +102,7 @@ export function useInvalidateQueries(): (...prefixes: string[]) => void {
 
 export type QueryState<T> =
   | { status: 'loading'; data?: undefined; error?: undefined }
-  | { status: 'ready'; data: T; error?: undefined }
+  | { status: 'ready'; data: T; error?: undefined; refreshing?: boolean; refreshError?: string; retry?: () => void }
   | {
       status: 'error'
       data?: undefined
@@ -151,7 +151,12 @@ export function useBackendQuery<T>(
   const [generation, setGeneration] = useState(0)
   useEffect(() => {
     const listener = (prefixes: readonly string[]) => {
-      if (prefixes.some((prefix) => key.startsWith(prefix))) setGeneration((value) => value + 1)
+      if (prefixes.some((prefix) => key.startsWith(prefix))) {
+        setState((previous) => previous.key === key && previous.status === 'ready'
+          ? { status: 'ready', data: previous.data, refreshing: true, key }
+          : { status: 'loading', key })
+        setGeneration((value) => value + 1)
+      }
     }
     context.listeners.add(listener)
     return () => {
@@ -205,15 +210,13 @@ export function useBackendQuery<T>(
       },
       (error: unknown) => {
         if (cancelled) return
-        setState({
-          status: 'error',
-          // Guide §5: server wording is for diagnostics, not for the user.
-          error:
-            error instanceof BackendError
-              ? userMessageFor(error)
-              : 'Something went wrong. Try again.',
-          key,
-        })
+        // Guide §5: server wording is for diagnostics, not for the user.
+        const message = error instanceof BackendError
+          ? userMessageFor(error)
+          : 'Something went wrong. Try again.'
+        setState((previous) => previous.key === key && previous.status === 'ready'
+          ? { status: 'ready', data: previous.data, refreshing: false, refreshError: message, key }
+          : { status: 'error', error: message, key })
       },
     )
 
@@ -238,9 +241,15 @@ export function useBackendQuery<T>(
 
   // A failed read is never cached, so bumping the generation reads it afresh.
   const retry = useCallback(() => {
-    setState({ status: 'loading', key })
-    setGeneration((value) => value + 1)
-  }, [key])
+    clearTimeout(context.queries.get(key)?.expiryTimer)
+    context.queries.delete(key)
+    context.listeners.forEach((listener) => listener([key]))
+  }, [key, context])
+  // Consumers synchronize settled data in effects. Preserve the result's
+  // identity on unrelated renders so adding retry does not repeat those writes.
+  const result = useMemo(() => state.status === 'error' || state.status === 'ready'
+    ? { ...state, retry }
+    : state, [state, retry])
 
   // A result from the previous key is another instrument's numbers. Report
   // loading rather than showing them under the new heading.
@@ -251,5 +260,5 @@ export function useBackendQuery<T>(
     if (cached?.status === 'fulfilled' && 'value' in cached) return { status: 'ready', data: cached.value as T }
     return { status: 'loading' }
   }
-  return state.status === 'error' ? { ...state, retry } : state
+  return result
 }

@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native'
 
@@ -22,13 +24,15 @@ import {
   ShieldIcon,
   SparkleIcon,
   Text,
-  colors,
   radius,
   shadow,
   spacing,
 } from '../design-system'
 
 export function SignInScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const session = useAppSession()
   const insets = useSafeAreaInsets()
   const [identifier, setIdentifier] = useState('')
@@ -165,6 +169,7 @@ export function SignInScreen() {
                   onPress={() => void submit()}
                   disabled={!canSubmit}
                   accessibilityLabel={submitting ? 'Signing in' : 'Sign in'}
+                  loading={submitting}
                   style={styles.cta}
                 >
                   <ButtonRow>
@@ -187,7 +192,7 @@ export function SignInScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
@@ -296,4 +301,4 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     marginTop: spacing.sm,
   },
-})
+}))

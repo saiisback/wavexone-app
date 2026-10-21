@@ -32,11 +32,11 @@ Do not invent an all-time filter, a date encoding, or unsupported pagination
 semantics. Verify a supported all-time/date-range request using authoritative
 backend documentation or server source before enabling these presets as live.
 
-Current position `time` is a timezone-unspecified server string; it has not been
-verified as execution-close time. Verify the close timestamp and its timezone
+The user confirmed server timestamps are UTC on 2026-10-18. Current position
+`time` has not been verified as execution-close time. Verify the close timestamp
 before grouping/filtering by it. Do not substitute open time or silently parse
-an unspecified server timezone as device time. Use broker calendar dates when
-the server supplies its zone, and label that basis in the UI.
+an unspecified server timezone as device time. Use UTC calendar boundaries and
+label that basis in the UI; do not silently convert records to device time.
 
 The exact documented `{status:"fail",message:"No Results"}` response is empty
 history; other failures must not become empty lists. If the required contract

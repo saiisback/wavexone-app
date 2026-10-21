@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -11,7 +13,6 @@ import {
   SparkleIcon,
   Text,
   TrendUpIcon,
-  colors,
   radius,
   spacing,
 } from '../design-system'
@@ -22,8 +23,11 @@ import {
  * card, without inventing any signal content.
  */
 export function SignalsScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
-    <PageScreen back title="Trading Signals">
+    <PageScreen back title="Trading Signals" tone="reference">
       <Reveal>
         <Gutter>
           <Card tone="ink" style={styles.hero}>
@@ -101,6 +105,9 @@ function InsightPreview({
   Icon: typeof MarketsIcon
   faded?: boolean
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <Card style={[styles.preview, faded ? styles.faded : null]}>
       <View style={styles.previewRow}>
@@ -134,6 +141,9 @@ function Feature({
   title: string
   caption: string
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.feature}>
       <IconChip tone="surface" size={40} shape="square">
@@ -149,7 +159,7 @@ function Feature({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   hero: {
     padding: spacing.xl,
     gap: spacing.sm,
@@ -225,4 +235,4 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
   },
-})
+}))

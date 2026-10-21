@@ -1,3 +1,4 @@
+import { useColors } from '../design-system/theme'
 import { Fragment, useState } from 'react'
 import { StyleSheet } from 'react-native'
 
@@ -8,10 +9,10 @@ import {
   SearchField,
   SearchIcon,
   Sheet,
-  colors,
   spacing,
   useSafeBack,
 } from '../design-system'
+import { tradingSpecification } from '../data/margin'
 import { useTradeDraft } from '../data/trade-draft'
 import { MARKET_ROW_DIVIDER_INSET } from '../features/markets/market-group'
 import { MarketRow } from '../features/markets/market-row'
@@ -23,9 +24,12 @@ import { QueryStateView } from '../features/shared/query-state'
  * white card, drawn with the same rows as the Markets tab.
  */
 export function InstrumentPickerScreen() {
+  const colors = useColors()
+
   const goBack = useSafeBack()
   const [query, setQuery] = useState('')
   const setInstrumentId = useTradeDraft((state) => state.setInstrumentId)
+  const setLots = useTradeDraft((state) => state.setLots)
   const { catalogue } = useMarketData()
   const instruments = catalogue.status === 'ready' ? catalogue.data : []
 
@@ -38,7 +42,12 @@ export function InstrumentPickerScreen() {
     : instruments
 
   const choose = (instrumentId: string) => {
+    const instrument = instruments.find((item) => item.id === instrumentId)
+    const terms = instrument
+      ? tradingSpecification(instrument.symbol, instrument.category)
+      : null
     setInstrumentId(instrumentId)
+    setLots(() => terms?.minimumLots ?? 0.01)
     goBack()
   }
 

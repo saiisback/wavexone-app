@@ -21,12 +21,13 @@ describe('defaults', () => {
   it('waits for the live catalogue before selecting an instrument', () => {
     expect(useTradeDraft.getState().instrumentId).toBeNull()
     expect(useTradeDraft.getState().orderType).toBe('Market')
-    expect(lots()).toBe(0.5)
+    expect(lots()).toBe(0.01)
   })
 })
 
 describe('lot sizing', () => {
   it('steps up and down', () => {
+    setLots(() => 0.5)
     setLots((previous) => previous + 0.1)
     expect(lots()).toBe(0.6)
     setLots((previous) => previous - 0.1)
@@ -35,6 +36,7 @@ describe('lot sizing', () => {
 
   it('does not accumulate binary drift across many steps', () => {
     // 0.1 + 0.2 is the classic case; ten increments is the realistic one.
+    setLots(() => 0.5)
     for (let step = 0; step < 10; step += 1) setLots((previous) => previous + 0.1)
     expect(lots()).toBe(1.5)
   })

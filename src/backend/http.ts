@@ -90,6 +90,12 @@ export async function send(request: HttpRequest): Promise<HttpResponse> {
   clearTimeout(timer)
 
   const text = await response.text()
+  if (typeof text !== 'string') {
+    throw new BackendError('malformed', `The service returned an unreadable body for ${request.endpoint}.`, {
+      endpoint: request.endpoint,
+      status: response.status,
+    })
+  }
   logBackendEvent('request.complete', { endpoint: request.endpoint, status: response.status })
 
   if (response.status === 429) {

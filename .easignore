@@ -1,0 +1,50 @@
+# Dependencies and local tooling
+node_modules/
+.git/
+.expo/
+.kilo/
+
+# Generated outputs and native projects (Continuous Native Generation)
+dist/
+web-build/
+expo-env.d.ts
+ios/
+android/
+.kotlin/
+*.tsbuildinfo
+*.apk
+*.aab
+
+# Local credentials, logs, and environment files
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+.env*.local
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+
+# Local API collections can contain account tokens and device fingerprints
+*postman_collection.json
+*postman_environment*.json
+
+# App Store marketing exports are uploaded separately from the app binary
+app-store-assets-complete/
+app-store-screenshots/
+app-store-upload-13-files-1284x2778/
+app-store-upload-13-files-1284x2778.zip
+app-store-upload-complete/
+app-store-upload-complete.zip
+fresh-app-store-assets/
+
+.local-artifacts/
+.claude/
+.superpowers/
+.env
+.env.*

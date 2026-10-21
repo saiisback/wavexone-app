@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -24,7 +26,6 @@ import {
   Sparkline,
   Text,
   TickFlash,
-  colors,
   radius,
   shadow,
   spacing,
@@ -63,6 +64,9 @@ const DOCK_HEIGHT = 76
  * through the order ticket sheet before it reaches the API.
  */
 export function TradeScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { openAccountSwitcher, openInstrumentPicker, openOrderTicket, openInstrument } =
     useAppNavigation()
   const showMenu = useActionMenu()
@@ -84,7 +88,7 @@ export function TradeScreen() {
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
     if (accountData.status === 'ready' && !accountData.data.account) {
       return (
-        <PageScreen title="Trade">
+        <PageScreen title="Trade" tone="reference">
           <Gutter>
             <AccountSummaryUnavailable account={accountData.data.selectedAccount} />
           </Gutter>
@@ -93,7 +97,7 @@ export function TradeScreen() {
     }
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return (
-      <PageScreen title="Trade">
+      <PageScreen title="Trade" tone="reference">
         <Gutter>
           <QueryStateView state={state} render={() => null} />
         </Gutter>
@@ -108,7 +112,7 @@ export function TradeScreen() {
   const instrument = listed ? applyQuote(listed, quote) : undefined
   if (!instrument) {
     return (
-      <PageScreen title="Trade" trailing={accountPill}>
+      <PageScreen title="Trade" tone="reference" trailing={accountPill}>
         <Gutter>
           <Text color={colors.textMuted}>No markets available.</Text>
         </Gutter>
@@ -154,6 +158,7 @@ export function TradeScreen() {
   return (
     <PageScreen
       title="Trade"
+      tone="reference"
       subtitle={`${orderType} order · ${instrument.symbol}`}
       trailing={accountPill}
       bottomInset={dockClearance}
@@ -172,6 +177,8 @@ export function TradeScreen() {
         </Glass>
       }
     >
+      <QueryStateView state={accountData} render={() => null} />
+      <QueryStateView state={catalogue} render={() => null} />
       <Gutter style={styles.top}>
         <Reveal index={0}>
           <PressableScale
@@ -303,6 +310,9 @@ export function TradeScreen() {
  * running off the bottom edge. Tapping it opens the full chart.
  */
 function PriceCard({ instrument, onOpen }: { instrument: Instrument; onOpen: () => void }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const direction = directionOf(instrument.changePercent)
   const shown = useCountUp(instrument.price)
   const price = formatPrice(instrument.price, instrument.precision)
@@ -372,6 +382,9 @@ function PriceCard({ instrument, onOpen }: { instrument: Instrument; onOpen: () 
 
 /** One figure on the price card's bid / spread / ask strip. */
 function QuoteWell({ label, value }: { label: string; value: string }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.well}>
       <Text variant="micro" color={colors.onInkMuted}>
@@ -396,6 +409,9 @@ function Stat({
   align?: 'start' | 'end'
   small?: boolean
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={[styles.stat, align === 'end' ? styles.alignEnd : null]}>
       <Text variant="caption" color={colors.textMuted}>
@@ -416,10 +432,13 @@ function Stat({
 
 /** Sell on the graphite-edged white pill, Buy on graphite: side, then its fill price. */
 function TradeAction({ side, price, onPress }: { side: 'Buy' | 'Sell'; price: string; onPress: () => void }) {
-  const tone = side === 'Buy' ? 'brand' : 'night'
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
+  const tone = side === 'Buy' ? 'gold' : 'ink'
   return (
     <Button tone={tone} style={styles.action} onPress={onPress} accessibilityLabel={`${side} at ${price}`}>
-      <Text variant="micro" color={side === 'Buy' ? 'rgba(255, 255, 255, 0.72)' : colors.textMuted}>
+      <Text variant="micro" color={side === 'Buy' ? colors.homePanel : colors.onInkMuted}>
         {side}
       </Text>
       <ButtonSubText tone={tone}>{price}</ButtonSubText>
@@ -427,7 +446,7 @@ function TradeAction({ side, price, onPress }: { side: 'Buy' | 'Sell'; price: st
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   top: {
     gap: spacing.md,
   },
@@ -585,4 +604,4 @@ const styles = StyleSheet.create({
   action: {
     flex: 1,
   },
-})
+}))

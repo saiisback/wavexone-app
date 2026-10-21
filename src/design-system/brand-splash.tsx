@@ -1,7 +1,8 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StatusBar } from 'expo-status-bar'
 import { StyleSheet, View } from 'react-native'
 
-import { colors } from './colors'
 import { InkBackdrop } from './ink-backdrop'
 import { Logo } from './logo'
 import { LiveDot, PopIn } from './motion'
@@ -13,6 +14,9 @@ import { spacing } from './tokens'
  * luminous gradient, the logo springing in and a breathing status line.
  */
 export function BrandSplash({ message }: { message: string }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
@@ -30,7 +34,7 @@ export function BrandSplash({ message }: { message: string }) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   root: {
     flex: 1,
     alignItems: 'center',
@@ -43,4 +47,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-})
+}))

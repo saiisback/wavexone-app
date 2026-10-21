@@ -55,6 +55,18 @@ describe('quote feed', () => {
     expect(feed.latest('XAUUSD')).toEqual({ bid: 2400.9, ask: 2401.1, price: 2401 })
   })
 
+  it('accepts finite numeric strings from the PHP-backed feed', () => {
+    const feed = createQuoteFeed('wss://feed.test/ticks', createFakeSocket)
+    feed.subscribe('WAVE:C.XAUUSD', jest.fn())
+    jest.advanceTimersByTime(60)
+    const socket = FakeSocket.latest()
+    socket.open()
+    socket.receive({
+      'WAVE:C.XAUUSD': { p: '2400.50', v: '1', b: '2400.40', a: '2400.60' },
+    })
+    expect(feed.latest('WAVE:C.XAUUSD')).toEqual({ bid: 2400.4, ask: 2400.6, price: 2400.5 })
+  })
+
   it('reconnects with back-off and re-subscribes after a drop', () => {
     const feed = createQuoteFeed('wss://feed.test/ticks', createFakeSocket)
     feed.subscribe('XAUUSD', jest.fn())

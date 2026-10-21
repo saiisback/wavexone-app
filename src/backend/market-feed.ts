@@ -148,10 +148,17 @@ export function createQuoteFeed(
 function readQuote(value: unknown): LiveQuote | undefined {
   if (!value || typeof value !== 'object') return undefined
   const { b, a, p } = value as Record<string, unknown>
-  if (typeof b !== 'number' || typeof a !== 'number' || !Number.isFinite(b) || !Number.isFinite(a)) {
-    return undefined
-  }
-  return { bid: b, ask: a, price: typeof p === 'number' && Number.isFinite(p) ? p : (a + b) / 2 }
+  const bid = finiteFeedNumber(b)
+  const ask = finiteFeedNumber(a)
+  if (bid === undefined || ask === undefined) return undefined
+  return { bid, ask, price: finiteFeedNumber(p) ?? (ask + bid) / 2 }
+}
+
+function finiteFeedNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined
+  if (typeof value === 'string' && value.trim() === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -360,11 +367,9 @@ function readCandle(value: unknown): Candle[] {
   if (!value || typeof value !== 'object') return []
   const { t, o, h, l, c } = value as Record<string, unknown>
   const time = typeof t === 'string' ? Date.parse(t) : typeof t === 'number' ? t : NaN
-  const numbers = [o, h, l, c]
-  if (!Number.isFinite(time) || !numbers.every((n) => typeof n === 'number' && Number.isFinite(n))) {
-    return []
-  }
-  return [{ time, open: o as number, high: h as number, low: l as number, close: c as number }]
+  const [open, high, low, close] = [o, h, l, c].map(finiteFeedNumber)
+  if (!Number.isFinite(time) || open === undefined || high === undefined || low === undefined || close === undefined) return []
+  return [{ time, open, high, low, close }]
 }
 
 // ---------------------------------------------------------------------------

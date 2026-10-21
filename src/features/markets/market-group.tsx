@@ -1,6 +1,8 @@
+import { useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
-import { Divider, colors, radius, spacing } from '../../design-system'
+import { Divider, radius, spacing } from '../../design-system'
 
 /** Tile (42) plus the row's gap, so dividers start at the text. */
 export const MARKET_ROW_DIVIDER_INSET = 54
@@ -20,6 +22,8 @@ export function MarketGroupCell({
   count: number
   children: React.ReactNode
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={[styles.cell, index === 0 ? styles.first : null, index === count - 1 ? styles.last : null]}>
       {children}
@@ -29,6 +33,8 @@ export function MarketGroupCell({
 
 /** Hairline between grouped rows, on the card's own surface. */
 export function MarketGroupSeparator() {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.cell}>
       <Divider inset={MARKET_ROW_DIVIDER_INSET} />
@@ -39,7 +45,7 @@ export function MarketGroupSeparator() {
 /** Matches the hairline ring in `shadow.card`. */
 const EDGE = 'rgba(20, 24, 43, 0.06)'
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   cell: {
     backgroundColor: colors.glass,
     paddingHorizontal: spacing.lg,
@@ -63,4 +69,4 @@ const styles = StyleSheet.create({
     // A soft pool under the group's foot only, so cells show no seams.
     boxShadow: '0px 12px 20px -14px rgba(20, 24, 43, 0.10)',
   },
-})
+}))

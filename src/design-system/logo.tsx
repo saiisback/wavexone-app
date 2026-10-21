@@ -1,22 +1,34 @@
+import { useColors } from './theme'
+import { useId } from 'react'
 import { StyleSheet, View } from 'react-native'
-import Svg, { Path } from 'react-native-svg'
+import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg'
 
-import { colors } from './colors'
 import { Text } from './text'
 import { fonts } from './tokens'
 
 type Tone = 'light' | 'dark'
 
 /**
- * The "W" mark: a heavy double chevron with the final upstroke struck
- * through in gold.
+ * Exact polygons from wavexone.com/icon.svg, with its background removed
+ * and bounds trimmed. White strokes become navy only on light surfaces.
  */
 export function LogoMark({ size = 28, tone = 'light' }: { size?: number; tone?: Tone }) {
+  const colors = useColors()
+
+  const gradientId = `wavex-gold-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const ink = tone === 'dark' ? colors.logoOnInk : colors.logoInk
   return (
-    <Svg width={size * 1.5} height={size} viewBox="0 0 108 72">
-      <Path d="M0 0h28l19 44L66 0h22L56 72H34Z" fill={ink} />
-      <Path d="M70 0h34L82 48Z" fill={colors.gold} />
+    <Svg width={size * (419.98 / 166.2)} height={size} viewBox="3 8.81 419.98 166.2">
+      <Defs>
+        <LinearGradient id={gradientId} x1="317.99" y1="71.98" x2="422.98" y2="71.98" gradientUnits="userSpaceOnUse">
+          <Stop offset="0" stopColor="#d4af37" />
+          <Stop offset="1" stopColor="#f4e04d" />
+        </LinearGradient>
+      </Defs>
+      <Polygon points="87.7 175.01 168.94 175.01 84.24 8.81 3 8.81 87.7 175.01" fill={ink} />
+      <Polygon points="168.94 175.01 87.7 175.01 172.37 8.81 253.61 8.81 168.94 175.01" fill={ink} />
+      <Polygon points="317.99 55.44 341.74 8.81 422.98 8.81 358.61 135.15 317.99 55.44" fill={`url(#${gradientId})`} />
+      <Polygon points="257.04 175.01 338.28 175.01 253.61 8.81 172.37 8.81 257.04 175.01" fill={ink} />
     </Svg>
   )
 }
@@ -26,6 +38,8 @@ export function LogoMark({ size = 28, tone = 'light' }: { size?: number; tone?: 
  * returns to the wordmark grey.
  */
 export function Logo({ size = 22, tone = 'light' }: { size?: number; tone?: Tone }) {
+  const colors = useColors()
+
   const ink = tone === 'dark' ? colors.logoOnInk : colors.logoInk
   return (
     <View style={styles.row}>

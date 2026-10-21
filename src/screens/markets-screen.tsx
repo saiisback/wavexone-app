@@ -1,14 +1,16 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { FlashList } from '@shopify/flash-list'
 import { useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
-  Aurora,
   Card,
   CircleButton,
   EmptyState,
   Gutter,
+  HomeAtmosphere,
   LiveDot,
   PageBar,
   PageTitle,
@@ -19,7 +21,6 @@ import {
   StarIcon,
   TAB_BAR_CLEARANCE,
   Text,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -31,6 +32,7 @@ import { MarketRow } from '../features/markets/market-row'
 import { MoverCard } from '../features/markets/mover-card'
 import { useSession } from '../data/store'
 import type { Instrument } from '../data/types'
+import { applySparkSnapshot } from '../data/live-quote'
 import { useMarketData } from '../features/markets/use-market-data'
 import { QueryStateView } from '../features/shared/query-state'
 import { useAppNavigation } from '../navigation/use-app-navigation'
@@ -60,6 +62,9 @@ const REVEAL_ROWS = 8
  * title over once the page scrolls.
  */
 export function MarketsScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { openInstrument, openOrderTicket } = useAppNavigation()
   const showMenu = useActionMenu()
   const { catalogue, setFavorite } = useMarketData()
@@ -84,7 +89,9 @@ export function MarketsScreen() {
   const toggleFavorite = useSession((state) => state.toggleFavorite)
 
   const needle = query.trim().toLowerCase()
-  const instruments = catalogue.status === 'ready' ? catalogue.data : []
+  const instruments = catalogue.status === 'ready'
+    ? catalogue.data.map((item) => applySparkSnapshot(item, sparkById?.get(item.id)))
+    : []
   const rows = instruments.filter((item) => {
     const matchesFilter =
       filter === 'All' || (filter === 'Favorites' ? favorites.has(item.id) : item.category === filter)
@@ -160,15 +167,17 @@ export function MarketsScreen() {
   const favoritesOnly = filter === 'Favorites'
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+      <HomeAtmosphere />
       <PageTitle
         scrollY={scrollY}
         title="Markets"
+        tone="reference"
         style={styles.title}
         subtitle={
           instruments.length > 0 ? (
             <View style={styles.subtitle}>
               <LiveDot color={colors.green} size={7} />
-              <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+              <Text variant="caption" color={colors.referenceMuted} numberOfLines={1}>
                 {`${instruments.length} instruments · live`}
               </Text>
             </View>
@@ -177,11 +186,11 @@ export function MarketsScreen() {
         trailing={
           <CircleButton
             size={44}
-            tone={favoritesOnly ? 'ink' : 'outline'}
+            tone={favoritesOnly ? 'gold' : 'outline'}
             accessibilityLabel={favoritesOnly ? 'Show all markets' : 'Show favourites'}
             onPress={() => setFilter((previous) => (previous === 'Favorites' ? 'All' : 'Favorites'))}
           >
-            <StarIcon size={20} color={favoritesOnly ? colors.gold : colors.text} filled={favoritesOnly} />
+            <StarIcon size={20} color={favoritesOnly ? colors.homePanel : colors.brand} filled={favoritesOnly} />
           </CircleButton>
         }
       />
@@ -192,12 +201,14 @@ export function MarketsScreen() {
         invisible. The rows below keep theirs.
       */}
       <Gutter>
-        <SearchField value={query} onChangeText={setQuery} />
+        {catalogue.status === 'ready' ? <QueryStateView state={catalogue} render={() => null} /> : null}
+        <SearchField tone="light" value={query} onChangeText={setQuery} />
       </Gutter>
 
       <CategoryChips options={FILTERS} value={filter} onChange={setFilter} />
 
-      {showMovers && rows.length > 0 ? (
+      <View style={styles.contentHeader}>
+        {showMovers && rows.length > 0 ? (
         <View style={styles.movers}>
           <Gutter style={styles.sectionRow}>
             <Text variant="section">Top movers</Text>
@@ -227,26 +238,26 @@ export function MarketsScreen() {
             ))}
           </ScrollView>
         </View>
-      ) : null}
+        ) : null}
 
-      {rows.length > 0 ? (
-        <Gutter style={styles.listHead}>
-          <Text variant="section">
-            {needle ? 'Results' : filter === 'All' ? 'All markets' : filter}
-          </Text>
-          <View style={styles.count}>
-            <Text variant="micro" weight="semibold" color={colors.textMuted}>
-              {rows.length}
+        {rows.length > 0 ? (
+          <Gutter style={styles.listHead}>
+            <Text variant="section">
+              {needle ? 'Results' : filter === 'All' ? 'All markets' : filter}
             </Text>
-          </View>
-        </Gutter>
-      ) : null}
+            <View style={styles.count}>
+              <Text variant="micro" weight="semibold" color={colors.textMuted}>
+                {rows.length}
+              </Text>
+            </View>
+          </Gutter>
+        ) : null}
+      </View>
     </View>
   )
 
   return (
     <View style={styles.root}>
-      <Aurora />
       <FlashList
         data={rows}
         renderItem={renderItem}
@@ -269,44 +280,54 @@ export function MarketsScreen() {
         }
         ListFooterComponent={<View style={styles.footer}>{rows.length > 0 ? <Hint /> : null}</View>}
       />
-      <PageBar scrollY={scrollY} title="Markets" />
+      <PageBar scrollY={scrollY} title="Markets" tone="reference" />
     </View>
   )
 }
 
 const keyExtractor = (item: Instrument) => item.id
-const Separator = () => <View style={styles.separator} />
+const Separator = () => { const styles = useThemeStyles(themeStyles); return <View style={styles.separator} /> }
 
-const Empty = () => (
+const Empty = () => { const colors = useColors(); return (
   <EmptyState
     icon={<SearchIcon size={22} color={colors.brand} />}
     title="No markets found"
     message="No markets match that search. Try a symbol such as EURUSD or a name such as Gold."
   />
-)
+)}
 
-const NoFavorites = () => (
+const NoFavorites = () => { const colors = useColors(); return (
   <EmptyState
     icon={<StarIcon size={22} color={colors.gold} filled />}
     title="No favourites yet"
     message="Press and hold a market to add it to your favourites."
   />
-)
+)}
 
-const Hint = () => (
+const Hint = () => { const colors = useColors(); const styles = useThemeStyles(themeStyles); return (
   <Text variant="caption" color={colors.textSubtle} style={styles.hint}>
     Press and hold a market for quick actions
   </Text>
-)
+)}
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
   },
   header: {
+    position: 'relative',
+    overflow: 'hidden',
     gap: spacing.lg,
+    paddingBottom: 0,
+  },
+  contentHeader: {
+    gap: spacing.lg,
+    paddingTop: spacing.xl,
     paddingBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   title: {
     paddingBottom: 0,
@@ -350,18 +371,22 @@ const styles = StyleSheet.create({
 
   cell: {
     paddingHorizontal: SCREEN_PADDING,
+    backgroundColor: 'transparent',
   },
   separator: {
     height: 10,
+    backgroundColor: colors.surface,
   },
   emptyCell: {
     paddingHorizontal: SCREEN_PADDING,
+    backgroundColor: colors.surface,
   },
   footer: {
     paddingBottom: TAB_BAR_CLEARANCE,
+    backgroundColor: colors.surface,
   },
   hint: {
     textAlign: 'center',
     paddingTop: 18,
   },
-})
+}))

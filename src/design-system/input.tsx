@@ -1,6 +1,7 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StyleSheet, TextInput, type TextInputProps } from 'react-native'
 
-import { colors } from './colors'
 import { fonts } from './tokens'
 
 /**
@@ -9,6 +10,9 @@ import { fonts } from './tokens'
  * `Field`.
  */
 export function Input({ style, ...props }: TextInputProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <TextInput
       selectionColor={colors.brandBright}
@@ -20,7 +24,7 @@ export function Input({ style, ...props }: TextInputProps) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   input: {
     fontFamily: fonts.regular,
     fontSize: 16,
@@ -29,4 +33,4 @@ const styles = StyleSheet.create({
     // The surrounding field draws focus; web's own ring would double it.
     outlineWidth: 0,
   },
-})
+}))

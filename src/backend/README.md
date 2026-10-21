@@ -161,8 +161,17 @@ Worth resolving before Phase 1 ships:
   an unavailable state instead of fixture content.
 - **Market Sentiment** and **`<50ms` execution** were unsupported design copy
   and are not shown as live account facts.
-- **Referrals and MAM/PAMM** appear in the guide's suggested interface groups
-  but have no screen. They are left out rather than added as dead surface.
+- **MAM/PAMM** has native read-only directories, dedicated followed-manager
+  lists, follower relationships, PAMM order reports and MAM share reports under
+  More → Managed accounts. Contracts were verified against the authenticated API
+  reference and Trading API collection. Report requests use the relationship IDs
+  returned by the server; totals are server-reported, not reconstructed. Currency
+  is not specified by these endpoints. Allocations and program settings remain
+  in the client portal; browsing or viewing reports never moves funds.
+- **Closed history** supports explicit pages and does not wait for the market
+  catalogue to render. Only the documented `24hr` filter is currently verified;
+  the screen labels this limit and does not claim to show all-time history.
+- **Referrals** has no native screen.
 
 ## Tests
 

@@ -189,11 +189,11 @@ describe('mutation safety', () => {
     }
   })
 
-  it('puts the chart configuration on the trading host, not the charting host', () => {
-    // `charting_library_cloned_data` dispatches through v1.php like every
-    // other collect= route; only the history feed lives on the chart host.
+  it('keeps the unavailable REST chart-history route out of the client', () => {
+    // History comes from /ws/ohlcV2. The docs explicitly mark
+    // collect=watchlist_charting as not callable through api-v1.
     expect(ENDPOINTS.chartConfig.transport).toBe('trading')
-    expect(ENDPOINTS.chartBars.transport).toBe('charting')
+    expect(ENDPOINTS).not.toHaveProperty('chartBars')
   })
 
   it('exempts only getuser from the Bearer header', () => {

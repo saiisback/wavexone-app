@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native'
 import { useSafeBack } from '../design-system'
 
 import type { FundingMode } from '../data/types'
-import type { HomeStackParamList, RootStackParamList, TabParamList } from './types'
+import type { HomeStackParamList, MoreStackParamList, RootStackParamList, TabParamList } from './types'
 
 type LooseNavigation = {
   navigate: (name: string, params?: object) => void
@@ -47,6 +47,9 @@ export function useAppNavigation() {
 
     /** Jumps to the Home tab and lands on one of its screens. */
     openHomeScreen: (screen: keyof HomeStackParamList) => navigation.navigate('Home', { screen }),
+
+    /** Jumps to the More tab and lands on one of its account screens. */
+    openMoreScreen: (screen: keyof MoreStackParamList) => navigation.navigate('More', { screen }),
 
     goBack,
   }

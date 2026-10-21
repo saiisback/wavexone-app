@@ -1,6 +1,8 @@
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
-import { ChevronDownIcon, ChevronRightIcon, Pressable, Text, colors, fonts } from '../../design-system'
+import { ChevronDownIcon, ChevronRightIcon, Pressable, Text, fonts } from '../../design-system'
 
 export type SectionHeaderProps = {
   title: string
@@ -18,6 +20,9 @@ export function SectionHeader({
   withChevron = false,
   onPressAction,
 }: SectionHeaderProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.row}>
       <Text variant="section">{title}</Text>
@@ -41,7 +46,7 @@ export function SectionHeader({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -60,4 +65,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
   },
-})
+}))

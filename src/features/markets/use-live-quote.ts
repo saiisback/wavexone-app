@@ -2,8 +2,35 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
 import { useBackend } from '../../backend/provider'
 import type { Quote } from '../../data/live-quote'
+import { useScreenFocus } from '../../navigation/use-screen-focus'
 
 const noop = () => {}
+
+/** Limit display work, not the feed: latest() still exposes every received tick. */
+function coalescedSubscription(subscribe: (notify: () => void) => () => void, listener: () => void) {
+  let last = -Infinity
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const notify = () => {
+    const remaining = 100 - (Date.now() - last)
+    if (remaining <= 0) {
+      if (timer !== undefined) clearTimeout(timer)
+      timer = undefined
+      last = Date.now()
+      listener()
+    } else if (timer === undefined) {
+      timer = setTimeout(() => {
+        timer = undefined
+        last = Date.now()
+        listener()
+      }, remaining)
+    }
+  }
+  const unsubscribe = subscribe(notify)
+  return () => {
+    unsubscribe()
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
 
 /**
  * The streamed quote for one instrument, or undefined until the first tick.
@@ -11,9 +38,10 @@ const noop = () => {}
  */
 export function useLiveQuote(instrumentId: string | undefined): Quote | undefined {
   const backend = useBackend()
+  const focused = useScreenFocus()
   const subscribe = useCallback(
-    (listener: () => void) => (instrumentId ? backend.prices.subscribe(instrumentId, listener) : noop),
-    [backend, instrumentId],
+    (listener: () => void) => (focused && instrumentId ? coalescedSubscription((notify) => backend.prices.subscribe(instrumentId, notify), listener) : noop),
+    [backend, focused, instrumentId],
   )
   const read = () => (instrumentId ? backend.prices.latest(instrumentId) : undefined)
   return useSyncExternalStore(subscribe, read, read)
@@ -25,15 +53,18 @@ export function useLiveQuote(instrumentId: string | undefined): Quote | undefine
  */
 export function useLiveQuotesVersion(instrumentIds: readonly string[]): number {
   const backend = useBackend()
+  const focused = useScreenFocus()
   const [version, setVersion] = useState(0)
   const key = [...new Set(instrumentIds)].sort().join(',')
 
   useEffect(() => {
-    if (!key) return
+    if (!focused || !key) return
     const bump = () => setVersion((value) => value + 1)
-    const unsubscribes = key.split(',').map((id) => backend.prices.subscribe(id, bump))
-    return () => unsubscribes.forEach((unsubscribe) => unsubscribe())
-  }, [backend, key])
+    return coalescedSubscription((notify) => {
+      const unsubscribes = key.split(',').map((id) => backend.prices.subscribe(id, notify))
+      return () => unsubscribes.forEach((unsubscribe) => unsubscribe())
+    }, bump)
+  }, [backend, focused, key])
 
   return version
 }

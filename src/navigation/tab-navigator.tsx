@@ -1,12 +1,13 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
-import { colors } from '../design-system'
+import { useColors } from '../design-system'
 import { AccountScreen } from '../screens/account-screen'
 import { ActivityScreen } from '../screens/activity-screen'
 import { BalanceScreen } from '../screens/balance-screen'
 import { HomeScreen } from '../screens/home-screen'
 import { MarketsScreen } from '../screens/markets-screen'
+import { ManagedAccountsScreen } from '../screens/managed-accounts-screen'
 import { NotificationsScreen } from '../screens/notifications-screen'
 import { PositionsScreen } from '../screens/positions-screen'
 import { ProfileScreen } from '../screens/profile-screen'
@@ -20,13 +21,17 @@ const Tab = createBottomTabNavigator<TabParamList>()
 const HomeStack = createNativeStackNavigator<HomeStackParamList>()
 const MoreStack = createNativeStackNavigator<MoreStackParamList>()
 
-const STACK_OPTIONS = {
+function useStackOptions() {
+  const colors = useColors()
+  return {
   headerShown: false,
   contentStyle: { backgroundColor: colors.bg },
 } as const
+}
 
 /** Screens pushed here keep the tab bar visible, as the mockups show. */
 function HomeStackNavigator() {
+  const STACK_OPTIONS = useStackOptions()
   return (
     <HomeStack.Navigator screenOptions={STACK_OPTIONS}>
       <HomeStack.Screen name="Dashboard" component={HomeScreen} />
@@ -37,6 +42,7 @@ function HomeStackNavigator() {
 }
 
 function MoreStackNavigator() {
+  const STACK_OPTIONS = useStackOptions()
   return (
     <MoreStack.Navigator screenOptions={STACK_OPTIONS}>
       <MoreStack.Screen name="Account" component={AccountScreen} />
@@ -44,16 +50,18 @@ function MoreStackNavigator() {
       <MoreStack.Screen name="Profile" component={ProfileScreen} />
       <MoreStack.Screen name="Settings" component={SettingsScreen} />
       <MoreStack.Screen name="Signals" component={SignalsScreen} />
+      <MoreStack.Screen name="ManagedAccounts" component={ManagedAccountsScreen} />
     </MoreStack.Navigator>
   )
 }
 
 /** Renders `TabBar` — see the note there on why this is not a native tab bar. */
 export function TabNavigator() {
+  const colors = useColors()
   return (
     <Tab.Navigator
       tabBar={renderTabBar}
-      screenOptions={{ headerShown: false, sceneStyle: SCENE_STYLE }}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}
     >
       <Tab.Screen name="Home" component={HomeStackNavigator} options={{ title: 'Home' }} />
       <Tab.Screen name="Markets" component={MarketsScreen} options={{ title: 'Markets' }} />
@@ -63,7 +71,5 @@ export function TabNavigator() {
     </Tab.Navigator>
   )
 }
-
-const SCENE_STYLE = { backgroundColor: colors.bg }
 
 const renderTabBar = (props: React.ComponentProps<typeof TabBar>) => <TabBar {...props} />

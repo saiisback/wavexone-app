@@ -1,6 +1,7 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { Platform, Switch as RNSwitch } from 'react-native'
 
-import { colors } from './colors'
 
 /**
  * Platform switch: the brand navy when on, the quiet track when off, with a
@@ -17,6 +18,10 @@ export function Switch({
   disabled?: boolean
   accessibilityLabel?: string
 }) {
+  const colors = useColors()
+  const WEB_THUMB = useThemeStyles(themeWEB_THUMB)
+  const TRACK = useThemeStyles(themeTRACK)
+
   return (
     <RNSwitch
       value={value}
@@ -32,6 +37,6 @@ export function Switch({
 }
 
 /** react-native-web paints the "on" thumb teal unless told otherwise. */
-const WEB_THUMB = Platform.OS === 'web' ? { activeThumbColor: colors.surface } : null
+const themeWEB_THUMB = (colors: Palette) => (Platform.OS === 'web' ? { activeThumbColor: colors.surface } : null)
 
-const TRACK = { false: colors.border, true: colors.brand }
+const themeTRACK = (colors: Palette) => ({ false: colors.border, true: colors.brand })

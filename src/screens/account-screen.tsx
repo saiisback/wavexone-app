@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Linking, StyleSheet, View } from 'react-native'
@@ -26,7 +28,6 @@ import {
   UserIcon,
   VerifiedIcon,
   WalletIcon,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -47,8 +48,11 @@ type Navigation = NativeStackNavigationProp<MoreStackParamList, 'Account'>
  * groups, and the support banner.
  */
 export function AccountScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { navigate } = useNavigation<Navigation>()
-  const { openAccountSwitcher, openHomeScreen } = useAppNavigation()
+  const { openAccountSwitcher, openHomeScreen, openMoreScreen } = useAppNavigation()
   const showMenu = useActionMenu()
   const openPortal = useOpenClientPortal()
   const { signOut } = useAppSession()
@@ -94,11 +98,11 @@ export function AccountScreen() {
       ],
     })
 
-  const trailing = <Logo size={15} />
+  const trailing = <Logo size={15} tone="dark" />
 
   if (accountData.status !== 'ready' || !accountData.data.account) {
     return (
-      <PageScreen title="Account" trailing={trailing}>
+      <PageScreen title="Account" tone="reference" trailing={trailing}>
         <Gutter style={styles.state}>
           <QueryStateView
             state={accountData}
@@ -119,7 +123,8 @@ export function AccountScreen() {
   ]
 
   return (
-    <PageScreen title="Account" trailing={trailing}>
+    <PageScreen title="Account" tone="reference" trailing={trailing}>
+      <QueryStateView state={accountData} render={() => null} />
       <Reveal>
         <Gutter>
           <ProfileHero account={account} profile={profile} onPress={() => navigate('Profile')} />
@@ -137,6 +142,12 @@ export function AccountScreen() {
       <Reveal index={3}>
         <Gutter>
           <ListGroup title="Account">
+            <ListRow
+              icon={<UserIcon size={20} color={colors.tintVioletInk} />}
+              tone="violet"
+              label="Managed accounts"
+              onPress={() => openMoreScreen('ManagedAccounts')}
+            />
             <ListRow
               icon={<WalletIcon size={20} color={colors.tintBlueInk} />}
               tone="blue"
@@ -252,6 +263,9 @@ function ProfileHero({
   profile: Profile
   onPress: () => void
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const demo = account.mode === 'DEMO'
   return (
     <PressableScale
@@ -309,6 +323,8 @@ type Shortcut = {
 
 /** A square white tile into one of the menu's own destinations. */
 function ShortcutTile({ label, Icon, tone, ink, onPress }: Shortcut) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <PressableScale scaleTo={0.94} onPress={onPress} accessibilityLabel={label}>
       <Card style={styles.tile}>
@@ -323,7 +339,7 @@ function ShortcutTile({ label, Icon, tone, ink, onPress }: Shortcut) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   state: { paddingTop: spacing.lg },
 
   hero: {
@@ -429,6 +445,6 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.brand,
+    backgroundColor: colors.royal,
   },
-})
+}))

@@ -5,17 +5,51 @@ import type { FundingConfiguration, WaveXBackend } from '../../src/backend/contr
 import { BackendError } from '../../src/backend/errors'
 import { BackendProvider, useInvalidateQueries } from '../../src/backend/provider'
 import { useSession } from '../../src/data/store'
-import { Button, Field, ListRow, QuickPicks, Sparkline, colors } from '../../src/design-system'
+import {
+  Amount,
+  Button,
+  CircleButton,
+  Field,
+  HomeAtmosphere,
+  ListRow,
+  Logo,
+  PageBar,
+  PageScreen,
+  PageTitle,
+  QuickPicks,
+  SearchField,
+  SegmentedControl,
+  Sparkline,
+  colors,
+} from '../../src/design-system'
 import type { ActionMenuRequest } from '../../src/design-system/action-menu'
 import type { Account, FundingMode, Instrument, Position, Profile } from '../../src/data/types'
 import { MoverCard } from '../../src/features/markets/mover-card'
+import { AccountPill } from '../../src/features/accounts/account-pill'
 import { PositionRow } from '../../src/features/positions/position-row'
+import { PositionCard } from '../../src/features/positions/position-card'
 import { HomeScreen } from '../../src/screens/home-screen'
 import { FundingScreen } from '../../src/screens/funding-screen'
 import { AccountSwitcherScreen } from '../../src/screens/account-switcher-screen'
+import { MarketsScreen } from '../../src/screens/markets-screen'
+import { PositionsScreen } from '../../src/screens/positions-screen'
+import { ManagedAccountsScreen } from '../../src/screens/managed-accounts-screen'
+import { TradeScreen } from '../../src/screens/trade-screen'
+import { AccountScreen } from '../../src/screens/account-screen'
+import { ActivityScreen } from '../../src/screens/activity-screen'
+import { BalanceScreen } from '../../src/screens/balance-screen'
+import { InstrumentScreen } from '../../src/screens/instrument-screen'
+import { TradingViewChart } from '../../src/features/chart/tradingview-chart'
+import { NotificationsScreen } from '../../src/screens/notifications-screen'
+import { ProfileScreen } from '../../src/screens/profile-screen'
+import { SettingsScreen } from '../../src/screens/settings-screen'
+import { SignalsScreen } from '../../src/screens/signals-screen'
+import { EditPhoneScreen } from '../../src/screens/edit-phone-screen'
 
 const mockOpenAccountSwitcher = jest.fn()
 const mockOpenInstrument = jest.fn()
+const mockOpenMoreScreen = jest.fn()
+const mockOpenOrderTicket = jest.fn()
 const mockGoBack = jest.fn()
 const mockShowMenu = jest.fn<void, [ActionMenuRequest]>()
 let mockFundingMode: FundingMode = 'deposit'
@@ -27,10 +61,15 @@ jest.mock('../../src/design-system/action-menu', () => ({
   useActionMenu: () => mockShowMenu,
 }))
 
+jest.mock('../../src/backend/session-provider', () => ({
+  useAppSession: () => ({ signOut: jest.fn() }),
+}))
+
 jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
   useIsFocused: () => true,
   useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack, canGoBack: () => true }),
-  useRoute: () => ({ params: { mode: mockFundingMode } }),
+  useRoute: () => ({ params: { mode: mockFundingMode, instrumentId: 'xauusd' } }),
 }))
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -41,8 +80,13 @@ jest.mock('../../src/navigation/use-app-navigation', () => ({
   useAppNavigation: () => ({
     openTab: jest.fn(),
     openHomeScreen: jest.fn(),
+    openMoreScreen: mockOpenMoreScreen,
     openAccountSwitcher: mockOpenAccountSwitcher,
     openInstrument: mockOpenInstrument,
+    openOrderTicket: mockOpenOrderTicket,
+    openFunding: jest.fn(),
+    openEditPhone: jest.fn(),
+    openInstrumentPicker: jest.fn(),
   }),
 }))
 
@@ -106,6 +150,8 @@ beforeEach(() => {
   useSession.setState({ accountId: null })
   mockOpenAccountSwitcher.mockClear()
   mockOpenInstrument.mockClear()
+  mockOpenMoreScreen.mockClear()
+  mockOpenOrderTicket.mockClear()
   mockGoBack.mockClear()
   mockShowMenu.mockClear()
   mockFundingMode = 'deposit'
@@ -124,17 +170,24 @@ function backendWith(
   readProfile: () => Promise<Profile> = async () => profile,
   positions: readonly Position[] = [],
 ): WaveXBackend {
-  return {
+  const backend = {
     accounts: {
       list,
       profile: readProfile,
     },
     orders: {
       list: async () => positions,
+      history: async () => [],
     },
     markets: {
       catalogue: async () => markets,
+      quoteSnapshot: async (ids: readonly string[]) => markets.filter((item) => ids.includes(item.id)),
       favorites: async () => [],
+      candles: async () => ({
+        points: [98, 99, 100], labels: ['1', '2', '3'], cursorIndex: 2,
+        times: [1790812800000, 1790816400000, 1790820000000],
+        cursorOpen: 99, cursorClose: 100, min: 98, max: 100, step: 1,
+      }),
       sparklines: async () => new Map([
         ['btcusd', [95, 97, 100]],
         ['audcad', [101, 100, 100]],
@@ -145,7 +198,25 @@ function backendWith(
       subscribe: () => () => {},
       latest: () => undefined,
     },
+    funds: {
+      history: async () => [],
+    },
+    engagement: {
+      notifications: async () => [],
+      markNotificationsRead: async () => undefined,
+    },
   } as unknown as WaveXBackend
+  backend.orders.historyPage = async (_id, { page }) => ({ positions: page === 1 ? await backend.orders.history(_id) : [], page, hasMore: false })
+  return backend
+}
+
+function renderLiveScreen(screen: React.ReactElement, backend = backendWith(async () => [account])) {
+  let tree!: renderer.ReactTestRenderer
+  act(() => {
+    tree = renderer.create(<BackendProvider backend={backend}>{screen}</BackendProvider>)
+  })
+  mounted.push(tree)
+  return tree
 }
 
 function renderHome(backend: WaveXBackend) {
@@ -160,6 +231,30 @@ function renderHome(backend: WaveXBackend) {
   mounted.push(tree)
   return tree
 }
+
+it.each([['Home', HomeScreen], ['Account', AccountScreen]] as const)('keeps loaded %s content visible during account refresh and failure', async (_name, ScreenComponent) => {
+  useSession.setState({ accountId: account.id })
+  let invalidate!: (...prefixes: string[]) => void
+  let reject!: (error: unknown) => void
+  let reads = 0
+  const backend = backendWith(() => {
+    reads += 1
+    return reads === 1 ? Promise.resolve([account]) : new Promise<readonly Account[]>((_, fail) => { reject = fail })
+  })
+  function RefreshHandle() { invalidate = useInvalidateQueries(); return null }
+  const tree = renderLiveScreen(<><RefreshHandle /><ScreenComponent /></>, backend)
+  await flush()
+  await flush()
+  const original = renderedText(tree)
+  expect(original).toContain('10001')
+  act(() => invalidate('accounts:'))
+  expect(renderedText(tree)).toContain('Updating…')
+  expect(renderedText(tree)).toContain('10001')
+  await flush()
+  await act(async () => reject(new Error('offline')))
+  expect(renderedText(tree)).toContain('Try again')
+  expect(renderedText(tree)).toContain('10001')
+})
 
 const flush = () => act(async () => void (await Promise.resolve()))
 const renderedText = (tree: renderer.ReactTestRenderer) => JSON.stringify(tree.toJSON())
@@ -299,18 +394,63 @@ describe('home dashboard', () => {
     expect(text).toContain('+$24.75 (+1.98%)')
   })
 
-  it('offers only deposit and withdraw as quick actions', async () => {
+  it('uses navy foregrounds and light controls on the warm atmosphere', async () => {
     useSession.setState({ accountId: account.id })
     const tree = renderHome(backendWith(async () => [account]))
     await flush()
     await flush()
-    for (const label of ['Deposit', 'Withdraw']) {
+
+    expect(tree.root.find((node) => node.props.children === 'Welcome back').props.color).toBe(colors.referenceMuted)
+    expect(tree.root.find((node) => node.props.children === 'Example').props.color).toBe(colors.brand)
+    expect(tree.root.findAllByType(Logo).map((logo) => logo.props.tone)).toContain('light')
+    expect(tree.root.findAllByType(AccountPill).map((pill) => pill.props.tone)).toContain('light')
+    expect(tree.root.findAllByType(CircleButton).find((button) =>
+      button.props.accessibilityLabel?.startsWith('Notifications'),
+    )?.props.tone).toBe('outline')
+    expect(tree.root.findAllByType(Amount).find((amount) =>
+      amount.props.accessibilityLabel === '$1,275.25',
+    )?.props.color).toBe(colors.brand)
+  })
+
+  it('offers a complete trading quick-action grid without dead controls', async () => {
+    useSession.setState({ accountId: account.id })
+    const tree = renderHome(backendWith(async () => [account]))
+    await flush()
+    await flush()
+    expect(renderedText(tree)).toContain('Quick actions')
+    for (const label of ['Deposit', 'Withdraw', 'Trade', 'Markets', 'Positions', 'Activity', 'Balance', 'More']) {
       const action = tree.root.find((node) =>
         node.props.delayLongPress !== undefined && node.props.accessibilityLabel === label,
       )
       expect(action.props.accessibilityRole).toBe('button')
     }
+    act(() => {
+      tree.root.find((node) =>
+        node.props.delayLongPress !== undefined && node.props.accessibilityLabel === 'Activity',
+      ).props.onPress()
+    })
+    expect(mockOpenMoreScreen).toHaveBeenCalledWith('Activity')
     expect(tree.root.findAll((node) => node.props.accessibilityLabel === 'Transfer')).toHaveLength(0)
+  })
+
+  it('turns the loaded catalogue into an actionable market pulse', async () => {
+    useSession.setState({ accountId: account.id })
+    const backend = backendWith(async () => [account])
+    backend.markets.catalogue = async () => [
+      { ...markets[0], changePercent: 1.8 },
+      { ...markets[1], changePercent: -0.4 },
+      { ...markets[2], changePercent: 2.6 },
+      { ...markets[3], changePercent: 0 },
+    ]
+    const tree = renderHome(backend)
+    await flush()
+    await flush()
+
+    const text = renderedText(tree)
+    expect(text).toContain('Market pulse')
+    expect(text).toContain('2 of 4 markets are moving higher')
+    expect(text).toContain('BTC/USD leads at +5.26%')
+    expect(tree.root.findByProps({ accessibilityLabel: 'View all markets from market pulse' })).toBeTruthy()
   })
 
   it('pins favourites to the watchlist ahead of the other markets', async () => {
@@ -410,6 +550,376 @@ describe('home dashboard', () => {
   })
 })
 
+describe('reference-led primary tabs', () => {
+  it('shows a pending close and consumes a position confirmation only once', async () => {
+    const backend = backendWith(async () => [account], async () => profile, [{ id: 'closing-1', instrumentId: 'xauusd', side: 'Buy', lots: 1, entry: 100, current: 105, pnl: 5, state: 'Open' }])
+    let finish!: () => void
+    const close = jest.fn(() => new Promise<void>((resolve) => { finish = resolve }))
+    backend.orders.close = close
+    const tree = renderLiveScreen(<PositionsScreen />, backend)
+    await flush(); await flush(); await flush()
+    const card = () => tree.root.findAllByType(PositionCard).find((node) => node.props.id === 'closing-1')!
+    act(() => card().props.onAction('closing-1'))
+    const confirm = mockShowMenu.mock.calls.at(-1)![0].options[0].onSelect!
+    await act(async () => { confirm(); confirm(); await Promise.resolve() })
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(card().props.actionLoading).toBe(true)
+    await act(async () => finish())
+    act(() => confirm())
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not close from a confirmation belonging to a previous account', async () => {
+    const backend = backendWith(async () => [account], async () => profile, [{ id: 'stale-1', instrumentId: 'xauusd', side: 'Buy', lots: 1, entry: 100, current: 105, pnl: 5, state: 'Open' }])
+    backend.orders.close = jest.fn(async () => undefined)
+    const tree = renderLiveScreen(<PositionsScreen />, backend)
+    await flush(); await flush(); await flush()
+    const card = tree.root.findAllByType(PositionCard).find((node) => node.props.id === 'stale-1')!
+    act(() => card.props.onAction('stale-1'))
+    const confirm = mockShowMenu.mock.calls.at(-1)![0].options[0].onSelect!
+    act(() => useSession.setState({ accountId: 'another-account' }))
+    act(() => confirm())
+    expect(backend.orders.close).not.toHaveBeenCalled()
+  })
+  it('shows real managed-account directories and filters followed managers', async () => {
+    const backend = backendWith(async () => [account])
+    backend.managedAccounts = { directory: async () => ({ managerEnabled: false, managers: [{ id: '1', name: 'Followed Manager', growth: 12.5, following: true }, { id: '2', name: 'Other Manager', following: false }] }), following: async () => ({ managerEnabled: false, managers: [{ id: '3', name: 'Actually Followed', following: true }] }), followers: async () => [], report: async () => { throw new Error('Unexpected report') } }
+    const tree = renderLiveScreen(<ManagedAccountsScreen />, backend)
+    await flush(); await flush()
+    expect(renderedText(tree)).toContain('Followed Manager')
+    expect(renderedText(tree)).toContain('Other Manager')
+    const filter = tree.root.findAllByType(SegmentedControl).find((control) => control.props.options.includes('Following'))!
+    act(() => filter.props.onChange('Following'))
+    await flush(); await flush()
+    expect(renderedText(tree)).toContain('Actually Followed')
+    expect(renderedText(tree)).not.toContain('Other Manager')
+  })
+
+  it('loads followers and their report even when the directory capability flag is false', async () => {
+    const backend = backendWith(async () => [account])
+    const report = jest.fn(async () => ({ kind: 'PAMM' as const, rows: [{ id: '8446', orderId: '8446', managerPnl: -0.00218482, userPnl: -0.00218482, totalPnl: -0.00436964 }], totals: { managerPnl: 0.73271727, userPnl: 0.73271727, totalPnl: 1.46543456 }, share: 50 }))
+    backend.managedAccounts = { directory: async () => ({ managerEnabled: false, managers: [] }), following: async () => ({ managerEnabled: false, managers: [] }), followers: async () => [{ id: '26:381', kind: 'PAMM', name: 'Follower One', managerId: '26', userId: '381', share: 50, investment: 5, sharedPnl: 1.27914 }], report }
+    const tree = renderLiveScreen(<ManagedAccountsScreen />, backend)
+    await flush(); await flush()
+    const views = tree.root.findAllByType(SegmentedControl).find((control) => control.props.options.includes('Manager'))!
+    act(() => views.props.onChange('Manager'))
+    await flush(); await flush()
+    expect(renderedText(tree)).toContain('Follower One')
+    const reports = tree.root.findAllByType(Button).find((button) => button.props.accessibilityLabel === 'View report for Follower One')!
+    act(() => reports.props.onPress())
+    await flush(); await flush()
+    expect(report).toHaveBeenCalledWith('PAMM', { managerId: '26', userId: '381' })
+    expect(renderedText(tree)).toContain('8446')
+    expect(renderedText(tree)).toContain('1.46543456')
+    act(() => tree.root.findAllByType(Button).find((button) => button.props.accessibilityLabel === 'Back to followers')!.props.onPress())
+    const portal = tree.root.findAllByType(Button).find((button) => button.props.accessibilityLabel === 'Open managed-account client portal')!
+    act(() => portal.props.onPress())
+    expect(mockShowMenu.mock.calls.at(-1)?.[0].options[0].label).toBe('Open client portal')
+  })
+  it('allows paging through closed trades without waiting for market data', async () => {
+    const backend = backendWith(async () => [account])
+    backend.markets.catalogue = () => new Promise<never>(() => {})
+    backend.orders.historyPage = async (_id, { page }) => ({
+      positions: [{ id: `closed-${page}`, instrumentId: page === 1 ? 'xauusd' : 'eurusd', side: 'Buy', lots: 1, entry: 100, current: 105, pnl: 5, state: 'Closed' }], page, hasMore: page === 1,
+    })
+    const tree = renderLiveScreen(<PositionsScreen />, backend)
+    await flush(); await flush(); await flush()
+    const tabs = tree.root.findAllByType(SegmentedControl).find((control) => control.props.options.includes('Closed'))!
+    act(() => tabs.props.onChange('Closed'))
+    await flush(); await flush()
+    const next = tree.root.findAllByType(Button).find((button) => button.props.accessibilityLabel === 'Next page of closed trades')
+    expect(next).toBeDefined()
+    act(() => next!.props.onPress())
+    await flush(); await flush()
+    expect(renderedText(tree)).toContain('EURUSD')
+    expect(renderedText(tree)).toContain('Page 2')
+  })
+  it('keeps position filters and history visible while the catalogue is unavailable', async () => {
+    const backend = backendWith(async () => [account])
+    backend.markets.catalogue = () => new Promise<never>(() => {})
+    backend.orders.history = async () => [{ id: 'closed-1', instrumentId: 'xauusd', side: 'Buy', lots: 1, entry: 100, current: 105, pnl: 5, state: 'Closed' }]
+    const tree = renderLiveScreen(<PositionsScreen />, backend)
+    await flush(); await flush(); await flush()
+    const tabs = tree.root.findAllByType(SegmentedControl).find((control) => control.props.options.includes('Closed'))
+    expect(tabs).toBeDefined()
+    act(() => tabs!.props.onChange('Closed'))
+    expect(renderedText(tree)).toContain('100.00 → 105.00')
+  })
+
+  it('opens managed accounts from the More menu', async () => {
+    const tree = renderLiveScreen(<AccountScreen />)
+    await flush(); await flush()
+    const item = tree.root.findAllByType(ListRow).find((row) => row.props.label === 'Managed accounts')
+    expect(item).toBeDefined()
+    act(() => item!.props.onPress())
+    expect(mockOpenMoreScreen).toHaveBeenCalledWith('ManagedAccounts')
+  })
+  beforeEach(() => useSession.setState({ accountId: account.id }))
+
+  it('places market discovery inside the warm reference shell while keeping search and filters actionable', async () => {
+    const tree = renderLiveScreen(<MarketsScreen />)
+    await flush()
+    await flush()
+
+    expect(tree.root.findAllByType(HomeAtmosphere)).toHaveLength(1)
+    expect(tree.root.findByType(PageTitle).props.tone).toBe('reference')
+    expect(tree.root.findByType(PageBar).props.tone).toBe('reference')
+    expect(tree.root.findByType(SearchField).props.tone).toBe('light')
+    expect(tree.root.findAllByType(CircleButton).find((button) =>
+      button.props.accessibilityLabel === 'Show favourites',
+    )?.props.tone).toBe('outline')
+    const selectedFilter = tree.root.findByProps({ accessibilityLabel: 'All' })
+    expect(selectedFilter.props.accessibilityState.selected).toBe(true)
+    const animatedFill = selectedFilter.find((node) => node.props.jestAnimatedStyle?.value?.backgroundColor)
+    expect(animatedFill.props.jestAnimatedStyle.value.backgroundColor).toBe('rgba(230, 190, 63, 1)')
+    expect(renderedText(tree)).toContain('Top movers')
+    expect(tree.root.find((node) => node.props.children === 'Biggest moves today').props.color)
+      .toBe(colors.textMuted)
+    expect(tree.root.find((node) => node.props.children === 'Press and hold a market for quick actions').props.color)
+      .toBe(colors.textSubtle)
+  })
+
+  it('uses the reference page hierarchy for trade without losing order controls', async () => {
+    const tree = renderLiveScreen(<TradeScreen />)
+    await flush()
+    await flush()
+
+    expect(tree.root.findByType(PageScreen).props.tone).toBe('reference')
+    expect(tree.root.findAllByType(AccountPill).map((pill) => pill.props.tone)).toContain('light')
+    expect(tree.root.findByType(SegmentedControl).props.value).toBe('Market')
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel?.startsWith('Sell at ')).length).toBeGreaterThan(0)
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel?.startsWith('Buy at ')).length).toBeGreaterThan(0)
+  })
+
+  it('keeps position scope and P&L inside a warm and navy hierarchy', async () => {
+    const position: Position = {
+      id: 'position-1', instrumentId: 'xauusd', side: 'Buy', lots: 0.1,
+      entry: 99, current: 100, pnl: 10, state: 'Open',
+    }
+    const tree = renderLiveScreen(<PositionsScreen />, backendWith(async () => [account], undefined, [position]))
+    await flush()
+    await flush()
+
+    expect(tree.root.findAllByType(HomeAtmosphere)).toHaveLength(1)
+    expect(tree.root.findByType(PageTitle).props.tone).toBe('reference')
+    expect(tree.root.findByType(PageBar).props.tone).toBe('reference')
+    expect(tree.root.findByType(AccountPill).props.tone).toBe('light')
+    expect(tree.root.findByType(SegmentedControl).props.value).toBe('Open')
+    expect(renderedText(tree)).toContain('Floating P&L')
+  })
+})
+
+describe('reference-led supporting screens', () => {
+  beforeEach(() => useSession.setState({ accountId: account.id }))
+
+  it.each([
+    ['Account', <AccountScreen />, 'Balance & funding'],
+    ['Balance', <BalanceScreen />, 'Deposit'],
+    ['Signals', <SignalsScreen />, 'Trading signals are coming soon'],
+    ['Profile', <ProfileScreen />, 'CONTACT'],
+    ['Settings', <SettingsScreen />, 'Price alerts'],
+  ])('moves %s into the shared reference shell without losing its primary content', async (_name, screen, copy) => {
+    const tree = renderLiveScreen(screen)
+    await flush()
+    await flush()
+
+    expect(tree.root.findByType(PageScreen).props.tone).toBe('reference')
+    if (_name === 'Account') {
+      expect(tree.root.findAllByType(Logo).map((logo) => logo.props.tone)).toContain('dark')
+    }
+    expect(renderedText(tree)).toContain(copy)
+  })
+
+  it('keeps activity filters and account history inside the reference hierarchy', async () => {
+    const tree = renderLiveScreen(<ActivityScreen />)
+    await flush()
+    await flush()
+
+    expect(tree.root.findAllByType(HomeAtmosphere)).toHaveLength(1)
+    expect(tree.root.findByType(PageTitle).props.tone).toBe('reference')
+    expect(tree.root.findByType(PageBar).props.tone).toBe('reference')
+    expect(tree.root.findAllByType(CircleButton).find((button) =>
+      button.props.accessibilityLabel === 'Filter activity',
+    )?.props.tone).toBe('outline')
+    expect(StyleSheet.flatten(tree.root.findByProps({ testID: 'activity-screen' }).props.style).backgroundColor)
+      .toBe(colors.surface)
+  })
+
+  it('keeps notification actions legible in the reference hierarchy', async () => {
+    const tree = renderLiveScreen(<NotificationsScreen />)
+    await flush()
+
+    expect(tree.root.findAllByType(HomeAtmosphere)).toHaveLength(1)
+    expect(tree.root.findByType(PageTitle).props.tone).toBe('reference')
+    expect(tree.root.findByType(PageBar).props.tone).toBe('reference')
+    expect(tree.root.find((node) => node.props.children === 'Mark all read').props.color).toBe(colors.referenceMuted)
+    expect(renderedText(tree)).toContain('No notifications')
+  })
+
+  it('shows a local order notification and unread bell even when the portal feed fails', async () => {
+    useSession.setState({ accountId: account.id, localNotifications: [
+      { id: 'local:order:1', kind: 'order', title: 'Buy confirmed', body: '0.01 lots XAU/USD', time: 'Just now' },
+    ] })
+    const backend = backendWith(async () => [account])
+    backend.engagement.notifications = async () => { throw new Error('Portal unavailable') }
+    const tree = renderLiveScreen(<NotificationsScreen />, backend)
+    const home = renderHome(backend)
+    await flush()
+    await flush()
+    expect(renderedText(tree)).toContain('Buy confirmed')
+    expect(home.root.findByProps({ accessibilityLabel: 'Notifications, 1 unread' })).toBeTruthy()
+  })
+
+  it('marks local order notifications read without sending their IDs to the portal', async () => {
+    useSession.setState({ localNotifications: [
+      { id: 'local:order:2', kind: 'order', title: 'Buy confirmed', body: '0.01 lots XAU/USD', time: 'Just now' },
+    ] })
+    const backend = backendWith(async () => [account])
+    const read = jest.fn(async () => undefined)
+    backend.engagement.markNotificationsRead = read
+    const tree = renderLiveScreen(<NotificationsScreen />, backend)
+    await flush()
+    const row = tree.root.findAll((node) => node.props.accessibilityLabel?.startsWith('Buy confirmed.'))[0]
+    act(() => row.props.onPress())
+    await flush()
+    expect(useSession.getState().readNotifications.has('local:order:2')).toBe(true)
+    expect(read).not.toHaveBeenCalled()
+    expect(tree.root.findByType(PageTitle).props.subtitle).toBe('All caught up')
+  })
+
+  it('reports a failed server read action without marking the notification as read', async () => {
+    const backend = backendWith(async () => [account])
+    backend.engagement.notifications = async () => [
+      { id: 'remote-1', kind: 'order', title: 'Trade update', body: 'Confirmed', time: '10:00' },
+    ]
+    backend.engagement.markNotificationsRead = async () => { throw new Error('Offline') }
+    const tree = renderLiveScreen(<NotificationsScreen />, backend)
+    await flush()
+    const row = tree.root.findAll((node) => node.props.accessibilityLabel?.startsWith('Trade update.'))[0]
+    act(() => row.props.onPress())
+    await flush()
+    expect(useSession.getState().readNotifications.has('remote-1')).toBe(false)
+    expect(mockShowMenu.mock.lastCall?.[0].title).toBe('Could not mark notifications read')
+  })
+
+  it('marks a mixed inbox read using only server IDs in the portal request', async () => {
+    useSession.setState({ readNotifications: new Set(['older']), localNotifications: [
+      { id: 'local:order:3', kind: 'order', title: 'Buy confirmed', body: 'XAU/USD', time: 'Just now' },
+    ] })
+    const backend = backendWith(async () => [account])
+    backend.engagement.notifications = async () => [
+      { id: 'remote-2', kind: 'order', title: 'Trade update', body: 'Confirmed', time: '10:00' },
+    ]
+    const read = jest.fn(async () => undefined)
+    backend.engagement.markNotificationsRead = read
+    const tree = renderLiveScreen(<NotificationsScreen />, backend)
+    await flush()
+    act(() => tree.root.findByType(PageTitle).props.trailing.props.onPress())
+    await flush()
+    expect(read).toHaveBeenCalledWith({ ids: ['remote-2'], idempotencyKey: expect.any(String) })
+    expect([...useSession.getState().readNotifications]).toEqual(['older', 'local:order:3', 'remote-2'])
+    expect(tree.root.findByType(PageTitle).props.subtitle).toBe('All caught up')
+  })
+
+  it('gives instrument detail a warm context header while preserving both trading actions', async () => {
+    const tree = renderLiveScreen(<InstrumentScreen />)
+    await flush()
+    await flush()
+
+    expect(tree.root.findAllByType(HomeAtmosphere)).toHaveLength(1)
+    expect(tree.root.findAllByType(CircleButton).find((button) =>
+      button.props.accessibilityLabel === 'Go back',
+    )?.props.tone).toBe('outline')
+    expect(tree.root.findAllByType(CircleButton).find((button) =>
+      button.props.accessibilityLabel === 'Add to favourites',
+    )?.props.tone).toBe('outline')
+    const buy = tree.root.findAllByType(Button).find((node) => node.props.tone === 'gold')
+    expect(buy).toBeTruthy()
+    act(() => { buy!.props.onPress() })
+    expect(mockOpenOrderTicket).toHaveBeenCalledWith('xauusd', 'Buy')
+    expect(renderedText(tree)).toContain('Market stats')
+  })
+
+  it('keeps the chart runtime mounted while a new window is loading', async () => {
+    const backend = backendWith(async () => [account])
+    const read = backend.markets.candles
+    let release!: (value: Awaited<ReturnType<typeof read>>) => void
+    backend.markets.candles = (id, range, interval) => range === '1D'
+      ? new Promise((resolve) => { release = resolve })
+      : read(id, range, interval)
+    const tree = renderLiveScreen(<InstrumentScreen />, backend)
+    await flush(); await flush()
+    const before = tree.root.findByType(TradingViewChart)
+    act(() => tree.root.findAllByType(SegmentedControl).find((control) => control.props.value === '1M')!.props.onChange('1D'))
+    await flush()
+    expect(Object.is(tree.root.findByType(TradingViewChart), before)).toBe(true)
+    expect(renderedText(tree)).toContain('Loading chart')
+    await act(async () => release(await read('xauusd', '1D')))
+    await flush()
+    expect(Object.is(tree.root.findByType(TradingViewChart), before)).toBe(true)
+  })
+
+  it('requests candle intervals separately from the date window', async () => {
+    const backend = backendWith(async () => [account])
+    backend.markets.candles = jest.fn(backend.markets.candles)
+    const tree = renderLiveScreen(<InstrumentScreen />, backend)
+    await flush(); await flush()
+    const intervals = tree.root.findAllByType(SegmentedControl).find((control) => control.props.options.includes('15m'))
+    expect(intervals).toBeDefined()
+    act(() => intervals!.props.onChange('15m'))
+    await flush(); await flush()
+    expect(backend.markets.candles).toHaveBeenLastCalledWith('xauusd', '1M', '15m')
+    expect(tree.root.findAllByType(SegmentedControl).some((control) => control.props.value === '1M')).toBe(true)
+  })
+
+  it('expands and closes the same chart without a second runtime', async () => {
+    const tree = renderLiveScreen(<InstrumentScreen />)
+    await flush(); await flush()
+    const before = tree.root.findByType(TradingViewChart)
+    act(() => tree.root.findAll((node) => node.props.accessibilityLabel === 'Expand chart')[0].props.onPress())
+    expect(tree.root.findAllByType(TradingViewChart)).toHaveLength(1)
+    expect(Object.is(tree.root.findByType(TradingViewChart), before)).toBe(true)
+    expect(tree.root.findByType(TradingViewChart).props.expanded).toBe(true)
+    act(() => tree.root.findAll((node) => node.props.accessibilityLabel === 'Close fullscreen chart')[0].props.onPress())
+    expect(tree.root.findByType(TradingViewChart).props.expanded).toBe(false)
+  })
+
+  it('loads one instrument and its chart without waiting for the full market catalogue', async () => {
+    const backend = backendWith(async () => [account])
+    backend.markets.catalogue = () => new Promise<never>(() => {})
+    backend.markets.quoteSnapshot = jest.fn(async () => [markets[0]])
+    backend.markets.candles = jest.fn(backend.markets.candles)
+
+    const tree = renderLiveScreen(<InstrumentScreen />, backend)
+    await flush()
+    await flush()
+
+    expect(backend.markets.quoteSnapshot).toHaveBeenCalledWith(['xauusd'])
+    expect(backend.markets.candles).toHaveBeenCalledWith('xauusd', '1M')
+    expect(renderedText(tree)).toContain('Market stats')
+  })
+
+  it('renders TradingView from broker data without requesting a hosted terminal session', async () => {
+    const backend = backendWith(async () => [account])
+
+    const tree = renderLiveScreen(<InstrumentScreen />, backend)
+    await flush()
+    await flush()
+
+    expect(tree.root.findByProps({ testID: 'tradingview-chart' })).toBeTruthy()
+  })
+
+  it('uses gold for the primary completion action in account and phone sheets', async () => {
+    const accountTree = renderLiveScreen(<AccountSwitcherScreen />)
+    const phoneTree = renderLiveScreen(<EditPhoneScreen />)
+    await flush()
+    await flush()
+
+    expect(accountTree.root.findByType(Button).props.tone).toBe('gold')
+    expect(phoneTree.root.findByType(Button).props.tone).toBe('gold')
+  })
+})
+
 describe('progressive funding flow', () => {
   const config: FundingConfiguration = {
     depositMethods: ['Bank transfer'], withdrawalMethods: ['Bank transfer'],
@@ -418,6 +928,11 @@ describe('progressive funding flow', () => {
     minimumDeposit: 50, minimumWithdrawal: 25,
   }
   const sibling = { ...account, id: 'account-2', number: '10002' }
+
+  it('uses gold for the reviewed funding action', async () => {
+    const { tree } = await funding()
+    expect(tree.root.findByType(Button).props.tone).toBe('gold')
+  })
 
   async function funding(mode: FundingMode = 'deposit', options: { configuration?: Partial<FundingConfiguration>; accounts?: Account[]; selectedAccountId?: string } = {}) {
     mockFundingMode = mode
@@ -493,6 +1008,27 @@ describe('progressive funding flow', () => {
     expect(funds.deposit).not.toHaveBeenCalled()
   })
 
+  it('lets the trader change the account before entering a funding request', async () => {
+    const { tree } = await funding()
+    const changeAccount = tree.root.findByProps({ accessibilityLabel: 'Change funding account' })
+    act(() => changeAccount.props.onPress())
+    expect(mockOpenAccountSwitcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a confirmed deposit success visible until the trader dismisses it', async () => {
+    const { tree, funds } = await funding()
+    change(tree, 'Amount', '100')
+    confirm(tree)
+    await flush()
+
+    expect(funds.deposit).toHaveBeenCalledTimes(1)
+    expect(renderedText(tree)).toContain('Deposit request sent')
+    expect(renderedText(tree)).toContain('Track its progress in Activity')
+    expect(mockGoBack).not.toHaveBeenCalled()
+    act(() => tree.root.findByProps({ accessibilityLabel: 'Done' }).props.onPress())
+    expect(mockGoBack).toHaveBeenCalledTimes(1)
+  })
+
   it('locks inputs and suppresses duplicate confirmations during and after submission', async () => {
     const { tree, funds } = await funding()
     let finish!: () => void
@@ -509,7 +1045,8 @@ describe('progressive funding flow', () => {
     await act(async () => finish())
     act(() => action())
     expect(funds.deposit).toHaveBeenCalledTimes(1)
-    expect(mockGoBack).toHaveBeenCalledTimes(1)
+    expect(renderedText(tree)).toContain('Deposit request sent')
+    expect(mockGoBack).not.toHaveBeenCalled()
     expect(funds.configuration).toHaveBeenCalledTimes(2)
   })
 
@@ -539,7 +1076,8 @@ describe('progressive funding flow', () => {
     const first = funds.sendWithdrawalOtp.mock.calls[0][0] as { idempotencyKey: string }
     const second = funds.requestWithdrawal.mock.calls[0][0] as { idempotencyKey: string }
     expect(second.idempotencyKey).not.toBe(first.idempotencyKey)
-    expect(mockGoBack).toHaveBeenCalledTimes(1)
+    expect(renderedText(tree)).toContain('Withdraw request sent')
+    expect(mockGoBack).not.toHaveBeenCalled()
   })
 
   it('does not accept an older confirmation after the OTP step has advanced', async () => {
@@ -679,7 +1217,8 @@ describe('progressive funding flow', () => {
     await flush()
     expect(funds.sendWithdrawalOtp).toHaveBeenCalledTimes(1)
     expect(funds.requestWithdrawal).toHaveBeenCalledTimes(2)
-    expect(mockGoBack).toHaveBeenCalledTimes(1)
+    expect(renderedText(tree)).toContain('Withdraw request sent')
+    expect(mockGoBack).not.toHaveBeenCalled()
   })
 
   it('blocks withdrawals above available funds', async () => {

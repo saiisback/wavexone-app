@@ -50,11 +50,9 @@ describe('formatSignedMoney', () => {
     expect(formatSignedMoney(-137.3).startsWith('-$')).toBe(true)
   })
 
-  it('renders a loss too small to show as a negative zero', () => {
-    // Documented wart rather than an assertion that this is desirable: a
-    // sub-cent loss reads as "-$0.00". Worth rounding before formatting if a
-    // real feed ever produces these.
-    expect(formatSignedMoney(-0.001)).toBe('-$0.00')
+  it('uses the flat sign when a sub-cent loss rounds to zero', () => {
+    expect(formatSignedMoney(-0.001)).toBe('+$0.00')
+    expect(formatSignedMoney(-0.005)).toBe('-$0.01')
   })
 })
 

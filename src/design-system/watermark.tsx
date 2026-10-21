@@ -1,7 +1,7 @@
+import { useColors } from './theme'
 import { StyleSheet, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 
-import { colors } from './colors'
 
 /**
  * The oversized "W" printed faintly on every dark card, bleeding off the
@@ -20,6 +20,8 @@ export function Watermark({
   top?: number
   opacity?: number
 }) {
+  const colors = useColors()
+
   return (
     <View
       pointerEvents="none"

@@ -1,10 +1,11 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { FlashList } from '@shopify/flash-list'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
-  Aurora,
   Amount,
   BackButton,
   Card,
@@ -12,6 +13,7 @@ import {
   Donut,
   EmptyState,
   FilterIcon,
+  HomeAtmosphere,
   PageBar,
   PageScreen,
   PageTitle,
@@ -19,7 +21,6 @@ import {
   SegmentedControl,
   TAB_BAR_CLEARANCE,
   Text,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -48,6 +49,9 @@ type ListItem =
 
 /** Activity: month summary, a Trades / Funds / Orders filter, grouped history. */
 export function ActivityScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const [tab, setTab] = useState<(typeof TABS)[number]>('Trades')
   const [range, setRange] = useState<MarketPeriod>('This month')
 
@@ -72,14 +76,14 @@ export function ActivityScreen() {
   if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
     if (accountData.status === 'ready' && !accountData.data.account) {
       return (
-        <PageScreen back title="Activity" contentStyle={styles.gutter}>
+        <PageScreen back title="Activity" tone="reference" contentStyle={styles.gutter}>
           <AccountSummaryUnavailable account={accountData.data.selectedAccount} />
         </PageScreen>
       )
     }
     const state = accountData.status !== 'ready' ? accountData : catalogue
     return (
-      <PageScreen back title="Activity" contentStyle={styles.gutter}>
+      <PageScreen back title="Activity" tone="reference" contentStyle={styles.gutter}>
         <QueryStateView state={state} render={() => null} />
       </PageScreen>
     )
@@ -168,7 +172,7 @@ export function ActivityScreen() {
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === 'header') {
       return (
-        <View style={styles.gutter}>
+        <View style={[styles.gutter, styles.rowSurface]}>
           <ActivityDayHeader title={item.title} count={item.count} total={item.total} />
         </View>
       )
@@ -179,7 +183,7 @@ export function ActivityScreen() {
       : undefined
 
     return (
-      <View style={styles.gutter}>
+      <View style={[styles.gutter, styles.rowSurface]}>
         <ActivityGroupCell first={item.first} last={item.last}>
           <ActivityRow
             id={item.entry.id}
@@ -203,24 +207,29 @@ export function ActivityScreen() {
   }
 
   const filterButton = (
-    <CircleButton size={42} accessibilityLabel="Filter activity" onPress={openFilter}>
-      <FilterIcon size={19} color={colors.text} />
+    <CircleButton size={42} tone="outline" accessibilityLabel="Filter activity" onPress={openFilter}>
+      <FilterIcon size={19} color={colors.brand} />
     </CircleButton>
   )
 
   const header = (
     <View style={styles.header}>
+      <HomeAtmosphere />
       <PageTitle
         scrollY={scrollY}
         title="Activity"
+        tone="reference"
         subtitle={`${account.mode} · ${account.number} · ${range}`}
-        leading={<BackButton />}
+        leading={<BackButton tone="reference" />}
         trailing={filterButton}
         style={styles.title}
       />
 
       {/* No entrance animations in a FlashList header: they never settle on device. */}
       <View style={styles.gutter}>
+        <QueryStateView state={accountData} render={() => null} />
+        <QueryStateView state={catalogue} render={() => null} />
+        {source.status === 'ready' ? <QueryStateView<unknown> state={source} render={() => null} /> : null}
         <MonthReport
           net={account.monthNetResult}
           trades={account.monthTrades}
@@ -235,8 +244,7 @@ export function ActivityScreen() {
   )
 
   return (
-    <View style={styles.root}>
-      <Aurora />
+    <View testID="activity-screen" style={styles.root}>
       <FlashList
         data={items}
         renderItem={renderItem}
@@ -248,7 +256,7 @@ export function ActivityScreen() {
         contentContainerStyle={{ ...styles.list, paddingTop: insets.top + spacing.sm }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={[styles.gutter, styles.empty]}>
+          <View style={[styles.gutter, styles.empty, styles.rowSurface]}>
             {source.status !== 'ready' ? (
               <QueryStateView state={source} render={() => null} />
             ) : (
@@ -262,8 +270,9 @@ export function ActivityScreen() {
             )}
           </View>
         }
+        ListFooterComponent={<View style={styles.footerSurface} />}
       />
-      <PageBar scrollY={scrollY} title="Activity" />
+      <PageBar scrollY={scrollY} title="Activity" tone="reference" />
     </View>
   )
 }
@@ -274,6 +283,9 @@ export function ActivityScreen() {
  * losses with its legend.
  */
 function MonthReport({ net, trades, winRate }: { net?: number; trades?: number; winRate?: number }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const shown = useCountUp(net ?? 0)
   const wins = trades !== undefined && winRate !== undefined ? Math.round((trades * winRate) / 100) : undefined
   const losses = wins !== undefined && trades !== undefined ? Math.max(trades - wins, 0) : undefined
@@ -333,6 +345,9 @@ function MonthReport({ net, trades, winRate }: { net?: number; trades?: number; 
 }
 
 function LegendLine({ color, label, value }: { color: string; label: string; value?: number }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.legendLine}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
@@ -382,15 +397,17 @@ const keyExtractor = (item: ListItem) => item.id
 /** Separate recycling pools so a header never recycles into a row. */
 const getItemType = (item: ListItem) => item.type
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
   },
   gutter: {
     paddingHorizontal: SCREEN_PADDING,
   },
   header: {
+    position: 'relative',
+    overflow: 'hidden',
     paddingBottom: spacing.xs,
   },
   title: {
@@ -444,6 +461,10 @@ const styles = StyleSheet.create({
 
   tabs: {
     paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   empty: {
     paddingTop: spacing.xl,
@@ -451,4 +472,11 @@ const styles = StyleSheet.create({
   list: {
     paddingBottom: TAB_BAR_CLEARANCE,
   },
-})
+  rowSurface: {
+    backgroundColor: colors.surface,
+  },
+  footerSurface: {
+    minHeight: TAB_BAR_CLEARANCE,
+    backgroundColor: colors.surface,
+  },
+}))

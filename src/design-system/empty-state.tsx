@@ -1,7 +1,8 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StyleSheet, View } from 'react-native'
 
 import { Button, ButtonText } from './button'
-import { colors } from './colors'
 import { PopIn } from './motion'
 import { Text } from './text'
 import { spacing } from './tokens'
@@ -24,6 +25,9 @@ export function EmptyState({
   action?: string
   onAction?: () => void
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.wrap}>
       {icon ? (
@@ -50,7 +54,7 @@ export function EmptyState({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   wrap: {
     alignItems: 'center',
     gap: spacing.md,
@@ -86,4 +90,4 @@ const styles = StyleSheet.create({
     minWidth: 180,
     marginTop: spacing.xs,
   },
-})
+}))

@@ -1,7 +1,8 @@
 import { Image } from 'expo-image'
-import { Image as RNImage, Text as RNText } from 'react-native'
+import { Image as RNImage, Text as RNText, StyleSheet, View } from 'react-native'
 import renderer, { act } from 'react-test-renderer'
-import { Path, SvgXml } from 'react-native-svg'
+import { Circle, Path, SvgXml } from 'react-native-svg'
+import { ThemeProvider } from '../../src/design-system/theme'
 
 import { AssetIcon, type AssetIconProps } from '../../src/design-system/asset-icon'
 import { BRAND_MARKS, COIN_MARKS, FLAG_SVGS } from '../../src/design-system/artwork.generated'
@@ -52,6 +53,51 @@ describe('bundled artwork only', () => {
 })
 
 describe('marks', () => {
+  const luminance = (color: string) => {
+    const channels = color.replace('#', '').match(/../g)!.map((channel) => {
+      const value = parseInt(channel, 16) / 255
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+    })
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+  }
+  const contrast = (a: string, b: string) => {
+    const values = [luminance(a), luminance(b)].sort((x, y) => y - x)
+    return (values[0] + 0.05) / (values[1] + 0.05)
+  }
+
+  it.each(['oil', 'gas'] as const)('keeps the rendered %s SVG glyph legible in Dark appearance', async (kind) => {
+    let tree!: renderer.ReactTestRenderer
+    await act(async () => {
+      tree = renderer.create(<ThemeProvider storage={{ read: async () => 'dark', write: async () => {} }}><AssetIcon kind={kind} /></ThemeProvider>)
+    })
+    const background = tree.root.findByType(Circle).props.fill
+    const foreground = tree.root.findByType(Path).props.fill
+    expect(contrast(foreground, background)).toBeGreaterThanOrEqual(3)
+    act(() => tree.unmount())
+  })
+
+  it('keeps the rendered fallback currency quote readable on its gold disc in Dark appearance', async () => {
+    let tree!: renderer.ReactTestRenderer
+    await act(async () => {
+      tree = renderer.create(<ThemeProvider storage={{ read: async () => 'dark', write: async () => {} }}><AssetIcon kind="forex" symbol="XAU/USD" /></ThemeProvider>)
+    })
+    const quote = tree.root.findAllByType(RNText).find((node) => flatten(node) === 'USD')!
+    const foreground = StyleSheet.flatten(quote.props.style).color
+    const disc = tree.root.findAllByType(View).find((node) => StyleSheet.flatten(node.props.style)?.backgroundColor === '#E6BE3F')!
+    expect(contrast(foreground, StyleSheet.flatten(disc.props.style).backgroundColor)).toBeGreaterThanOrEqual(4.5)
+    act(() => tree.unmount())
+  })
+
+  it.each(['apple', 'tesla', 'nvidia', 'meta', 'google', 'netflix'])(
+    'uses the bundled official %s mark instead of an approximate drawing',
+    (kind) => {
+      const mark = (BRAND_MARKS as Record<string, { path: string }>)[kind]
+      expect(mark?.path.length).toBeGreaterThan(20)
+      const tree = render({ kind: kind as AssetIconProps['kind'] })
+      expect(tree.root.findByType(Path).props.d).toBe(mark.path)
+    },
+  )
+
   it('shows both flags for a currency pair', () => {
     const tree = render({ kind: 'forex', symbol: 'EUR/USD' })
     const flags = tree.root.findAllByType(SvgXml).map((node) => node.props.xml)

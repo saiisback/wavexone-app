@@ -14,7 +14,9 @@ it.each(['up', 'down'] as const)('keeps %s percentages readable on feature cards
   let tree!: renderer.ReactTestRenderer
   act(() => { tree = renderer.create(<Delta label={direction === 'up' ? '+1%' : '-1%'} direction={direction} onInk />) })
   const foreground = StyleSheet.flatten(tree.root.findByType(RNText).props.style).color
-  const contrast = (luminance(colors.surface) + 0.05) / (luminance(foreground) + 0.05)
+  const lighter = Math.max(luminance(colors.royal), luminance(foreground))
+  const darker = Math.min(luminance(colors.royal), luminance(foreground))
+  const contrast = (lighter + 0.05) / (darker + 0.05)
   expect(contrast).toBeGreaterThanOrEqual(4.5)
   act(() => { tree.unmount() })
 })

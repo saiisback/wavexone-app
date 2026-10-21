@@ -1,8 +1,9 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { useEffect, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 
-import { colors } from './colors'
 import { SearchIcon } from './icons'
 import { Input } from './input'
 import { fonts, motion, radius, shadow } from './tokens'
@@ -24,6 +25,11 @@ export function SearchField({
   /** `onInk` frosts the field for a brand-gradient surface. */
   tone?: 'light' | 'onInk'
 }) {
+  const colors = useColors()
+  const RING = useThemeStyles(themeRING)
+  const RING_ON_INK = useThemeStyles(themeRING_ON_INK)
+  const styles = useThemeStyles(themeStyles)
+
   const ink = tone === 'onInk'
   const [focused, setFocused] = useState(false)
   const focus = useSharedValue(0)
@@ -65,10 +71,10 @@ export function SearchField({
   )
 }
 
-const RING = [colors.border, colors.brandBright]
-const RING_ON_INK = [colors.glassOnInkEdge, colors.onInk]
+const themeRING = (colors: Palette) => ([colors.border, colors.brandBright])
+const themeRING_ON_INK = (colors: Palette) => ([colors.glassOnInkEdge, colors.onInk])
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   field: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -110,4 +116,4 @@ const styles = StyleSheet.create({
   inputOnInk: {
     color: colors.onInk,
   },
-})
+}))

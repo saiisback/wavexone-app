@@ -1,6 +1,8 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import * as Crypto from 'expo-crypto'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -21,7 +23,6 @@ import {
   ShieldIcon,
   Text,
   TrendUpIcon,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -50,6 +51,9 @@ const DECIMAL = /^\d+(\.\d+)?$/
  * same `positions:` query as the Positions tab, so opening it costs no request.
  */
 export function ModifyOrderScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { params } = useRoute<ModifyRoute>()
   const { goBack } = useAppNavigation()
   const showMenu = useActionMenu()
@@ -76,6 +80,8 @@ export function ModifyOrderScreen() {
   // current values without copying them into state during render.
   const [stopLossInput, setStopLoss] = useState<string>()
   const [takeProfitInput, setTakeProfit] = useState<string>()
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
 
   if (accountData.status === 'ready' && !accountData.data.account) {
     return <Sheet title="Modify order"><AccountSummaryUnavailable account={accountData.data.selectedAccount} /></Sheet>
@@ -117,13 +123,19 @@ export function ModifyOrderScreen() {
   const missingTrigger = position.state === 'Pending' && trigger === undefined
   const canSubmit = changed && !stopLossError && !takeProfitError && !missingTrigger
 
-  const submit = () =>
+  const submit = () => {
+    if (savingRef.current || !canSubmit) return
+    let consumed = false
     showMenu({
       title: `Modify ${instrument.symbol}`,
       message: `Stop loss ${stopLoss || '—'} · Take profit ${takeProfit || '—'}. Sent once and not automatically retried.`,
       options: [{
         label: 'Confirm changes',
         onSelect: () => {
+          if (consumed || savingRef.current) return
+          consumed = true
+          savingRef.current = true
+          setSaving(true)
           const base = {
             positionId: position.id,
             stopLoss: levelValue(stopLoss, initialStopLoss),
@@ -136,14 +148,19 @@ export function ModifyOrderScreen() {
           void backend.orders.modify(request).then(() => {
             invalidate(...AFTER_TRADE)
             goBack()
-          }).catch((error: unknown) => showMenu({
-            title: 'Changes not confirmed',
-            message: mutationFailureMessage(error),
-            options: [{ label: 'Got it' }],
-          }))
+          }).catch((error: unknown) => {
+            savingRef.current = false
+            setSaving(false)
+            showMenu({
+              title: 'Changes not confirmed',
+              message: mutationFailureMessage(error),
+              options: [{ label: 'Got it' }],
+            })
+          })
         },
       }],
     })
+  }
 
   const current = markPosition(position, instrument, quote).current
   const pending = position.state === 'Pending'
@@ -152,10 +169,10 @@ export function ModifyOrderScreen() {
     <Sheet
       title="Modify order"
       footer={
-        <Button tone="brand" disabled={!canSubmit} onPress={submit}>
+        <Button tone="gold" disabled={!canSubmit || saving} loading={saving} onPress={submit}>
           <ButtonRow>
-            <ButtonText tone="brand">Save changes</ButtonText>
-            <ArrowRightIcon size={18} color={colors.white} />
+            <ButtonText tone="gold">{saving ? 'Saving changes…' : 'Save changes'}</ButtonText>
+            <ArrowRightIcon size={18} color={colors.homePanel} />
           </ButtonRow>
         </Button>
       }
@@ -271,6 +288,8 @@ function LevelRow({
   tone: 'rose' | 'mint'
   children: React.ReactNode
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.levelRow}>
       <View style={styles.levelIcon}>
@@ -283,7 +302,7 @@ function LevelRow({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   metaPill: {
     height: 26,
     justifyContent: 'center',
@@ -322,4 +341,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing.lg,
   },
-})
+}))

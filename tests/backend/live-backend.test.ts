@@ -8,10 +8,13 @@ import {
   portalBootstrapResponse,
 } from './fixtures/portal-responses'
 import {
+  accountDetailResponse,
   chartHistoryResponse,
+  closedHistoryResponse,
   dailySnapshotResponse,
   favoritesResponse,
   marketCatalogueResponse,
+  openPositionsResponse,
   symbolMetadataResponse,
   tradingAccountsResponse,
 } from './fixtures/trading-responses'
@@ -48,10 +51,14 @@ function scriptFetch(...replies: { status?: number; body: string }[]) {
   for (const reply of replies) {
     mock.mockResolvedValueOnce({ status: reply.status ?? 200, text: async () => reply.body })
   }
-  // Anything beyond the script is an unexpected call.
-  mock.mockResolvedValue({
-    status: 200,
-    text: async () => JSON.stringify(portalBootstrapResponse),
+  mock.mockImplementation(async (url: string) => {
+    const body = String(url).includes('collect=detail')
+      ? JSON.stringify({
+          status: 'success',
+          data: { balance: 1250.5, fund: 1200.5, credit: 0, equity: 1275.25, currency: 'USD' },
+        })
+      : JSON.stringify(portalBootstrapResponse)
+    return { status: 200, text: async () => body }
   })
   globalThis.fetch = mock as unknown as typeof fetch
   return mock
@@ -71,6 +78,74 @@ const CHECK_OK = {
   }),
 }
 const BEARER_OK = { body: 'raw.bearer' }
+
+describe('managed account directory', () => {
+  it('loads the authenticated MAM directory without exposing API envelopes to screens', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    const fetchMock = scriptFetch({ body: JSON.stringify({ status: 'success', data: { user: '[{"mam":"1"}]', mamList: '[{"user":"26","name":"Manager One","growth":"12.5","follow":"1"}]' } }) })
+    expect(backend.managedAccounts).toBeDefined()
+    await expect(backend.managedAccounts.directory('MAM')).resolves.toEqual({ managerEnabled: true, managers: [{ id: '26', name: 'Manager One', growth: 12.5, following: true }] })
+    expect(fetchMock.mock.calls[0][0]).toContain('collect=mamList')
+  })
+})
+
+describe('closed history pages', () => {
+  async function signedInBackend() {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    return backend
+  }
+
+  it('loads an explicit later page and offers another page while records remain', async () => {
+    const backend = await signedInBackend()
+    const fetchMock = scriptFetch({ body: JSON.stringify({
+      ...closedHistoryResponse,
+      info: { page: 2, total: 1, count: 1 },
+    }) })
+
+    await expect(backend.orders.historyPage('acct-1', { page: 2 })).resolves.toMatchObject({
+      page: 2,
+      hasMore: true,
+      positions: [expect.objectContaining({ id: 'order-closed', current: 2325.75, pnl: 25.75 })],
+    })
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('page')).toBe('2')
+  })
+
+  it('ends pagination on a documented empty outcome without an echoed page', async () => {
+    const backend = await signedInBackend()
+    scriptFetch({ body: '{"status":"empty","data":[]}' })
+    await expect(backend.orders.historyPage('acct-1', { page: 3 })).resolves.toEqual({
+      page: 3, hasMore: false, positions: [],
+    })
+  })
+
+  it('deduplicates repeated order IDs within a page', async () => {
+    const backend = await signedInBackend()
+    scriptFetch({ body: JSON.stringify({
+      ...closedHistoryResponse,
+      data: [...closedHistoryResponse.data, ...closedHistoryResponse.data],
+    }) })
+    const result = await backend.orders.historyPage('acct-1', { page: 1 })
+    expect(result.positions.map((position) => position.id)).toEqual(['order-closed'])
+  })
+
+  it('rejects a repeated earlier page instead of letting pagination loop', async () => {
+    const backend = await signedInBackend()
+    scriptFetch({ body: JSON.stringify(closedHistoryResponse) })
+    await expect(backend.orders.historyPage('acct-1', { page: 2 })).rejects.toMatchObject({
+      kind: 'malformed', endpoint: 'closedHistory',
+    })
+  })
+
+  it('propagates a later-page failure instead of reporting an empty end of history', async () => {
+    const backend = await signedInBackend()
+    scriptFetch({ status: 503, body: 'unavailable' })
+    await expect(backend.orders.historyPage('acct-1', { page: 2 })).rejects.toMatchObject({ kind: 'server' })
+  })
+})
 
 beforeEach(() => {
   mockStore.clear()
@@ -129,6 +204,21 @@ describe('session', () => {
 
   it('restores nothing when storage is empty', async () => {
     await expect(createLiveBackend(CONFIG).session.restore()).resolves.toBe(false)
+  })
+
+  it('clears a legacy stored session that cannot register demo fingerprints', async () => {
+    mockStore.set('wavex.session.v1', JSON.stringify({
+      accountToken: 'acct-1',
+      secretKey: 'sk-1',
+      bearerToken: 'raw.bearer',
+      footprint: 'server-fp',
+      issuedAt: '2026-10-01T00:00:00.000Z',
+    }))
+
+    await expect(createLiveBackend(CONFIG).session.restore()).resolves.toBe(false)
+
+    expect(mockStore.has('wavex.session.v1')).toBe(false)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   it('restores a stored session that the server still accepts', async () => {
@@ -276,6 +366,28 @@ describe('orders.counts', () => {
 })
 
 describe('accounts', () => {
+  it('uses collect=detail as the authoritative current-account snapshot', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+
+    globalThis.fetch = jest.fn(async (url: string) => {
+      const body = String(url).includes('collect=detail')
+        ? JSON.stringify(accountDetailResponse)
+        : JSON.stringify(tradingAccountsResponse)
+      return { status: 200, text: async () => body }
+    }) as unknown as typeof fetch
+
+    await expect(backend.accounts.list()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'account-1',
+        balance: 2450.75,
+        equity: 2475.5,
+        freeMargin: 2205.25,
+      }),
+    ])
+  })
+
   it('joins a trading account id to the portal database id while keeping its API token', async () => {
     const bootstrapWithSeparateIds = {
       ...portalBootstrapResponse,
@@ -487,16 +599,23 @@ describe('markets', () => {
     sockets.WebSocket = original
   })
 
-  /** Lets the REST reads settle until the feed sockets have been opened. */
+  /** Lets the REST reads settle until the initial quote socket has opened. */
   async function feedSockets() {
-    for (let turn = 0; turn < 50 && FakeSocket.instances.length < 2; turn += 1) {
+    for (let turn = 0; turn < 50 && !FakeSocket.instances.some((socket) => socket.url.endsWith('/ticks')); turn += 1) {
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
-    const bars = FakeSocket.instances.find((socket) => socket.url.endsWith('/ohlcV2'))!
     const ticks = FakeSocket.instances.find((socket) => socket.url.endsWith('/ticks'))!
-    bars.open()
     ticks.open()
-    return { bars, ticks }
+    return { ticks }
+  }
+
+  async function nextSocket(path: string) {
+    for (let turn = 0; turn < 50; turn += 1) {
+      const socket = FakeSocket.instances.find((candidate) => candidate.url.endsWith(path))
+      if (socket) return socket
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    throw new Error(`No ${path} socket opened`)
   }
 
   function answerDayBars(bars: FakeSocket, days: Record<string, { o: number; h: number; l: number; c: number }>) {
@@ -508,7 +627,7 @@ describe('markets', () => {
     }
   }
 
-  it('joins catalogue and metadata with day bars and quotes from the feeds', async () => {
+  it('joins catalogue and metadata with quotes from the feed', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
@@ -518,18 +637,16 @@ describe('markets', () => {
     )
 
     const pending = backend.markets.catalogue()
-    const { bars, ticks } = await feedSockets()
-    expect(ticks.sent).toEqual([{ action: 'subscribe', symbols: ['XAUUSD', 'BTCUSD'] }])
-    expect(bars.sent).toEqual([
-      expect.objectContaining({ action: 'ohlc', symbol: 'XAUUSD', timeframe: '1D', limit: 1 }),
-      expect.objectContaining({ action: 'ohlc', symbol: 'BTCUSD', timeframe: '1D', limit: 1 }),
-    ])
-    answerDayBars(bars, {
-      XAUUSD: { o: 2390, h: 2410, l: 2380, c: 2400 },
-      BTCUSD: { o: 67500, h: 68500, l: 67000, c: 68000 },
+    const { ticks } = await feedSockets()
+    expect(ticks.sent).toEqual([{
+      action: 'subscribe',
+      symbols: ['WAVE:C.XAUUSD', 'WAVE:X.BTCUSD'],
+    }])
+    ticks.receive({ status: 'subscribed', symbols: ['WAVE:C.XAUUSD', 'WAVE:X.BTCUSD'] })
+    ticks.receive({
+      'WAVE:C.XAUUSD': { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 },
+      'WAVE:X.BTCUSD': { p: 68000, v: 1, b: 67995, a: 68005 },
     })
-    ticks.receive({ status: 'subscribed', symbols: ['XAUUSD', 'BTCUSD'] })
-    ticks.receive({ XAUUSD: { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
 
     await expect(pending).resolves.toEqual([
       expect.objectContaining({
@@ -540,14 +657,73 @@ describe('markets', () => {
         bid: 2400.1,
         ask: 2400.3,
         price: 2400.2,
-        dayOpen: 2390,
       }),
-      // No tick yet: priced from the day bar until the stream catches up.
-      expect.objectContaining({ id: 'x:btcusd', symbol: 'BTC/USD', bid: 68000, ask: 68000 }),
+      expect.objectContaining({ id: 'x:btcusd', symbol: 'BTC/USD', bid: 67995, ask: 68005 }),
     ])
     expect(marketFetch.mock.calls.map(([url]) => String(url))).not.toContainEqual(
       expect.stringContaining('getCurrentDayData'),
     )
+  })
+
+  it('normalizes an unprefixed metal ticker to the documented Wave chart symbol', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify({ fx: [{ name: 'Gold', ticker: 'XAUUSD', market: 'metals' }] }) },
+      { body: JSON.stringify(symbolMetadataResponse) },
+    )
+
+    const pending = backend.markets.catalogue()
+    const { ticks } = await feedSockets()
+    expect(ticks.sent[0]).toEqual({ action: 'subscribe', symbols: ['WAVE:C.XAUUSD'] })
+    ticks.receive({ 'WAVE:C.XAUUSD': { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
+    await expect(pending).resolves.toEqual([expect.objectContaining({ id: 'c:xauusd' })])
+  })
+
+  it('loads the catalogue from the fast quote snapshot without waiting for 286 daily bars', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify(marketCatalogueResponse) },
+      { body: JSON.stringify(symbolMetadataResponse) },
+    )
+
+    const pending = backend.markets.catalogue()
+    const ticks = await nextSocket('/ticks')
+    ticks.open()
+    ticks.receive({
+      'WAVE:C.XAUUSD': { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 },
+      'WAVE:X.BTCUSD': { p: 68005, v: 1, b: 68000, a: 68010 },
+    })
+
+    await expect(pending).resolves.toHaveLength(2)
+    expect(FakeSocket.instances.some((socket) => socket.url.endsWith('/ohlcV2'))).toBe(false)
+  })
+
+  it('prices one requested instrument without subscribing to the full catalogue', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify(marketCatalogueResponse) },
+      { body: JSON.stringify(symbolMetadataResponse) },
+    )
+
+    const pending = backend.markets.quoteSnapshot(['c:xauusd'])
+    const ticks = await nextSocket('/ticks')
+    ticks.open()
+    expect(ticks.sent).toEqual([{
+      action: 'subscribe',
+      symbols: ['WAVE:C.XAUUSD'],
+    }])
+    ticks.receive({ 'WAVE:C.XAUUSD': { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
+
+    await expect(pending).resolves.toEqual([
+      expect.objectContaining({ id: 'c:xauusd', price: 2400.2 }),
+    ])
+    expect(FakeSocket.instances.some((socket) => socket.url.endsWith('/ohlcV2'))).toBe(false)
   })
 
   it('resolves bundled marks without changing server tickers, IDs or prices', async () => {
@@ -562,14 +738,17 @@ describe('markets', () => {
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
     const plain = (ticker: string) => ticker.split(':').pop()!
+    const feed = (ticker: string) => {
+      const [venue, symbol] = ticker.split(':')
+      return symbol ? `WAVE:${venue}.${symbol}` : `WAVE:S.${venue}`
+    }
     scriptFetch(
       { body: JSON.stringify({ stocks: cases.map(([ticker]) => ({ ticker, name: ticker, market: 'stocks' })) }) },
       { body: JSON.stringify(Object.fromEntries(cases.map(([ticker]) => [plain(ticker), { decimal: 2, lot: 1, spread: 0.1 }]))) },
     )
     const pending = backend.markets.catalogue()
-    const { bars, ticks } = await feedSockets()
-    answerDayBars(bars, Object.fromEntries(cases.map(([ticker]) => [plain(ticker), { o: 10, h: 12, l: 9, c: 11 }])))
-    ticks.receive(Object.fromEntries(cases.map(([ticker]) => [plain(ticker), { p: 11, v: 1, b: 10, a: 12 }])))
+    const { ticks } = await feedSockets()
+    ticks.receive(Object.fromEntries(cases.map(([ticker]) => [feed(ticker), { p: 11, v: 1, b: 10, a: 12 }])))
 
     const markets = await pending
     expect(markets.map(({ icon }) => icon)).toEqual(cases.map(([, icon]) => icon))
@@ -586,10 +765,58 @@ describe('markets', () => {
       { body: JSON.stringify(symbolMetadataResponse) },
     )
     const pending = backend.markets.catalogue()
-    const { bars, ticks } = await feedSockets()
-    answerDayBars(bars, { XAUUSD: { o: 2390, h: 2410, l: 2380, c: 2400 } })
-    ticks.receive({ XAUUSD: { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
+    const { ticks } = await feedSockets()
+    ticks.receive({ 'WAVE:C.XAUUSD': { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 } })
     await expect(pending).resolves.toEqual([expect.objectContaining({ id: 'c:xauusd' })])
+  })
+
+  it('marks a newly filled order when the order API omits the catalogue namespace', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify(openPositionsResponse) },
+      { body: JSON.stringify(marketCatalogueResponse) },
+      { body: JSON.stringify(symbolMetadataResponse) },
+    )
+
+    const pending = backend.orders.list('account-1')
+    const { ticks } = await feedSockets()
+    ticks.receive({
+      'WAVE:C.XAUUSD': { p: 2400.2, v: 1, b: 2400.1, a: 2400.3 },
+      'WAVE:X.BTCUSD': { p: 68005, v: 1, b: 68000, a: 68010 },
+    })
+
+    const positions = await pending
+    expect(positions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'order-open',
+        instrumentId: 'c:xauusd',
+        current: 2400.1,
+      }),
+    ]))
+    // Price movement plus the swap and commission charged by the server.
+    expect(positions.find((position) => position.id === 'order-open')?.pnl).toBeCloseTo(-9.25)
+  })
+
+  it('values the pictured AUD/CAD trade using the live contract multiplier, not the minimum lot', async () => {
+    scriptFetch(CHECK_OK, BEARER_OK)
+    const backend = createLiveBackend(CONFIG)
+    await backend.session.signIn('a@b.com', 'pw')
+    scriptFetch(
+      { body: JSON.stringify({ status: 'success', data: [{
+        id: 'audcad-position', symbol: 'AUDCAD', bs: 'buy', lot: '0.01',
+        avg: '0.98762', status: 'open', t_swap: '0', commission: '0',
+      }] }) },
+      { body: JSON.stringify({ fx: [{ name: 'Australian dollar - Canadian dollar', ticker: 'C:AUDCAD', market: 'forex' }] }) },
+      { body: JSON.stringify({ AUDCAD: { spread: 100000, decimal: 5, lot: 0.01 } }) },
+    )
+    const pending = backend.orders.list('account-1')
+    const { ticks } = await feedSockets()
+    ticks.receive({ 'WAVE:C.AUDCAD': { p: 0.98755, b: 0.98754, a: 0.98756, v: 1 } })
+    const [position] = await pending
+    expect(position.contractSize).toBe(100000)
+    expect(position.pnl).toBeCloseTo(-0.08)
   })
 
   it('reports the price feed as unreachable rather than an empty market list', async () => {
@@ -601,13 +828,16 @@ describe('markets', () => {
       { body: JSON.stringify(symbolMetadataResponse) },
     )
     const pending = backend.markets.catalogue()
-    const { bars, ticks } = await feedSockets()
-    bars.drop()
+    const { ticks } = await feedSockets()
     ticks.drop()
     await expect(pending).rejects.toMatchObject({ kind: 'network' })
   })
 
-  it('parses stringified favorites and reads charts from the candle feed, not the old endpoint', async () => {
+  it.each([
+    [undefined, '240', 220],
+    ['15m' as const, '15', 500],
+    ['1D' as const, '1D', 500],
+  ])('reads candle feed with independent interval %s and bounded history', async (interval, feedInterval, limit) => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend(CONFIG)
     await backend.session.signIn('a@b.com', 'pw')
@@ -620,12 +850,12 @@ describe('markets', () => {
     const original = sockets.WebSocket
     sockets.WebSocket = FakeSocket
     try {
-      const pending = backend.markets.candles('c:xauusd', '1M')
+      const pending = backend.markets.candles('c:xauusd', '1M', interval)
       const socket = FakeSocket.latest()
       expect(socket.url).toBe('wss://cloud.wavexone.com/ws/ohlcV2')
       socket.open()
       const request = socket.sent[0] as { uid: string; symbol: string; timeframe: string }
-      expect(request).toMatchObject({ action: 'ohlc', symbol: 'XAUUSD', timeframe: '240' })
+      expect(request).toMatchObject({ action: 'ohlc', symbol: 'WAVE:C.XAUUSD', timeframe: feedInterval, limit })
       socket.receive({
         action: 'ohlc_response',
         success: true,
@@ -691,7 +921,7 @@ describe('the methods that are not wired yet', () => {
 })
 
 describe('acknowledged mutations', () => {
-  it('creates a demo order fingerprint with the account database id, not its trading token', async () => {
+  it('creates and reuses the opaque demo fingerprint for its account database id', async () => {
     scriptFetch(CHECK_OK, BEARER_OK)
     const backend = createLiveBackend({ ...CONFIG, phase: 2 })
     await backend.session.signIn('a@b.com', 'pw')
@@ -709,33 +939,50 @@ describe('acknowledged mutations', () => {
     ]
     const fetchMock = scriptFetch(
       { body: JSON.stringify(linkedAccounts) },
+      { body: JSON.stringify(accountDetailResponse) },
       { body: '{"status":"success"}' },
       { body: '{"status":"success"}' },
-      { body: '0123456789abcdef0123456789abcdef_20002' },
+      { body: '{"status":"success","fingerprint":"server-issued-opaque-value"}' },
+      { body: '{"status":"success"}' },
       { body: '{"status":"success"}' },
     )
+    let now = 1_000_000
+    const dateNow = jest.spyOn(Date, 'now').mockImplementation(() => now)
 
-    await backend.accounts.list()
-    await backend.accounts.switchAccount({
-      accountId: 'demo-token',
-      idempotencyKey: 'switch-demo',
-    })
-    await expect(
-      backend.orders.place({
+    try {
+      await backend.accounts.list()
+      await backend.accounts.switchAccount({
+        accountId: 'demo-token',
+        idempotencyKey: 'switch-demo',
+      })
+      await backend.orders.place({
         instrumentId: 'c:xauusd',
         side: 'Buy',
         lots: '0.01',
-        idempotencyKey: 'place-demo-order',
-      }),
-    ).resolves.toBeUndefined()
+        idempotencyKey: 'place-demo-order-1',
+      })
+      now += 31_000
+      await backend.orders.place({
+        instrumentId: 'c:xauusd',
+        side: 'Buy',
+        lots: '0.01',
+        idempotencyKey: 'place-demo-order-2',
+      })
 
-    const urls = fetchMock.mock.calls.map(([url]) => String(url))
-    expect(urls).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('collect=create_fingerprint&token=demo-token&account_id=20002'),
-        expect.stringContaining('collect=placeorder&token=demo-token'),
-      ]),
-    )
+      const urls = fetchMock.mock.calls.map(([url]) => String(url))
+      expect(urls).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'collect=create_fingerprint&token=demo-token&account_id=20002&sid=session-1',
+          ),
+          expect.stringContaining('collect=placeorder&token=demo-token'),
+        ]),
+      )
+      expect(urls.filter((url) => url.includes('collect=create_fingerprint'))).toHaveLength(1)
+      expect(urls.filter((url) => url.includes('collect=placeorder'))).toHaveLength(2)
+    } finally {
+      dateNow.mockRestore()
+    }
   })
 
   it('re-reads the portal bootstrap once a trade is acknowledged', async () => {

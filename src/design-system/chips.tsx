@@ -1,12 +1,13 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StyleSheet, View } from 'react-native'
 
-import { colors } from './colors'
 import { ChevronRightIcon } from './icons'
 import { Pressable } from './pressable'
 import { Text } from './text'
 import { fonts, radius } from './tokens'
 
-const CHIP_FILL = {
+const themeCHIP_FILL = (colors: Palette) => ({
   navy: colors.brandTint,
   blue: colors.tintBlue,
   violet: colors.tintViolet,
@@ -16,7 +17,7 @@ const CHIP_FILL = {
   gold: 'rgba(230, 190, 63, 0.18)',
   onInk: 'rgba(255, 255, 255, 0.14)',
   surface: colors.surface,
-} as const
+} as const)
 
 /** A tinted disc behind an icon: rows, tiles, empty states. */
 export function IconChip({
@@ -26,11 +27,14 @@ export function IconChip({
   shape = 'circle',
 }: {
   children: React.ReactNode
-  tone?: keyof typeof CHIP_FILL
+  tone?: keyof ReturnType<typeof themeCHIP_FILL>
   size?: number
   /** `square` is the rounded tile used beside list rows. */
   shape?: 'circle' | 'square'
 }) {
+  const CHIP_FILL = useThemeStyles(themeCHIP_FILL)
+  const styles = useThemeStyles(themeStyles)
+
   const round = shape === 'circle' ? size / 2 : size * 0.32
   return (
     <View style={[styles.chip, { width: size, height: size, borderRadius: round, backgroundColor: CHIP_FILL[tone] }]}>
@@ -51,6 +55,9 @@ export function PillLink({
   tone?: 'light' | 'onInk'
   accessibilityLabel?: string
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const ink = tone === 'onInk'
   return (
     <Pressable
@@ -66,7 +73,7 @@ export function PillLink({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   chip: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -95,4 +102,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 17,
   },
-})
+}))

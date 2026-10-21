@@ -3,7 +3,8 @@
  * `react-native` or a third-party package directly, so a swap (a different
  * image library, a new text primitive) is a one-file change.
  */
-export { colors, type ColorName } from './colors'
+export { colors, darkColors, type ColorName, type Palette } from './colors'
+export { ThemeProvider, useTheme, useColors, useThemeStyles, type AppearancePreference } from './theme'
 export { SCREEN_PADDING, fonts, motion, radius, shadow, spacing, type } from './tokens'
 
 export { Text, type TextProps } from './text'
@@ -11,6 +12,7 @@ export { Card, type CardProps } from './card'
 export { InkBackdrop } from './ink-backdrop'
 export { Glass, type GlassProps, type GlassTone } from './glass'
 export { LiquidBackdrop } from './liquid-backdrop'
+export { HomeAtmosphere } from './home-atmosphere'
 export { LiquidGlass } from './liquid-glass'
 export { WalletCard } from './wallet-card'
 export { Aurora } from './aurora'

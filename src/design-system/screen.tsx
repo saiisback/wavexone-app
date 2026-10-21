@@ -1,8 +1,9 @@
+import { useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StyleSheet, View, type ViewProps } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Aurora } from './aurora'
-import { colors } from './colors'
 import { SCREEN_PADDING } from './tokens'
 
 /** Height of the floating glass tab bar, without the safe-area inset under it. */
@@ -38,6 +39,8 @@ export function Screen({
   /** The ambient canvas; off under full-bleed dark headers. */
   aurora?: boolean
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   const insets = useSafeAreaInsets()
 
   return (
@@ -60,10 +63,12 @@ export function Screen({
 
 /** Standard horizontal gutter. */
 export function Gutter({ style, ...rest }: ViewProps) {
+  const styles = useThemeStyles(themeStyles)
+
   return <View {...rest} style={[styles.gutter, style]} />
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -71,4 +76,4 @@ const styles = StyleSheet.create({
   gutter: {
     paddingHorizontal: SCREEN_PADDING,
   },
-})
+}))

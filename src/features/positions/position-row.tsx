@@ -1,6 +1,7 @@
+import { useColors } from '../../design-system/theme'
 import { StyleSheet, View } from 'react-native'
 
-import { Amount, AssetIcon, Badge, PressableScale, Text, colors } from '../../design-system'
+import { Amount, AssetIcon, Badge, PressableScale, Text } from '../../design-system'
 import { formatLots, formatPrice, formatSignedMoney } from '../../data/format'
 import { markPosition } from '../../data/live-quote'
 import type { Instrument, Position } from '../../data/types'
@@ -23,6 +24,8 @@ export function PositionRow({
   instrument?: Instrument
   onPress: () => void
 }) {
+  const colors = useColors()
+
   const quote = useLiveQuote(instrument && position.state === 'Open' ? position.instrumentId : undefined)
   const marked = markPosition(position, instrument, quote)
   const symbol = instrument?.symbol ?? position.instrumentId.replace(/^[^:]+:/, '').toUpperCase()

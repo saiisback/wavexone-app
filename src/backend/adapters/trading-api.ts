@@ -2,10 +2,10 @@ import { z } from 'zod'
 
 import { BackendError } from '../errors'
 import type { Gate } from '../gate'
-import { unwrapEnvelope } from '../http'
+import { unwrapEnvelope, type HttpResponse } from '../http'
 import { logBackendEvent } from '../redact'
 import {
-  parseChartHistory,
+  parseAccountDetail,
   parseCheckedSession,
   parseFavoriteIds,
   parseMarketCatalogue,
@@ -39,6 +39,11 @@ function pick(source: Record<string, unknown>, ...names: string[]): string | und
 }
 
 const objectish = z.record(z.string(), z.unknown())
+// The official Postman history sample omits `data` for this empty outcome.
+const noHistoryResultsSchema = z.object({
+  status: z.literal('fail'),
+  message: z.literal('No Results'),
+}).strict()
 
 export type SignInOutcome =
   | { kind: 'authenticated'; material: SessionMaterial }
@@ -107,6 +112,7 @@ export class TradingApiAdapter {
       material: {
         accountToken: session.accountToken,
         secretKey: session.secretKey,
+        ...(session.sessionId === undefined ? {} : { sessionId: session.sessionId }),
         bearerToken,
         // Guide §3.1 step 2 says the footprint comes back; trust the server's
         // value when it does, so both sides agree on the device identity.
@@ -226,24 +232,6 @@ export class TradingApiAdapter {
     unwrapEnvelope(response, 'toggleFavorite')
   }
 
-  async chart(material: SessionMaterial, instrumentId: string, resolution: string, count: number) {
-    const toTs = Math.floor(Date.now() / 1000)
-    const fromTs = toTs - count * 24 * 60 * 60
-    const response = await this.gate.call('chartBars', {
-      query: {
-        symbol: instrumentId.toUpperCase(),
-        fromTs: String(fromTs),
-        toTs: String(toTs),
-        count: String(count),
-        previouscount: '0',
-        resolution,
-        firstDataRequest: 'true',
-      },
-      headers: this.headers(material),
-    })
-    return parseChartHistory(response.json)
-  }
-
   async orderCounts(material: SessionMaterial) {
     const response = await this.gate.call('ordersCount', {
       query: { token: material.accountToken },
@@ -252,20 +240,41 @@ export class TradingApiAdapter {
     return parseOrderCounts(response.json)
   }
 
+  async accountDetail(material: SessionMaterial) {
+    const response = await this.gate.call('instrumentDetail', {
+      query: { token: material.accountToken, data: '[]' },
+      headers: this.headers(material),
+    })
+    return parseResponse('instrumentDetail', response.json, parseAccountDetail)
+  }
+
   async openOrders(material: SessionMaterial) {
     const response = await this.gate.call('orders', {
       query: { token: material.accountToken },
       headers: this.headers(material),
     })
-    return parseOpenPositions(response.json)
+    return parseResponse('orders', response.json, parseOpenPositions)
   }
 
-  async closedOrders(material: SessionMaterial) {
+  async closedOrders(material: SessionMaterial, options: { page?: number; filter?: '24hr' } = {}) {
+    const page = options.page ?? 1
+    if (!Number.isSafeInteger(page) || page < 1) {
+      throw new BackendError('blocked', 'History page must be a positive integer.', { endpoint: 'closedHistory' })
+    }
     const response = await this.gate.call('closedHistory', {
-      query: { token: material.accountToken, page: '1', type: '', filter: '24hr', from: '', to: '' },
+      query: {
+        token: material.accountToken,
+        page: String(page),
+        type: '',
+        filter: options.filter ?? '24hr',
+        from: '',
+        to: '',
+      },
       headers: this.headers(material),
     })
-    return parseClosedHistory(response.json)
+    return parseClosedHistory(noHistoryResultsSchema.safeParse(response.json).success
+      ? { status: 'fail', message: 'No Results', data: [] }
+      : response.json)
   }
 
   async placeOrder(material: SessionMaterial, request: PlaceOrderRequest, fingerprint: string) {
@@ -274,7 +283,10 @@ export class TradingApiAdapter {
         token: material.accountToken,
         type: request.limitPrice ? 'limit' : 'market',
         bs: request.side.toLowerCase(),
-        symbol: request.instrumentId.replace(/^[^:]+:/, '').toUpperCase(),
+        // `placeorder` resolves the market from the catalogue namespace too
+        // (`C:AUDCAD`, `S:AAPL`, …). Dropping it can make a valid account look
+        // unauthenticated because the order service cannot resolve the route.
+        symbol: request.instrumentId.toUpperCase(),
         lot: request.lots,
         sl: request.stopLoss ?? '',
         target: request.takeProfit ?? '',
@@ -286,7 +298,7 @@ export class TradingApiAdapter {
       headers: this.headers(material),
       idempotencyKey: request.idempotencyKey,
     })
-    assertAcknowledged(response.json, 'placeOrder')
+    assertAcknowledged(response, 'placeOrder')
   }
 
   async modifyOrder(material: SessionMaterial, request: ModifyOrderRequest, fingerprint: string) {
@@ -303,7 +315,7 @@ export class TradingApiAdapter {
       headers: this.headers(material),
       idempotencyKey: request.idempotencyKey,
     })
-    assertAcknowledged(response.json, endpoint)
+    assertAcknowledged(response, endpoint)
   }
 
   async closeOrder(material: SessionMaterial, request: CloseOrderRequest, fingerprint: string) {
@@ -312,7 +324,7 @@ export class TradingApiAdapter {
       headers: this.headers(material),
       idempotencyKey: request.idempotencyKey,
     })
-    assertAcknowledged(response.json, 'closePosition')
+    assertAcknowledged(response, 'closePosition')
   }
 
   async cancelOrder(material: SessionMaterial, request: CloseOrderRequest, fingerprint: string) {
@@ -321,7 +333,7 @@ export class TradingApiAdapter {
       headers: this.headers(material),
       idempotencyKey: request.idempotencyKey,
     })
-    assertAcknowledged(response.json, 'bulkCancelPending')
+    assertAcknowledged(response, 'bulkCancelPending')
   }
 
   async submitDepositRequest(material: SessionMaterial, request: FundingRequest) {
@@ -334,7 +346,7 @@ export class TradingApiAdapter {
       headers: this.headers(material),
       idempotencyKey: request.idempotencyKey,
     })
-    assertAcknowledged(response.json, 'requestPayment')
+    assertAcknowledged(response, 'requestPayment')
   }
 
   async submitWithdrawalRequest(material: SessionMaterial, request: FundingRequest) {
@@ -351,7 +363,7 @@ export class TradingApiAdapter {
       headers: this.headers(material),
       idempotencyKey: request.idempotencyKey,
     })
-    assertAcknowledged(response.json, 'requestPayment')
+    assertAcknowledged(response, 'requestPayment')
   }
 
   /**
@@ -361,8 +373,8 @@ export class TradingApiAdapter {
    * sent to `check`/`bearer`. The two are shaped differently: a footprint is
    * a short client-chosen label, a fingerprint is `<32 hex chars>_<accountId>`.
    * Sending the wrong one would fail only at order time, so the two never
-   * share a field. (Shapes only — the collection's literal values are live
-   * credentials and are not reproduced here.)
+   * share a field. The order fingerprint is opaque; its format is not a
+   * client-side validation rule.
    *
    * Marked a mutation in the registry, so it needs an idempotency key; the
    * account id is a natural one, since a second call for the same account is
@@ -376,7 +388,11 @@ export class TradingApiAdapter {
    */
   async issueOrderFingerprint(material: SessionMaterial, accountId: string): Promise<string> {
     const response = await this.gate.call('createFingerprint', {
-      query: { token: material.accountToken, account_id: accountId },
+      query: {
+        token: material.accountToken,
+        account_id: accountId,
+        ...(material.sessionId === undefined ? {} : { sid: material.sessionId }),
+      },
       headers: this.headers(material),
       idempotencyKey: `fingerprint:${accountId}`,
     })
@@ -391,9 +407,10 @@ export class TradingApiAdapter {
         ? unwrapped
         : response.text.trim()
 
-    // Every sample in the collection ends `_<accountId>`; anything else means
-    // we are reading the wrong field out of an envelope we have never seen.
-    if (!fingerprint || !fingerprint.endsWith(`_${accountId}`)) {
+    // The service owns this value and the reference documents it as opaque.
+    // Do not infer an account-id suffix from historical samples: production
+    // returns a top-level fingerprint whose format is not client-defined.
+    if (!fingerprint) {
       throw new BackendError(
         'malformed',
         'The service did not return a usable order fingerprint.',
@@ -421,7 +438,13 @@ function parseResponse<T>(
   }
 }
 
-function assertAcknowledged(input: unknown, endpoint: string): void {
+function assertAcknowledged(response: HttpResponse, endpoint: string): void {
+  // The trading API reports business rejections (closed market, invalid lot,
+  // insufficient margin, disabled symbol, …) with HTTP 200 and
+  // `status: "fail"`. Normalize that envelope before checking the success
+  // acknowledgement so the order ticket can show the actionable reason.
+  unwrapEnvelope(response, endpoint)
+  const input = response.json
   if (
     typeof input !== 'object' ||
     input === null ||

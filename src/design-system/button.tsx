@@ -1,7 +1,8 @@
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
+import { useRef, useState } from 'react'
+import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 
-import { colors } from './colors'
+import type { Palette } from './colors'
+import { useColors, useThemeStyles } from './theme'
 import { PressableScale } from './pressable'
 import { Text } from './text'
 import { radius, spacing } from './tokens'
@@ -15,10 +16,11 @@ type Tone = 'ink' | 'brand' | 'night' | 'gold' | 'track' | 'surface'
 
 export type ButtonProps = {
   tone?: Tone
-  onPress?: () => void
+  onPress?: () => void | Promise<void>
   children: React.ReactNode
   style?: StyleProp<ViewStyle>
   disabled?: boolean
+  loading?: boolean
   accessibilityLabel?: string
 }
 
@@ -33,49 +35,51 @@ export function Button({
   children,
   style,
   disabled,
+  loading = false,
   accessibilityLabel,
 }: ButtonProps) {
+  const colors = useColors()
+  const tones = useThemeStyles(createTones)
+  const labelColor = buttonLabelColors(colors)
+  const locked = useRef(false)
+  const [pending, setPending] = useState(false)
+  const busy = loading || pending
+  const unavailable = disabled || busy
+  const press = () => {
+    if (unavailable || locked.current) return
+    locked.current = true
+    try {
+      const result = onPress?.()
+      if (result && typeof result.then === 'function') {
+        setPending(true)
+        const release = () => { locked.current = false; setPending(false) }
+        result.then(release, release)
+      } else {
+        locked.current = false
+      }
+    } catch (error) {
+      locked.current = false
+      throw error
+    }
+  }
   return (
     <PressableScale
-      onPress={onPress}
-      disabled={disabled}
+      onPress={press}
+      disabled={unavailable}
+      accessibilityState={{ busy, disabled: unavailable }}
       style={style}
       accessibilityLabel={accessibilityLabel}
     >
       <View style={[styles.base, tones[tone], disabled ? styles.disabled : null]}>
-        {tone === 'ink' || tone === 'gold' || tone === 'brand' ? <ButtonFill tone={tone} /> : null}
+        {busy ? <ActivityIndicator style={styles.spinner} color={labelColor[tone]} size="small" /> : null}
         {children}
       </View>
     </PressableScale>
   )
 }
 
-/** Navy and gold buttons are lit from above: lighter at the top edge. */
-const FILLS = {
-  ink: ['#26346F', colors.ink, colors.ink],
-  brand: ['#26346F', colors.ink, colors.ink],
-  gold: ['#F1D16A', colors.gold, '#D6A92A'],
-} as const
-
-function ButtonFill({ tone }: { tone: 'ink' | 'gold' | 'brand' }) {
-  const [top, middle, bottom] = FILLS[tone]
-  return (
-    <View pointerEvents="none" style={styles.fill}>
-      <Svg width="100%" height="100%" preserveAspectRatio="none">
-        <Defs>
-          <LinearGradient id={`button-${tone}`} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={top} />
-            <Stop offset="0.55" stopColor={middle} />
-            <Stop offset="1" stopColor={bottom} />
-          </LinearGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill={`url(#button-${tone})`} />
-      </Svg>
-    </View>
-  )
-}
-
 export function ButtonText({ tone = 'ink', children }: { tone?: Tone; children: React.ReactNode }) {
+  const labelColor = buttonLabelColors(useColors())
   return (
     <Text variant="strong" color={labelColor[tone]}>
       {children}
@@ -91,6 +95,7 @@ export function ButtonSubText({
   tone?: Tone
   children: React.ReactNode
 }) {
+  const labelColor = buttonLabelColors(useColors())
   return (
     <Text variant="strong" color={labelColor[tone]}>
       {children}
@@ -107,14 +112,14 @@ export function ButtonRow({ children }: { children: React.ReactNode }) {
   return <View style={styles.row}>{children}</View>
 }
 
-const labelColor: Record<Tone, string> = {
+const buttonLabelColors = (colors: Palette): Record<Tone, string> => ({
   ink: colors.white,
   brand: colors.white,
   night: colors.text,
-  gold: colors.ink,
+  gold: colors.royal,
   track: colors.text,
   surface: colors.text,
-}
+})
 
 const styles = StyleSheet.create({
   base: {
@@ -122,7 +127,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     borderCurve: 'continuous',
     paddingHorizontal: spacing.xl,
     paddingVertical: 10,
@@ -131,24 +136,20 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.45,
   },
+  spinner: { position: 'absolute', left: spacing.md },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  // Behind the label on web too, where absolute layers otherwise paint on top.
-  fill: {
-    ...StyleSheet.absoluteFill,
-    zIndex: -1,
-  },
 })
 
-const tones = StyleSheet.create({
+const createTones = (colors: Palette) => StyleSheet.create({
   ink: {
-    backgroundColor: colors.ink,
+    backgroundColor: colors.royal,
   },
   brand: {
-    backgroundColor: colors.ink,
+    backgroundColor: colors.royal,
   },
   // Apple secondary: a grey fill with dark text.
   night: {
@@ -156,15 +157,9 @@ const tones = StyleSheet.create({
   },
   gold: {
     backgroundColor: colors.gold,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.45)',
-    boxShadow: '0px 8px 18px rgba(214, 169, 42, 0.30)',
   },
   track: {
-    backgroundColor: colors.glass,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    boxShadow: '0px 0px 0px 1px rgba(20, 24, 43, 0.05)',
+    backgroundColor: colors.well,
   },
   surface: {
     backgroundColor: colors.surface,

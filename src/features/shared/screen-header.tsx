@@ -1,6 +1,7 @@
+import { useColors } from '../../design-system/theme'
 import { StyleSheet, View } from 'react-native'
 
-import { ArrowLeftIcon, CircleButton, Gutter, Text, colors, useSafeBack } from '../../design-system'
+import { ArrowLeftIcon, CircleButton, Gutter, Text, useSafeBack } from '../../design-system'
 
 export type ScreenHeaderProps = {
   title: string
@@ -11,6 +12,8 @@ export type ScreenHeaderProps = {
 
 /** Back button plus title, for the screens pushed onto a tab's stack. */
 export function ScreenHeader({ title, subtitle, action }: ScreenHeaderProps) {
+  const colors = useColors()
+
   const goBack = useSafeBack()
 
   return (

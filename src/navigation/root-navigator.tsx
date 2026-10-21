@@ -4,7 +4,7 @@ import {
   type NativeStackNavigationOptions,
 } from '@react-navigation/native-stack'
 
-import { colors, fonts } from '../design-system'
+import { fonts, useColors, useTheme, type Palette } from '../design-system'
 import { AccountSwitcherScreen } from '../screens/account-switcher-screen'
 import { EditPhoneScreen } from '../screens/edit-phone-screen'
 import { FundingScreen } from '../screens/funding-screen'
@@ -27,13 +27,17 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
  */
 /** Mounted only after `SessionProvider` has established both backend sessions. */
 export function RootNavigator() {
+  const colors = useColors()
+  const { scheme } = useTheme()
+  const contentStyle = { backgroundColor: colors.bg }
+  const navigationTheme = makeNavigationTheme(colors, scheme === 'dark')
   return (
     <NavigationContainer theme={navigationTheme}>
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: CONTENT_STYLE }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle }}>
         <Stack.Screen name="Tabs" component={TabNavigator} />
         <Stack.Screen name="Instrument" component={InstrumentScreen} />
 
-        <Stack.Group screenOptions={SHEET_OPTIONS}>
+        <Stack.Group screenOptions={{ ...SHEET_OPTIONS, contentStyle }}>
           <Stack.Screen name="Funding" component={FundingScreen} />
           <Stack.Screen name="OrderTicket" component={OrderTicketScreen} />
           <Stack.Screen name="ModifyOrder" component={ModifyOrderScreen} />
@@ -46,8 +50,6 @@ export function RootNavigator() {
   )
 }
 
-const CONTENT_STYLE = { backgroundColor: colors.bg }
-
 const SHEET_OPTIONS: NativeStackNavigationOptions = {
   presentation: 'formSheet',
   // Fixed detents rather than `fitToContents`: the sheets scroll, so they
@@ -55,11 +57,11 @@ const SHEET_OPTIONS: NativeStackNavigationOptions = {
   sheetAllowedDetents: [0.72, 0.96],
   sheetCornerRadius: 28,
   sheetGrabberVisible: true,
-  contentStyle: CONTENT_STYLE,
 }
 
-const navigationTheme: Theme = {
+const makeNavigationTheme = (colors: Palette, dark: boolean): Theme => ({
   ...DefaultTheme,
+  dark,
   colors: {
     ...DefaultTheme.colors,
     background: colors.bg,
@@ -74,4 +76,4 @@ const navigationTheme: Theme = {
     bold: { fontFamily: fonts.bold, fontWeight: '700' },
     heavy: { fontFamily: fonts.extrabold, fontWeight: '800' },
   },
-}
+})

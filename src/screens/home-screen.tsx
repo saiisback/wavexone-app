@@ -1,6 +1,10 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { StatusBar } from 'expo-status-bar'
 import { Fragment } from 'react'
+import { useNotifications } from '../features/notifications/use-notifications'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
 import {
@@ -8,20 +12,21 @@ import {
   Avatar,
   BellIcon,
   BoltIcon,
+  CandlesIcon,
   Card,
   ChevronRightIcon,
   CircleButton,
+  ClockIcon,
   DepositIcon,
   Divider,
   EmptyState,
   Delta,
   Gutter,
+  HomeAtmosphere,
   Logo,
-  HeroScreen,
   IconChip,
-  InfoIcon,
-  LiquidGlass,
-  PillLink,
+  MarketsIcon,
+  MoreIcon,
   PopIn,
   PositionsIcon,
   Pressable,
@@ -36,25 +41,24 @@ import {
   TrendUpIcon,
   WalletIcon,
   WithdrawIcon,
-  colors,
   radius,
   shadow,
   spacing,
   useCountUp,
-  WalletCard,
 } from '../design-system'
 import { useBackendQuery } from '../backend/provider'
 import { formatMoney, formatPercent, formatSignedMoney, trendOf } from '../data/format'
+import { applySparkSnapshot } from '../data/live-quote'
 import { useSession } from '../data/store'
-import type { DetailedAccount, FundingMode, Instrument, Position, Profile } from '../data/types'
+import type { DetailedAccount, Instrument, Position, Profile } from '../data/types'
 import { AccountPill } from '../features/accounts/account-pill'
 import { AccountSummaryUnavailable } from '../features/accounts/account-summary-unavailable'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { MoverCard } from '../features/markets/mover-card'
+import { MarketPulse } from '../features/markets/market-pulse'
 import { useMarketData } from '../features/markets/use-market-data'
 import { POSITION_ROW_DIVIDER_INSET, PositionRow } from '../features/positions/position-row'
 import { QueryStateView, UnavailableState } from '../features/shared/query-state'
-import { SectionHeader } from '../features/shared/section-header'
 import { useAppNavigation } from '../navigation/use-app-navigation'
 import type { HomeStackParamList } from '../navigation/types'
 
@@ -72,6 +76,8 @@ const TREND_TRADES = 30
  * and out, the markets they watch, then what they hold.
  */
 export function HomeScreen() {
+  const styles = useThemeStyles(themeStyles)
+
   const { navigate } = useNavigation<Navigation>()
   const accountData = useAccountData()
 
@@ -90,27 +96,32 @@ export function HomeScreen() {
 
   const { account, profile } = accountData.data
 
-  return <HomeDashboard account={account} profile={profile} onNotifications={() => navigate('Notifications')} />
+  return <HomeDashboard account={account} profile={profile} feedback={<QueryStateView state={accountData} render={() => null} />} onNotifications={() => navigate('Notifications')} />
 }
 
 function HomeDashboard({
   account,
   profile,
+  feedback,
   onNotifications,
 }: {
   account: DetailedAccount
   profile: Profile
+  feedback: React.ReactNode
   onNotifications: () => void
 }) {
-  const { openAccountSwitcher, openFunding, openHomeScreen, openInstrument, openTab } = useAppNavigation()
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
+  const { openAccountSwitcher, openFunding, openHomeScreen, openInstrument, openMoreScreen, openTab } = useAppNavigation()
   const { catalogue } = useMarketData()
   const favorites = useSession((state) => state.favorites)
 
-  const instruments = catalogue.status === 'ready' ? catalogue.data : []
-  const pinned = instruments.filter((item) => favorites.has(item.id))
+  const catalogueInstruments = catalogue.status === 'ready' ? catalogue.data : []
+  const pinned = catalogueInstruments.filter((item) => favorites.has(item.id))
   // Favourites first; until there are any, the leading markets stand in.
-  const watchlist = (pinned.length > 0 ? pinned : instruments).slice(0, WATCHLIST_SIZE)
-  const watchIds = watchlist.map((item) => item.id)
+  const watchlistSnapshot = (pinned.length > 0 ? pinned : catalogueInstruments).slice(0, WATCHLIST_SIZE)
+  const watchIds = watchlistSnapshot.map((item) => item.id)
   const sparks = useBackendQuery(
     `home-sparks:${account.id}:${watchIds.join(',') || 'none'}`,
     (backend) => watchIds.length > 0
@@ -118,39 +129,58 @@ function HomeDashboard({
       : Promise.resolve(new Map<string, readonly number[]>()),
   )
   const sparkById = sparks.status === 'ready' ? sparks.data : undefined
+  const instruments = catalogueInstruments.map((item) => applySparkSnapshot(item, sparkById?.get(item.id)))
+  const watchlist = watchlistSnapshot.map((item) => applySparkSnapshot(item, sparkById?.get(item.id)))
 
   // Same keys as the Positions tab, so both screens share one request each.
   const positions = useBackendQuery(`positions:${account.id}`, (backend) => backend.orders.list(account.id))
   const history = useBackendQuery(`history:${account.id}`, (backend) => backend.orders.history(account.id))
   const trend = history.status === 'ready' ? realisedTrend(history.data) : null
 
-  // Same key as the Notifications screen; a failed read just shows no dot.
-  const notifications = useBackendQuery('notifications', (backend) => backend.engagement.notifications())
-  const read = useSession((state) => state.readNotifications)
-  const unread = notifications.status === 'ready'
-    ? notifications.data.filter((item) => !read.has(item.id)).length
-    : 0
+  const { unread } = useNotifications()
   const pnlLabel = `${formatSignedMoney(account.floatingPnl)} (${formatPercent(account.changePercent)})`
 
+  const quickActions = [
+    { label: 'Deposit', Icon: DepositIcon, onPress: () => openFunding('deposit' as const), primary: true },
+    { label: 'Withdraw', Icon: WithdrawIcon, onPress: () => openFunding('withdraw' as const), primary: false },
+    { label: 'Trade', Icon: CandlesIcon, onPress: () => openTab('Trade'), primary: false },
+    { label: 'Markets', Icon: MarketsIcon, onPress: () => openTab('Markets'), primary: false },
+    { label: 'Positions', Icon: PositionsIcon, onPress: () => openTab('Positions'), primary: false },
+    { label: 'Activity', Icon: ClockIcon, onPress: () => openMoreScreen('Activity'), primary: false },
+    { label: 'Balance', Icon: WalletIcon, onPress: () => openHomeScreen('Balance'), primary: false },
+    { label: 'More', Icon: MoreIcon, onPress: () => openTab('More'), primary: false },
+  ] as const
+
   return (
-    <HeroScreen
-      compact={{ title: 'Total equity', value: formatMoney(account.equity) }}
-      bar={
-        <>
+    <Screen edges={['top']} aurora={false} style={styles.homeScreen}>
+      <StatusBar style="dark" />
+      <HomeAtmosphere />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.homeContent}
+        contentInsetAdjustmentBehavior="never"
+      >
+        <Gutter style={styles.homeHeader}>
           <Pressable accessibilityRole="button" accessibilityLabel="Open account" onPress={() => openTab('More')}>
-            <LiquidGlass style={styles.avatarRing}>
-              <Avatar uri={profile.avatarUrl} size={42} />
-            </LiquidGlass>
+            <View style={styles.identity}>
+              <View style={styles.avatarRing}>
+                <Avatar uri={profile.avatarUrl} size={42} />
+              </View>
+              <View style={styles.greeting}>
+                <Text variant="caption" color={colors.referenceMuted}>Welcome back</Text>
+                <Text variant="strong" color={colors.brand}>{profile.holder.split(' ')[0]}</Text>
+              </View>
+            </View>
           </Pressable>
-          <AccountPill mode={account.mode} number={account.number} onPress={openAccountSwitcher} />
           <View>
             <CircleButton
-              tone="glass"
+              tone="outline"
               size={44}
               onPress={onNotifications}
               accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
             >
-              <BellIcon size={20} color={colors.text} />
+              <BellIcon size={20} color={colors.brand} />
             </CircleButton>
             {unread > 0 ? (
               <PopIn delay={700} style={styles.bellDot}>
@@ -158,87 +188,89 @@ function HomeDashboard({
               </PopIn>
             ) : null}
           </View>
-        </>
-      }
-      hero={
-        <>
+        </Gutter>
+
+        {feedback}
+        {history.status === 'ready' ? <QueryStateView state={history} render={() => null} /> : null}
+
+        <Gutter style={styles.equitySection}>
+          <View style={styles.brandRow}>
+            <Logo size={17} tone="light" />
+            <AccountPill mode={account.mode} number={account.number} tone="light" onPress={openAccountSwitcher} />
+          </View>
           <PressableScale
             accessibilityLabel={`Open balance. Total equity ${formatMoney(account.equity)}. Open P&L ${pnlLabel}.`}
             onPress={() => openHomeScreen('Balance')}
-            scaleTo={0.98}
+            scaleTo={0.985}
           >
-            <View style={styles.figure}>
-              <Text variant="caption" color={colors.textMuted} style={styles.figureLabel}>
-                {`Hi ${profile.holder.split(' ')[0]}`}
-              </Text>
-              <WalletCard>
-                <View style={styles.cardTop}>
-                  <Logo size={17} />
-                  <Text variant="micro" color={colors.textMuted}>
-                    {`${account.mode} · ${account.number}`}
-                  </Text>
-                </View>
-                <View style={styles.cardBottom}>
-                  <Text variant="caption" color={colors.textMuted}>
-                    Total equity
-                  </Text>
-                  <EquityFigure value={account.equity} />
-                  <View style={styles.cardPnl}>
-                    <Delta label={pnlLabel} direction={trendOf(account.floatingPnl)} size={13} />
-                    <Text variant="caption" color={colors.textMuted}>
-                      open P&amp;L
-                    </Text>
-                  </View>
-                </View>
-              </WalletCard>
+            <View style={styles.equityBlock}>
+              <Text variant="caption" color={colors.referenceMuted}>Total equity</Text>
+              <EquityFigure value={account.equity} />
+              <View style={styles.cardPnl}>
+                <Delta label={pnlLabel} direction={trendOf(account.floatingPnl)} size={13} />
+                <Text variant="caption" color={colors.referenceMuted}>open P&amp;L</Text>
+              </View>
             </View>
           </PressableScale>
-
-          <View style={styles.actions}>
-            {FUNDING_ACTIONS.map(({ mode, label, Icon }, index) => (
-              <Reveal key={mode} index={index + 2} distance={10} style={styles.action}>
-                <HeroAction label={label} primary={mode === 'deposit'} onPress={() => openFunding(mode)}>
-                  <Icon size={21} color={mode === 'deposit' ? colors.white : colors.text} />
-                </HeroAction>
-              </Reveal>
-            ))}
-          </View>
-        </>
-      }
-    >
-      <Reveal index={1}>
-        <Gutter style={styles.section}>
-          <View style={styles.sectionRow}>
-            <View style={styles.sectionTitle}>
-              <Text variant="section">Your money</Text>
-              <InfoIcon size={16} color={colors.textSubtle} />
-            </View>
-            <PillLink label="Details" onPress={() => openHomeScreen('Balance')} />
-          </View>
-          <View style={styles.tiles}>
-            <StatTile label="Balance" value={account.balance} Icon={WalletIcon} tone="blue" ink={colors.tintBlueInk} />
-            <StatTile label="Free margin" value={account.freeMargin} Icon={BoltIcon} tone="amber" ink={colors.tintAmberInk} />
-          </View>
-          <MarginInsight equity={account.equity} freeMargin={account.freeMargin} onPress={() => openTab('Positions')} />
         </Gutter>
-      </Reveal>
+
+        <View style={styles.overviewSection}>
+          <Gutter style={styles.sectionRowOnInk}>
+            <Text variant="section" color={colors.brand}>Account overview</Text>
+            <Pressable accessibilityRole="button" onPress={() => openHomeScreen('Balance')} hitSlop={8}>
+              <Text variant="caption" weight="semibold" color={colors.brand}>Details +</Text>
+            </Pressable>
+          </Gutter>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.accountStrip}
+          >
+            <StatTile label="Balance" value={account.balance} Icon={WalletIcon} tone="blue" ink={colors.brand} />
+            <StatTile label="Free margin" value={account.freeMargin} Icon={BoltIcon} tone="amber" ink={colors.tintAmberInk} />
+            <StatTile label="Open P&L" value={account.floatingPnl} Icon={TrendUpIcon} tone="mint" ink={colors.tintMintInk} />
+          </ScrollView>
+        </View>
+
+        <Gutter>
+          <Reveal index={1}>
+            <View style={styles.quickPanel}>
+              <Text variant="section" color={colors.white}>Quick actions</Text>
+              <View style={styles.quickGrid}>
+                {quickActions.map(({ label, Icon, onPress, primary }) => (
+                  <QuickAction key={label} label={label} primary={primary} onPress={onPress}>
+                    <Icon size={21} color={primary ? colors.homeBlack : colors.white} />
+                  </QuickAction>
+                ))}
+              </View>
+            </View>
+          </Reveal>
+        </Gutter>
+
+        <Reveal index={2}>
+          <Gutter>
+            <MarketPulse instruments={instruments} onPress={() => openTab('Markets')} />
+          </Gutter>
+        </Reveal>
+
+        <Reveal index={3}>
+          <Gutter>
+            <MarginInsight equity={account.equity} freeMargin={account.freeMargin} onPress={() => openTab('Positions')} />
+          </Gutter>
+        </Reveal>
 
       {trend ? (
-        <Reveal index={2}>
+        <Reveal index={4}>
           <Gutter>
             <RealisedTrend {...trend} />
           </Gutter>
         </Reveal>
       ) : null}
 
-      <Reveal index={3} style={styles.section}>
+      <Reveal index={5} style={styles.section}>
         <Gutter>
-          <SectionHeader
-            title="Watchlist"
-            action="See all"
-            withChevron="right"
-            onPressAction={() => openTab('Markets')}
-          />
+          <DarkSectionHeader title="Watchlist" onPress={() => openTab('Markets')} />
+          {catalogue.status === 'ready' ? <QueryStateView state={catalogue} render={() => null} /> : null}
         </Gutter>
         {catalogue.status === 'ready' && watchlist.length === 0 ? (
           <Gutter>
@@ -276,7 +308,7 @@ function HomeDashboard({
             </ScrollView>
             {pinned.length === 0 ? (
               <Gutter>
-                <Text variant="caption" color={colors.textSubtle} style={styles.hint}>
+                <Text variant="caption" color={colors.referenceMuted} style={styles.hint}>
                   Star a market on the Markets tab to pin it here.
                 </Text>
               </Gutter>
@@ -285,14 +317,9 @@ function HomeDashboard({
         )}
       </Reveal>
 
-      <Reveal index={4}>
+      <Reveal index={6}>
         <Gutter style={styles.section}>
-          <SectionHeader
-            title="Open positions"
-            action="See all"
-            withChevron="right"
-            onPressAction={() => openTab('Positions')}
-          />
+          <DarkSectionHeader title="Open positions" onPress={() => openTab('Positions')} />
           <QueryStateView
             state={positions}
             render={(list) => (
@@ -306,17 +333,20 @@ function HomeDashboard({
           />
         </Gutter>
       </Reveal>
-    </HeroScreen>
+      </ScrollView>
+    </Screen>
   )
 }
 
 /** The hero figure, rolling up to the account's equity and gliding with it. */
 function EquityFigure({ value }: { value: number }) {
+  const colors = useColors()
+
   const shown = useCountUp(value)
   return (
     <Amount
       variant="hero"
-      color={colors.text}
+      color={colors.brand}
       numberOfLines={1}
       adjustsFontSizeToFit
       accessibilityLabel={formatMoney(value)}
@@ -326,16 +356,8 @@ function EquityFigure({ value }: { value: number }) {
   )
 }
 
-const FUNDING_ACTIONS: readonly { mode: FundingMode; label: string; Icon: typeof DepositIcon }[] = [
-  { mode: 'deposit', label: 'Deposit', Icon: DepositIcon },
-  { mode: 'withdraw', label: 'Withdraw', Icon: WithdrawIcon },
-]
-
-/**
- * Money in and out: a Liquid Glass disc over a label. Deposit is the
- * blue-tinted glass; withdrawal is clear.
- */
-function HeroAction({
+/** One of the eight real trading destinations in the reference-shaped action grid. */
+function QuickAction({
   label,
   primary,
   onPress,
@@ -346,11 +368,14 @@ function HeroAction({
   onPress: () => void
   children: React.ReactNode
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
-    <PressableScale accessibilityLabel={label} onPress={onPress} scaleTo={0.92}>
-      <View style={styles.actionInner}>
-        <LiquidGlass tint={primary ? 'accent' : 'clear'} style={styles.actionDisc}>{children}</LiquidGlass>
-        <Text variant="caption" weight="medium" color={colors.text}>
+    <PressableScale accessibilityLabel={label} onPress={onPress} scaleTo={0.92} style={styles.quickAction}>
+      <View style={styles.quickActionInner}>
+        <View style={[styles.quickActionIcon, primary ? styles.quickActionIconPrimary : null]}>{children}</View>
+        <Text variant="micro" weight="medium" color={primary ? colors.gold : colors.onInkMuted}>
           {label}
         </Text>
       </View>
@@ -358,7 +383,24 @@ function HeroAction({
   )
 }
 
-/** A secondary account figure on a white tile, its icon on a soft tint. */
+function DarkSectionHeader({ title, onPress }: { title: string; onPress: () => void }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
+  return (
+    <View style={styles.darkSectionHeader}>
+      <Text variant="section" color={colors.brand}>{title}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`See all, ${title}`} onPress={onPress} hitSlop={8}>
+        <View style={styles.darkSectionAction}>
+          <Text variant="caption" weight="semibold" color={colors.goldDeep}>See all</Text>
+          <ChevronRightIcon size={14} color={colors.goldDeep} />
+        </View>
+      </Pressable>
+    </View>
+  )
+}
+
+/** A secondary account figure on navy, with a contrasting icon on a soft tint. */
 function StatTile({
   label,
   value,
@@ -369,21 +411,26 @@ function StatTile({
   label: string
   value: number
   Icon: typeof WalletIcon
-  tone: 'blue' | 'amber'
+  tone: 'blue' | 'amber' | 'mint'
   ink: string
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const shown = useCountUp(value)
   return (
-    <Card style={styles.tile}>
+    <Card lifted={false} style={styles.tile}>
       <IconChip size={42} tone={tone}>
-        <Icon size={20} color={ink} />
+        <Icon size={22} color={ink} />
       </IconChip>
       <View style={styles.tileText}>
-        <Text variant="caption" color={colors.textMuted}>
+        <Text variant="caption" color={colors.onInkMuted}>
           {label}
         </Text>
         <Amount
           variant="displaySm"
+          color={colors.white}
+          style={styles.tileAmount}
           numberOfLines={1}
           adjustsFontSizeToFit
           accessibilityLabel={`${label} ${formatMoney(value)}`}
@@ -401,6 +448,9 @@ function StatTile({
  * wrong stands apart from the white cards around it.
  */
 function MarginInsight({ equity, freeMargin, onPress }: { equity: number; freeMargin: number; onPress: () => void }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   if (equity <= 0) return null
   const used = Math.max(equity - freeMargin, 0)
   const share = used / equity
@@ -448,6 +498,9 @@ function realisedTrend(history: readonly Position[]) {
 
 /** Realised P&L across recent trades, as a soft area chart on a white card. */
 function RealisedTrend({ points, trades, total }: { points: number[]; trades: number; total: number }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const negative = total < 0
   return (
     <Card padded={false} style={styles.trendCard}>
@@ -487,6 +540,9 @@ function OpenPositions({
   onOpen: () => void
   onExplore: () => void
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   if (positions.length === 0) {
     return (
       <Card padded={false}>
@@ -525,12 +581,36 @@ function OpenPositions({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   state: { paddingTop: 32 },
-
+  homeScreen: {
+    backgroundColor: colors.referenceCanvas,
+  },
+  homeContent: {
+    paddingTop: spacing.md,
+    paddingBottom: 152,
+    gap: spacing.xl,
+  },
+  homeHeader: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  identity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   avatarRing: {
     padding: 2,
     borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderWidth: 1,
+    borderColor: colors.referenceLine,
+  },
+  greeting: {
+    gap: 1,
   },
   bellDot: {
     position: 'absolute',
@@ -543,75 +623,112 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#FF8A7A',
     borderWidth: 1.5,
-    borderColor: colors.ink,
+    borderColor: colors.surface,
   },
-  figure: {
-    gap: spacing.sm,
+  equitySection: {
+    gap: spacing.xl,
     paddingTop: spacing.sm,
   },
-  cardTop: {
+  brandRow: {
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cardBottom: {
-    gap: 2,
+  equityBlock: {
+    gap: spacing.xs,
+    paddingBottom: spacing.md,
   },
   cardPnl: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  figureLabel: {
-    fontSize: 15,
-    paddingHorizontal: 2,
+  overviewSection: {
+    gap: spacing.md,
   },
-  actions: {
+  sectionRowOnInk: {
+    minHeight: 36,
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.xxl,
-    paddingTop: spacing.lg,
-  },
-  action: {
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  actionInner: {
+  accountStrip: {
+    paddingHorizontal: SCREEN_PADDING,
+    paddingBottom: spacing.xs,
+    gap: spacing.md,
+  },
+  quickPanel: {
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xl,
+    borderRadius: radius.xl,
+    borderCurve: 'continuous',
+    backgroundColor: colors.homePanel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.homeLine,
+    boxShadow: '0px 18px 34px rgba(8, 11, 19, 0.24)',
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: spacing.xl,
+  },
+  quickAction: {
+    width: '25%',
+  },
+  quickActionInner: {
     alignItems: 'center',
     gap: spacing.sm,
   },
-  actionDisc: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+  quickActionIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.075)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  quickActionIconPrimary: {
+    backgroundColor: colors.gold,
+    borderColor: colors.goldSoft,
+    boxShadow: '0px 8px 20px rgba(230, 190, 63, 0.22)',
   },
 
   section: {
     gap: spacing.md,
   },
-  sectionRow: {
+  darkSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 40,
   },
-  sectionTitle: {
+  darkSectionAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  tiles: {
-    flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.xs,
   },
   tile: {
-    flex: 1,
+    width: 158,
+    flexShrink: 0,
+    minHeight: 136,
     padding: spacing.lg,
-    gap: spacing.xl,
+    gap: spacing.lg,
+    backgroundColor: colors.homePanelRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.homeLine,
   },
   tileText: {
     gap: 2,
+  },
+  tileAmount: {
+    fontSize: 20,
+    lineHeight: 25,
+    letterSpacing: -0.45,
   },
   insight: {
     padding: spacing.lg,
@@ -676,4 +793,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-})
+}))

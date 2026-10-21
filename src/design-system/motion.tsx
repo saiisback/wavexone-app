@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, {
   Easing,
@@ -82,49 +82,13 @@ export function TickFlash({
 
 const REVEAL = { duration: motion.reveal, easing: Easing.out(Easing.exp) }
 
-/** Tests assert on final figures, so the count-up starts at its target there. */
-const SKIP_COUNT = process.env.NODE_ENV === 'test'
-
 /**
- * Figures roll up from zero only while the app is opening. A screen visited
- * later — or returned to — shows its numbers at once and only glides when
- * they change, so going back never feels like a reload.
+ * Keep financial figures exact. Interpolating live values with React state on
+ * every animation frame kept the JS thread busy between feed updates and while
+ * navigating. The options argument remains compatible with existing callers.
  */
-const LAUNCHED_AT = Date.now()
-const LAUNCH_WINDOW_MS = 4000
-
-/**
- * A number that rolls up to its value when the app opens and glides between
- * values as they change, eased out so it lands softly. `format` turns the in-between
- * values into display strings; render the result through `Amount` or `Text`.
- */
-export function useCountUp(value: number, { duration = 1100 }: { duration?: number } = {}) {
-  const [intro] = useState(() => Date.now() - LAUNCHED_AT < LAUNCH_WINDOW_MS)
-  const [shown, setShown] = useState(intro ? 0 : value)
-  const from = useRef(intro ? 0 : value)
-  const still = SKIP_COUNT || !Number.isFinite(value)
-
-  useEffect(() => {
-    if (still) return
-    const start = from.current
-    const began = Date.now()
-    if (start === value) return
-    // Ticks are short glides; the launch roll-up takes the full duration.
-    const span = start === 0 ? duration : Math.min(duration, 420)
-    let frame = 0
-    const step = () => {
-      const t = Math.min((Date.now() - began) / span, 1)
-      const eased = 1 - Math.pow(1 - t, 4)
-      const next = start + (value - start) * eased
-      from.current = next
-      setShown(next)
-      if (t < 1) frame = requestAnimationFrame(step)
-    }
-    frame = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(frame)
-  }, [value, duration, still])
-
-  return still ? value : shown
+export function useCountUp(value: number, _options: { duration?: number } = {}) {
+  return value
 }
 
 /**

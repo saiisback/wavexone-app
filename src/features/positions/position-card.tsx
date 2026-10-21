@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -15,7 +17,6 @@ import {
   PressableScale,
   Text,
   TickFlash,
-  colors,
   radius,
   spacing,
   type AssetIconKind,
@@ -48,6 +49,7 @@ export type PositionCardProps = {
   currentLabel?: string
   /** Copy on the footer button — "Close", "Cancel", … */
   actionLabel: string
+  actionLoading?: boolean
   onAction: (id: string) => void
   /** Shown beside the action when the order can still be changed. */
   onModify?: (id: string) => void
@@ -84,11 +86,15 @@ function OpenPositionCard({
   entryLabel = 'Open',
   currentLabel = 'Current',
   actionLabel,
+  actionLoading,
   onAction,
   onModify,
   onMenu,
   onPress,
 }: PositionCardProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const move = priceMove(side, entry, current)
   const tint = pnl > 0.005 ? colors.green : pnl < -0.005 ? colors.red : colors.text
 
@@ -135,7 +141,7 @@ function OpenPositionCard({
       <CardMenu id={id} symbol={symbol} onMenu={onMenu} />
 
       <View style={styles.actions}>
-        <Button tone="track" onPress={() => onAction(id)} style={styles.action}>
+        <Button tone="track" loading={actionLoading} onPress={() => onAction(id)} style={styles.action}>
           <ButtonText tone="track">{actionLabel}</ButtonText>
         </Button>
         {onModify ? (
@@ -168,11 +174,15 @@ function PendingOrderCard({
   entryLabel = 'Order price',
   currentLabel = 'Current',
   actionLabel,
+  actionLoading,
   onAction,
   onModify,
   onMenu,
   onPress,
 }: PositionCardProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const away = current > 0 ? Math.abs((entry - current) / current) * 100 : null
 
   return (
@@ -214,7 +224,7 @@ function PendingOrderCard({
       <CardMenu id={id} symbol={symbol} onMenu={onMenu} />
 
       <View style={styles.actions}>
-        <Button tone="track" onPress={() => onAction(id)} style={styles.action}>
+        <Button tone="track" loading={actionLoading} onPress={() => onAction(id)} style={styles.action}>
           <ButtonText tone="track">{actionLabel}</ButtonText>
         </Button>
         {onModify ? (
@@ -248,6 +258,9 @@ function ClosedTradeCard({
   onAction,
   onMenu,
 }: PositionCardProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const tint = pnl > 0.005 ? colors.green : pnl < -0.005 ? colors.red : colors.textMuted
   return (
     <Card padded={false} style={styles.closed}>
@@ -295,7 +308,7 @@ function ClosedTradeCard({
         onPress={() => onMenu(id)}
         style={styles.moreCompact}
       >
-        <MoreVerticalIcon size={18} color={colors.textSubtle} />
+        <MoreVerticalIcon size={18} color={colors.textMuted} />
       </Pressable>
     </Card>
   )
@@ -313,6 +326,9 @@ function Identity({
   side,
   onMenu,
 }: Pick<PositionCardProps, 'id' | 'symbol' | 'description' | 'iconKind' | 'iconLabel' | 'iconTint' | 'category' | 'side' | 'onMenu'>) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.header}>
       <AssetIcon kind={iconKind} label={iconLabel} tint={iconTint} symbol={symbol} category={category} size={44} />
@@ -336,6 +352,9 @@ function Identity({
 
 /** The ⋮ menu, floated over the card's top-right corner beside `Identity`. */
 function CardMenu({ id, symbol, onMenu }: Pick<PositionCardProps, 'id' | 'symbol' | 'onMenu'>) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -361,6 +380,9 @@ function PricePair({
   currentLabel: string
   current: string
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.pair}>
       <View style={styles.well}>
@@ -393,7 +415,7 @@ function priceMove(side: 'Buy' | 'Sell', entry: number, current: number): number
   return side === 'Buy' ? raw : -raw
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   card: {
     padding: spacing.lg,
     gap: spacing.lg,
@@ -525,4 +547,4 @@ const styles = StyleSheet.create({
   tabular: {
     fontVariant: ['tabular-nums'],
   },
-})
+}))

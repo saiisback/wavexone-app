@@ -1,3 +1,5 @@
+import { useThemeStyles, useTheme } from './theme'
+import type { Palette } from './colors'
 import { useIsFocused } from '@react-navigation/native'
 import { BlurView } from 'expo-blur'
 import { StatusBar } from 'expo-status-bar'
@@ -12,7 +14,6 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { colors } from './colors'
 import { LiquidBackdrop } from './liquid-backdrop'
 import { Reveal } from './motion'
 import { TAB_BAR_CLEARANCE } from './screen'
@@ -58,6 +59,8 @@ export function HeroHeader({
   children?: React.ReactNode
   style?: StyleProp<ViewStyle>
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   const insets = useSafeAreaInsets()
   const focused = useIsFocused()
 
@@ -93,11 +96,10 @@ export function ContentSheet({
   /** Space kept clear at the bottom; the tab bar's by default. */
   bottomInset?: number
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <Reveal distance={40} style={[styles.sheet, { paddingBottom: bottomInset }, style]}>
-      {Platform.OS === 'android' ? null : <BlurView intensity={40} tint="light" style={styles.sheetBlur} />}
-      {/* The iOS sheet grabber: tells the eye this is a layer riding over the hero. */}
-      <View pointerEvents="none" style={styles.grabber} />
       {children}
     </Reveal>
   )
@@ -119,6 +121,9 @@ export function CompactBar({
   /** Scroll offset at which the bar is fully shown. */
   threshold?: number
 }) {
+  const styles = useThemeStyles(themeStyles)
+  const { scheme } = useTheme()
+
   const insets = useSafeAreaInsets()
   const shown = useAnimatedStyle(() => {
     const progress = interpolate(scrollY.get(), [threshold - 50, threshold], [0, 1], Extrapolation.CLAMP)
@@ -127,7 +132,7 @@ export function CompactBar({
 
   return (
     <Animated.View pointerEvents="none" style={[styles.compact, { paddingTop: insets.top }, shown]}>
-      {Platform.OS === 'android' ? null : <BlurView intensity={60} tint="light" style={styles.sheetBlur} />}
+      {Platform.OS === 'android' ? null : <BlurView intensity={60} tint={scheme} style={styles.sheetBlur} />}
       <View style={styles.compactRow}>
         <Text variant="strong" numberOfLines={1}>
           {title}
@@ -166,6 +171,8 @@ export function HeroScreen({
   /** Floating chrome drawn above the scroll view: a docked action bar. */
   overlay?: React.ReactNode
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   const { scrollY, onScroll } = useHeroScroll()
   return (
     <View style={styles.root}>
@@ -196,6 +203,8 @@ export function HeroScreen({
  * glass sheet blurs it as it rides up. It eases up a little with the page.
  */
 function HeroLight({ scrollY }: { scrollY: SharedValue<number> }) {
+  const styles = useThemeStyles(themeStyles)
+
   const drift = useAnimatedStyle(() => ({
     transform: [{ translateY: interpolate(scrollY.get(), [-200, 0, 400], [0, 0, -120], Extrapolation.CLAMP) }],
   }))
@@ -206,7 +215,7 @@ function HeroLight({ scrollY }: { scrollY: SharedValue<number> }) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   light: {
     position: 'absolute',
     top: 0,
@@ -241,15 +250,8 @@ const styles = StyleSheet.create({
     marginTop: -SHEET_OVERLAP,
     paddingTop: spacing.xl + spacing.sm,
     gap: spacing.xxl - 4,
-    // A frosted glass sheet: translucent grouped grey over the pastel light,
-    // a bright hairline along its top edge and a soft shadow cast upward, so
-    // scrolling reads as one layer sliding over another.
-    backgroundColor: Platform.OS === 'android' ? 'rgba(242, 242, 247, 0.97)' : 'rgba(242, 242, 247, 0.86)',
-    borderTopWidth: 1,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
-    boxShadow: '0px 0px 0px 0.5px rgba(60, 60, 67, 0.10), 0px -8px 28px rgba(0, 0, 0, 0.08)',
+    backgroundColor: colors.bg,
+    boxShadow: '0px -8px 24px rgba(17, 26, 66, 0.06)',
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     borderCurve: 'continuous',
@@ -261,18 +263,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     overflow: 'hidden',
-    backgroundColor: 'rgba(250, 250, 252, 0.82)',
+    backgroundColor: colors.compactBar,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(20, 24, 43, 0.08)',
-  },
-  grabber: {
-    position: 'absolute',
-    top: 8,
-    alignSelf: 'center',
-    width: 36,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(60, 60, 67, 0.22)',
+    borderColor: colors.divider,
   },
   sheetBlur: {
     ...StyleSheet.absoluteFill,
@@ -289,4 +282,4 @@ const styles = StyleSheet.create({
   compactValue: {
     fontVariant: ['tabular-nums'],
   },
-})
+}))

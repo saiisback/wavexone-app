@@ -1,6 +1,6 @@
+import { useColors } from './theme'
 import Svg, { Circle, Path, Rect, G } from 'react-native-svg'
 
-import { colors } from './colors'
 
 export type IconProps = {
   size?: number
@@ -14,7 +14,10 @@ const DEFAULT = 24
 /* ------------------------------------------------------------------ */
 
 /** Solid house. The mockups draw Home filled in every state. */
-export function HomeIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function HomeIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -26,7 +29,10 @@ export function HomeIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 }
 
 /** Ascending bars with a rounded cap on the tallest — the Markets glyph. */
-export function MarketsIcon({ size = DEFAULT, color = colors.text, filled = false }: IconProps & { filled?: boolean }) {
+export function MarketsIcon({ size = DEFAULT, color, filled = false }: IconProps & { filled?: boolean }) {
+  const colors = useColors()
+  color ??= colors.text
+
   const stroke = filled ? 'none' : color
   const fill = filled ? color : 'none'
   return (
@@ -46,7 +52,10 @@ export function MarketsIcon({ size = DEFAULT, color = colors.text, filled = fals
 }
 
 /** Three candlesticks — used gold-on-black inside the centre Trade button. */
-export function CandlesIcon({ size = DEFAULT, color = colors.gold }: IconProps) {
+export function CandlesIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.gold
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <G fill={color}>
@@ -62,7 +71,10 @@ export function CandlesIcon({ size = DEFAULT, color = colors.gold }: IconProps) 
 }
 
 /** Document with ruled lines — the Positions glyph. */
-export function PositionsIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function PositionsIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Rect x="3.6" y="2.8" width="16.8" height="18.4" rx="3" fill="none" stroke={color} strokeWidth={1.8} />
@@ -78,9 +90,11 @@ export function PositionsIcon({ size = DEFAULT, color = colors.text }: IconProps
 
 /** Active Positions glyph: the document inverts into a filled badge. */
 export function PositionsIconFilled({ size = DEFAULT }: IconProps) {
+  const colors = useColors()
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5" fill={colors.brand} />
+      <Rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5" fill={colors.royal} />
       <Path
         d="M7 8.4h10M7 12h10M7 15.6h5.6"
         stroke={colors.white}
@@ -92,7 +106,10 @@ export function PositionsIconFilled({ size = DEFAULT }: IconProps) {
 }
 
 /** Three horizontal dots — the More glyph. */
-export function MoreIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function MoreIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <G fill={color}>
@@ -108,7 +125,10 @@ export function MoreIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 /* Navigation & chrome                                                 */
 /* ------------------------------------------------------------------ */
 
-export function ArrowLeftIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function ArrowLeftIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -123,7 +143,10 @@ export function ArrowLeftIcon({ size = DEFAULT, color = colors.text }: IconProps
   )
 }
 
-export function ChevronRightIcon({ size = DEFAULT, color = colors.textSubtle }: IconProps) {
+export function ChevronRightIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.textSubtle
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -138,7 +161,10 @@ export function ChevronRightIcon({ size = DEFAULT, color = colors.textSubtle }: 
   )
 }
 
-export function ChevronDownIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function ChevronDownIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -153,7 +179,10 @@ export function ChevronDownIcon({ size = DEFAULT, color = colors.text }: IconPro
   )
 }
 
-export function SearchIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function SearchIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Circle cx="10.6" cy="10.6" r="7" fill="none" stroke={color} strokeWidth={2} />
@@ -162,7 +191,10 @@ export function SearchIcon({ size = DEFAULT, color = colors.text }: IconProps) {
   )
 }
 
-export function StarIcon({ size = DEFAULT, color = colors.text, filled = false }: IconProps & { filled?: boolean }) {
+export function StarIcon({ size = DEFAULT, color, filled = false }: IconProps & { filled?: boolean }) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -176,7 +208,10 @@ export function StarIcon({ size = DEFAULT, color = colors.text, filled = false }
   )
 }
 
-export function BellIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function BellIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -197,7 +232,10 @@ export function BellIcon({ size = DEFAULT, color = colors.text }: IconProps) {
   )
 }
 
-export function FilterIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function FilterIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -212,7 +250,10 @@ export function FilterIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 }
 
 /** Vertical ellipsis used on position and activity rows. */
-export function MoreVerticalIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function MoreVerticalIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <G fill={color}>
@@ -231,9 +272,12 @@ export function MoreVerticalIcon({ size = DEFAULT, color = colors.text }: IconPr
 /** Solid triangle used beside every percentage change. */
 export function DeltaTriangle({
   size = 12,
-  color = colors.green,
+  color,
   direction = 'up',
 }: IconProps & { direction?: 'up' | 'down' }) {
+  const colors = useColors()
+  color ??= colors.green
+
   return (
     <Svg width={size} height={size * 0.88} viewBox="0 0 12 11">
       <Path
@@ -245,7 +289,10 @@ export function DeltaTriangle({
 }
 
 /** Rising zig-zag with an arrowhead — the "Bullish" mark. */
-export function TrendUpIcon({ size = DEFAULT, color = colors.green }: IconProps) {
+export function TrendUpIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.green
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -262,7 +309,10 @@ export function TrendUpIcon({ size = DEFAULT, color = colors.green }: IconProps)
 }
 
 /** Filled bolt — the "Execution" mark. */
-export function BoltIcon({ size = DEFAULT, color = colors.gold }: IconProps) {
+export function BoltIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.gold
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M13.9 2 4.6 13.4h5.3L9.1 22l9.5-11.6h-5.4L13.9 2Z" fill={color} />
@@ -275,7 +325,10 @@ export function BoltIcon({ size = DEFAULT, color = colors.gold }: IconProps) {
 /* ------------------------------------------------------------------ */
 
 /** Card with a plus — used for funding method choices. */
-export function CardPlusIcon({ size = DEFAULT, color = colors.white }: IconProps) {
+export function CardPlusIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.white
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -293,7 +346,10 @@ export function CardPlusIcon({ size = DEFAULT, color = colors.white }: IconProps
 }
 
 /** Tray with a down arrow — a completed deposit. */
-export function DepositIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function DepositIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -316,7 +372,10 @@ export function DepositIcon({ size = DEFAULT, color = colors.text }: IconProps) 
 }
 
 /** Tray with an up arrow — a completed withdrawal. */
-export function WithdrawIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function WithdrawIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -342,7 +401,10 @@ export function WithdrawIcon({ size = DEFAULT, color = colors.text }: IconProps)
 /* Account menu                                                        */
 /* ------------------------------------------------------------------ */
 
-export function WalletIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function WalletIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Rect x="2.6" y="5" width="18.8" height="14.6" rx="3.4" fill="none" stroke={color} strokeWidth={1.8} />
@@ -357,7 +419,10 @@ export function WalletIcon({ size = DEFAULT, color = colors.text }: IconProps) {
   )
 }
 
-export function UserIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function UserIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Circle cx="12" cy="7.4" r="4.2" fill="none" stroke={color} strokeWidth={1.8} />
@@ -372,7 +437,10 @@ export function UserIcon({ size = DEFAULT, color = colors.text }: IconProps) {
   )
 }
 
-export function ExternalLinkIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function ExternalLinkIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -394,7 +462,10 @@ export function ExternalLinkIcon({ size = DEFAULT, color = colors.text }: IconPr
   )
 }
 
-export function CodeIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function CodeIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -409,7 +480,10 @@ export function CodeIcon({ size = DEFAULT, color = colors.text }: IconProps) {
   )
 }
 
-export function HeadsetIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function HeadsetIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -432,7 +506,10 @@ export function HeadsetIcon({ size = DEFAULT, color = colors.text }: IconProps) 
   )
 }
 
-export function SettingsIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function SettingsIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Circle cx="12" cy="12" r="3.3" fill="none" stroke={color} strokeWidth={1.8} />
@@ -447,7 +524,10 @@ export function SettingsIcon({ size = DEFAULT, color = colors.text }: IconProps)
   )
 }
 
-export function SwapIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function SwapIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -470,7 +550,10 @@ export function SwapIcon({ size = DEFAULT, color = colors.text }: IconProps) {
   )
 }
 
-export function LogoutIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function LogoutIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -494,6 +577,8 @@ export function LogoutIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 
 /** Scalloped gold disc with a white tick — the verified marker. */
 export function VerifiedIcon({ size = 20 }: IconProps) {
+  const colors = useColors()
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -513,7 +598,10 @@ export function VerifiedIcon({ size = 20 }: IconProps) {
 }
 
 /** Outlined shield with a tick: risk controls (stop loss, take profit). */
-export function ShieldIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function ShieldIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -540,7 +628,10 @@ export function ShieldIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 /* ------------------------------------------------------------------ */
 
 /** A cross — closes sheets and dismisses banners. */
-export function CloseIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function CloseIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M6 6l12 12M18 6 6 18" stroke={color} strokeWidth={2} strokeLinecap="round" />
@@ -549,7 +640,10 @@ export function CloseIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 }
 
 /** A plus. */
-export function PlusIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function PlusIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth={2} strokeLinecap="round" />
@@ -558,7 +652,10 @@ export function PlusIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 }
 
 /** A four-point sparkle with a small companion — insights and signals. */
-export function SparkleIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function SparkleIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -571,7 +668,10 @@ export function SparkleIcon({ size = DEFAULT, color = colors.text }: IconProps) 
 }
 
 /** Circled "i". */
-export function InfoIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function InfoIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Circle cx="12" cy="12" r="8.6" fill="none" stroke={color} strokeWidth={1.6} />
@@ -582,7 +682,10 @@ export function InfoIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 }
 
 /** Diagonal arrow — "open elsewhere", "expand". */
-export function ArrowUpRightIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function ArrowUpRightIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M7 17 17 7M9 7h8v8" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -591,7 +694,10 @@ export function ArrowUpRightIcon({ size = DEFAULT, color = colors.text }: IconPr
 }
 
 /** A right arrow, for primary call-to-action pills. */
-export function ArrowRightIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function ArrowRightIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M4.5 12h15m0 0-6-6m6 6-6 6" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -600,7 +706,10 @@ export function ArrowRightIcon({ size = DEFAULT, color = colors.text }: IconProp
 }
 
 /** A clock face — history, pending orders. */
-export function ClockIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function ClockIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Circle cx="12" cy="12" r="8.6" fill="none" stroke={color} strokeWidth={1.8} />
@@ -610,7 +719,10 @@ export function ClockIcon({ size = DEFAULT, color = colors.text }: IconProps) {
 }
 
 /** A check mark. */
-export function CheckIcon({ size = DEFAULT, color = colors.text }: IconProps) {
+export function CheckIcon({ size = DEFAULT, color }: IconProps) {
+  const colors = useColors()
+  color ??= colors.text
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />

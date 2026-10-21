@@ -25,7 +25,7 @@ export function formatMoney(value: number) {
 
 /** "+$320.00" / "-$137.30" — the signed P&L form used on cards and rows. */
 export function formatSignedMoney(value: number) {
-  const sign = value < 0 ? '-' : '+'
+  const sign = value <= -0.005 ? '-' : '+'
   return `${sign}${money2.format(Math.abs(value))}`
 }
 

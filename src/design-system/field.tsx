@@ -1,8 +1,9 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { useEffect, useState } from 'react'
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 
-import { colors } from './colors'
 import { Pressable } from './pressable'
 import { Text } from './text'
 import { fonts, motion, radius, spacing } from './tokens'
@@ -25,6 +26,9 @@ const HALO = 4
  * fades in around it on focus (red while the value is invalid).
  */
 export function Field({ label, prefix, hint, invalid = false, style, onFocus, onBlur, ...rest }: FieldProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const [focused, setFocused] = useState(false)
   const lit = focused || invalid
 
@@ -89,6 +93,8 @@ export function QuickPicks({
   onSelect: (value: number) => void
   format: (value: number) => string
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.picks}>
       {values.map((value) => {
@@ -113,7 +119,7 @@ export function QuickPicks({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   wrap: {
     gap: spacing.sm,
   },
@@ -187,7 +193,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   pickActive: {
-    backgroundColor: colors.brand,
+    backgroundColor: colors.royal,
     borderColor: colors.brand,
     boxShadow: '0px 6px 14px rgba(20, 24, 43, 0.20)',
   },
@@ -205,4 +211,4 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     color: colors.white,
   },
-})
+}))

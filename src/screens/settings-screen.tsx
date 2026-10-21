@@ -1,3 +1,4 @@
+import { useColors } from '../design-system/theme'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import {
@@ -15,7 +16,9 @@ import {
   Switch,
   TrendUpIcon,
   UserIcon,
-  colors,
+  SegmentedControl,
+  Text,
+  useTheme,
 } from '../design-system'
 import { useOpenClientPortal } from '../features/shared/use-client-portal'
 import { useSession, type SettingKey } from '../data/store'
@@ -24,11 +27,24 @@ import type { MoreStackParamList } from '../navigation/types'
 type Navigation = NativeStackNavigationProp<MoreStackParamList, 'Settings'>
 
 export function SettingsScreen() {
+  const colors = useColors()
+  const { preference, setPreference, error } = useTheme()
+
   const { navigate } = useNavigation<Navigation>()
   const openPortal = useOpenClientPortal()
 
   return (
-    <PageScreen back title="Settings">
+    <PageScreen back title="Settings" tone="reference">
+      <Gutter>
+        <ListGroup title="Appearance">
+          <SegmentedControl
+            options={['Light', 'Dark', 'System'] as const}
+            value={preference === 'light' ? 'Light' : preference === 'dark' ? 'Dark' : 'System'}
+            onChange={(value) => { void setPreference(value.toLowerCase() as 'light' | 'dark' | 'system') }}
+          />
+        </ListGroup>
+        {error ? <Text accessibilityRole="alert" variant="caption" color={colors.red}>{error}</Text> : null}
+      </Gutter>
       <Reveal>
         <Gutter>
           <ListGroup title="Notifications">

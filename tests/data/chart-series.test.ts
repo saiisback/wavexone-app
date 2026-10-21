@@ -12,6 +12,28 @@ function bars(count: number, stepMs: number, price = (index: number) => 100 + in
 }
 
 describe('buildChartSeries', () => {
+  it('keeps one real daily candle when the caller supports single-bar charts', () => {
+    const series = buildChartSeries([
+      { time: start, open: 100, high: 110, low: 90, close: 105 },
+      { time: start + 24 * HOUR, open: 105, high: 112, low: 98, close: 102 },
+    ], '1D', { allowSingleBar: true })!
+    expect(series.points).toEqual([102])
+    expect(series.opens).toEqual([105])
+    expect(series.highs).toEqual([112])
+    expect(series.lows).toEqual([98])
+    expect(series.cursorIndex).toBe(0)
+  })
+  it('retains the actual candle wicks for the TradingView chart', () => {
+    const series = buildChartSeries([
+      { time: start, open: 100, high: 110, low: 90, close: 105 },
+      { time: start + HOUR, open: 105, high: 112, low: 98, close: 102 },
+    ], '1D')!
+    expect(series.highs).toEqual([110, 112])
+    expect(series.lows).toEqual([90, 98])
+    const live = withLivePrice(series, 115)
+    expect(live.highs).toEqual([110, 115])
+    expect(live.lows).toEqual([90, 98])
+  })
   it('keeps only the window ending at the newest bar and rests the cursor on it', () => {
     // 3 days of hourly bars; 1D keeps the last 24 hours.
     const series = buildChartSeries(bars(72, HOUR), '1D')!

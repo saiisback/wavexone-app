@@ -11,11 +11,11 @@ export const radius = {
   sm: 10,
   md: 14,
   lg: 18,
-  xl: 22,
+  xl: 18,
   /** Cards, list groups and tiles. */
-  card: 24,
+  card: 18,
   /** The content sheet's top corners, where it overlaps the hero. */
-  sheet: 32,
+  sheet: 24,
   /** The hero's own bottom sweep. */
   header: 36,
   /** Anything pill shaped. */
@@ -107,12 +107,12 @@ export const type = {
  * architecture and on web.
  */
 export const shadow = {
-  card: 'inset 0px 1px 0px rgba(255, 255, 255, 0.95), 0px 0px 0px 0.5px rgba(60, 60, 67, 0.12), 0px 1px 2px rgba(0, 0, 0, 0.03), 0px 8px 24px rgba(0, 0, 0, 0.05)',
-  raised: '0px 2px 6px rgba(0, 0, 0, 0.06), 0px 10px 28px rgba(0, 0, 0, 0.07)',
+  card: '0px 1px 2px rgba(17, 26, 66, 0.04), 0px 8px 24px rgba(17, 26, 66, 0.06)',
+  raised: '0px 2px 5px rgba(17, 26, 66, 0.07), 0px 12px 28px rgba(17, 26, 66, 0.09)',
   /** Feature cards: same as any card. */
-  hero: 'inset 0px 1px 0px rgba(255, 255, 255, 0.95), 0px 0px 0px 0.5px rgba(60, 60, 67, 0.12), 0px 1px 2px rgba(0, 0, 0, 0.03), 0px 10px 28px rgba(0, 0, 0, 0.06)',
+  hero: '0px 16px 34px rgba(17, 26, 66, 0.22)',
   /** The Trade button. */
-  fab: 'inset 0px 1px 0px rgba(255, 255, 255, 1), 0px 0px 0px 0.5px rgba(0, 0, 0, 0.12), 0px 8px 22px rgba(0, 0, 0, 0.16)',
+  fab: '0px 8px 22px rgba(17, 26, 66, 0.24)',
   /** The floating tab bar. */
   float: '0px 8px 30px rgba(0, 0, 0, 0.10)',
 } as const

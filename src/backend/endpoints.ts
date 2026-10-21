@@ -99,22 +99,13 @@ const portal = (
   encoding?: BodyEncoding,
 ): EndpointSpec => ({ transport: 'portal', name, method, mutation, phase, params, encoding })
 
-const charting = (name: string, params: readonly string[]): EndpointSpec => ({
-  transport: 'charting',
-  name,
-  method: 'GET',
-  mutation: false,
-  phase: 1,
-  params,
-})
-
 /**
  * Two different device identifiers travel through this API and they are not
  * interchangeable — the collection uses both, spelled differently:
  *
  *  - `footprint`, sent to `check` and `bearer`. Client-chosen, pre-auth.
  *  - `fingerprint`, required by every order mutation. Issued per account by
- *    `create_fingerprint` and formatted `<hex>_<accountId>`.
+ *    `create_fingerprint` and treated as an opaque server value.
  *
  * Sending the footprint where the fingerprint belongs is the kind of mistake
  * that fails only at order time, so they are separate fields everywhere.
@@ -145,7 +136,7 @@ export const ENDPOINTS = {
    * example, and a route called `create_*` most likely inserts a row. Treating
    * a write as a read is the expensive direction of that guess.
    */
-  createFingerprint: trading('create_fingerprint', 'GET', true, 2, ['token', 'account_id']),
+  createFingerprint: trading('create_fingerprint', 'GET', true, 2, ['token', 'account_id', 'sid']),
 
   // §4.2 Home and accounts
   getUser: {
@@ -196,17 +187,14 @@ export const ENDPOINTS = {
   // §4.4 Charts
   /** On the trading host, not the charting host — `v1.php?collect=…&s=XAUUSD`. */
   chartConfig: trading('charting_library_cloned_data', 'GET', false, 1, ['s']),
-  /** The one charting-host route. Its path is fixed; see `Gate.urlFor`. */
-  chartBars: charting('watchlist_charting', [
-    'symbol',
-    'fromTs',
-    'toTs',
-    'count',
-    'previouscount',
-    'resolution',
-    'firstDataRequest',
-  ]),
-
+  mamDirectory: trading('mamList', 'GET', false, 1, ['token']),
+  pammDirectory: trading('pammList', 'GET', false, 1, ['token']),
+  mamFollowing: trading('mamFollowingList', 'GET', false, 1, ['token']),
+  pammFollowing: trading('pammFollowingList', 'GET', false, 1, ['token']),
+  mamFollowers: trading('userMamFollowersList', 'GET', false, 1, ['token']),
+  pammFollowers: trading('userPammFollowers', 'GET', false, 1, ['token']),
+  mamReport: trading('mamShareValue', 'GET', false, 1, ['mam_id', 'user_id', 'token']),
+  pammReport: trading('pammOrderReport', 'GET', false, 1, ['pamm_id', 'user_id', 'token']),
   // §4.5 Orders and positions
   orders: trading('orders', 'GET', false, 1, ['token']),
   singleOrder: trading('singleorder', 'GET', false, 1, ['token', 'order_id']),

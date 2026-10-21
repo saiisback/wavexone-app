@@ -1,14 +1,20 @@
+import { useColors } from './theme'
 import { StyleSheet, View } from 'react-native'
 
-import { colors } from './colors'
 
 /** Hairline between rows inside a card. */
-export function Divider({ inset = 0, color = colors.divider }: { inset?: number; color?: string }) {
+export function Divider({ inset = 0, color }: { inset?: number; color?: string }) {
+  const colors = useColors()
+  color ??= colors.divider
+
   return <View style={[styles.base, { marginLeft: inset, backgroundColor: color }]} />
 }
 
 /** Vertical hairline, used to split the Activity summary into two columns. */
-export function VerticalDivider({ color = colors.onInkDivider }: { color?: string }) {
+export function VerticalDivider({ color }: { color?: string }) {
+  const colors = useColors()
+  color ??= colors.onInkDivider
+
   return <View style={[styles.vertical, { backgroundColor: color }]} />
 }
 

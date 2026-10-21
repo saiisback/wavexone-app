@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { Fragment, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
@@ -21,7 +23,6 @@ import {
   TrendUpIcon,
   WalletIcon,
   WithdrawIcon,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -50,6 +51,8 @@ const RECENT_FUNDING = 4
  * where the equity sits, recent funding, then search and Market Watch.
  */
 export function BalanceScreen() {
+  const styles = useThemeStyles(themeStyles)
+
   const accountData = useAccountData()
   const account = accountData.status === 'ready' ? accountData.data.account : null
 
@@ -57,8 +60,10 @@ export function BalanceScreen() {
     <PageScreen
       back
       title="Balance"
+      tone="reference"
       subtitle={account ? `${account.mode} · ${account.number}` : undefined}
     >
+      {accountData.status === 'ready' ? <QueryStateView state={accountData} render={() => null} /> : null}
       {accountData.status !== 'ready' ? (
         <View style={styles.gutter}>
           <QueryStateView state={accountData} render={() => null} />
@@ -79,6 +84,9 @@ export function BalanceScreen() {
 }
 
 function BalanceOverview({ account }: { account: DetailedAccount }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { openFunding, openInstrument } = useAppNavigation()
   const showMenu = useActionMenu()
   // Same key as Activity's Funds filter, so both share one request.
@@ -109,7 +117,7 @@ function BalanceOverview({ account }: { account: DetailedAccount }) {
       <Reveal index={1} style={[styles.gutter, styles.actions]}>
         {FUNDING_ACTIONS.map(({ mode, label, Icon }) => (
           <FundingAction key={mode} label={label} primary={mode === 'deposit'} onPress={() => openFunding(mode)}>
-            <Icon size={22} color={mode === 'deposit' ? colors.white : colors.brand} />
+            <Icon size={22} color={mode === 'deposit' ? colors.homePanel : colors.brand} />
           </FundingAction>
         ))}
       </Reveal>
@@ -121,6 +129,7 @@ function BalanceOverview({ account }: { account: DetailedAccount }) {
 
       <Reveal index={3} style={[styles.gutter, styles.section]}>
         <SectionHeader title="Recent funding" />
+        {funds.status === 'ready' ? <QueryStateView state={funds} render={() => null} /> : null}
         {funds.status !== 'ready' ? (
           <QueryStateView state={funds} render={() => null} />
         ) : recent.length === 0 ? (
@@ -159,6 +168,9 @@ function BalanceOverview({ account }: { account: DetailedAccount }) {
 
 /** The screen's one luminous moment: equity rolling up, with balance and open P&L. */
 function BalanceCard({ account }: { account: DetailedAccount }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const shown = useCountUp(account.equity)
   return (
     <Card tone="ink" style={styles.hero}>
@@ -219,6 +231,9 @@ function FundingAction({
   onPress: () => void
   children: React.ReactNode
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <PressableScale accessibilityLabel={label} onPress={onPress} scaleTo={0.92} style={styles.action}>
       <View style={styles.actionInner}>
@@ -236,6 +251,9 @@ function FundingAction({
  * its share of equity, the amount, and a thin bar of that share.
  */
 function Breakdown({ account }: { account: DetailedAccount }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const equity = account.equity
   const used = Math.max(equity - account.freeMargin, 0)
   const share = (value: number) => (equity > 0 ? Math.min(Math.max(value / equity, 0), 1) : 0)
@@ -329,6 +347,9 @@ function percentOf(share: number) {
 
 /** Search and Market Watch, kept from the original Balance screen. */
 function MarketWatch() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { openInstrument } = useAppNavigation()
   const showMenu = useActionMenu()
   const [query, setQuery] = useState('')
@@ -415,7 +436,7 @@ function MarketWatch() {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   gutter: {
     paddingHorizontal: SCREEN_PADDING,
   },
@@ -461,8 +482,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   discPrimary: {
-    backgroundColor: colors.brand,
-    boxShadow: '0px 10px 22px rgba(20, 24, 43, 0.25)',
+    backgroundColor: colors.gold,
+    boxShadow: '0px 10px 22px rgba(184, 144, 30, 0.28)',
   },
   discPlain: {
     backgroundColor: colors.glass,
@@ -499,4 +520,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
     alignItems: 'center',
   },
-})
+}))

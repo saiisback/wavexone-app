@@ -1,6 +1,8 @@
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
-import { PopIn, PressableScale, Text, colors, radius, shadow, spacing } from '../../design-system'
+import { PopIn, PressableScale, Text, radius, shadow, spacing } from '../../design-system'
 
 /**
  * Building blocks shared by the Trade tab and the order sheets: the centred
@@ -23,6 +25,9 @@ export function SheetIntro({
   subtitle?: string
   children?: React.ReactNode
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.intro}>
       <PopIn>
@@ -65,6 +70,9 @@ export function LotStepper({
   /** A smaller figure for sheets. */
   compact?: boolean
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.stepper}>
       <StepButton kind="minus" accessibilityLabel="Decrease volume" onPress={onDecrease} compact={compact} />
@@ -97,6 +105,9 @@ function StepButton({
   onPress: () => void
   compact: boolean
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const plus = kind === 'plus'
   const size = compact ? 48 : 56
   const glyph = plus ? colors.white : colors.brand
@@ -133,6 +144,9 @@ export function KeyValueRow({
   /** Sets the row on a soft inset well, for the figure that matters most. */
   well?: boolean
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={[styles.row, well ? styles.rowWell : null]}>
       <Text variant="body" color={colors.textMuted} style={styles.rowLabel}>
@@ -151,7 +165,7 @@ export function KeyValueRow({
 const DISC = 76
 const RING = 10
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   intro: {
     alignItems: 'center',
     gap: spacing.md,
@@ -204,7 +218,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandTint,
   },
   stepPlus: {
-    backgroundColor: colors.brand,
+    backgroundColor: colors.royal,
     boxShadow: '0px 8px 18px rgba(20, 24, 43, 0.24)',
   },
   bar: {
@@ -253,4 +267,4 @@ const styles = StyleSheet.create({
   tabular: {
     fontVariant: ['tabular-nums'],
   },
-})
+}))

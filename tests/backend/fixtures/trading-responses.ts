@@ -21,6 +21,18 @@ export const tradingAccountsResponse = [
   },
 ] as const
 
+export const accountDetailResponse = {
+  status: 'success',
+  message: 'success',
+  data: {
+    balance: '2450.75',
+    fund: '2180.25',
+    credit: '25.00',
+    equity: '2475.50',
+    currency: 'USD',
+  },
+} as const
+
 export const orderCountsResponse = {
   status: 'success',
   total_count: '2',
@@ -34,9 +46,9 @@ export const marketCatalogueResponse = {
 } as const
 
 export const symbolMetadataResponse = {
-  XAUUSD: { spread: 0.25, decimal: 2, lot: 100 },
-  EURUSD: { spread: 0.0002, decimal: 4, lot: 100000 },
-  BTCUSD: { spread: 10, decimal: 2, lot: 1 },
+  XAUUSD: { spread: 100, decimal: 2, lot: 0.01 },
+  EURUSD: { spread: 100000, decimal: 5, lot: 0.01 },
+  BTCUSD: { spread: 100, decimal: 2, lot: 0.01 },
 } as const
 
 export const dailySnapshotResponse = {

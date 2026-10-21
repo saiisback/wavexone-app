@@ -1,3 +1,5 @@
+import { useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { useEffect } from 'react'
 import { StyleSheet, View, type DimensionValue } from 'react-native'
 import Animated, {
@@ -8,7 +10,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 
-import { colors } from './colors'
 import { radius, spacing } from './tokens'
 
 /** One placeholder shape. No spinner; the group breathes as a whole. */
@@ -21,6 +22,8 @@ export function SkeletonBlock({
   height: number
   round?: boolean
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View
       testID="loading-skeleton-block"
@@ -35,6 +38,8 @@ export function SkeletonBlock({
  * gently while it waits.
  */
 export function SkeletonRows({ count = 3 }: { count?: number }) {
+  const styles = useThemeStyles(themeStyles)
+
   const pulse = useSharedValue(1)
   useEffect(() => {
     pulse.set(withRepeat(withTiming(0.55, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true))
@@ -63,7 +68,7 @@ export function SkeletonRows({ count = 3 }: { count?: number }) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   block: {
     backgroundColor: colors.track,
     borderRadius: radius.sm,
@@ -81,4 +86,4 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 6,
   },
-})
+}))

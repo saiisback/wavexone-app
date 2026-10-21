@@ -1,8 +1,10 @@
 import type { LiveQuote, TradingEvent } from './market-feed'
+import type { ManagedDirectory, ManagedFollower, ManagedKind, ManagedRelationship, ManagedReport } from './managed-accounts'
 import type { MarketPeriod } from '../data/store'
 import type {
   Account,
   ActivityEntry,
+  CandleInterval,
   ChartSeries,
   Instrument,
   Notification,
@@ -148,7 +150,7 @@ export interface WaveXBackend {
     favorites(): Promise<readonly string[]>
     setFavorite(request: SetFavoriteRequest): Promise<void>
     quoteSnapshot(instrumentIds: readonly string[]): Promise<readonly Instrument[]>
-    candles(instrumentId: string, timeframe: Timeframe): Promise<ChartSeries>
+    candles(instrumentId: string, timeframe: Timeframe, interval?: CandleInterval): Promise<ChartSeries>
     /** Closes over `period` per instrument, for row sparklines; missing ids are absent. */
     sparklines(
       instrumentIds: readonly string[],
@@ -156,10 +158,23 @@ export interface WaveXBackend {
     ): Promise<ReadonlyMap<string, readonly number[]>>
   }
 
+  managedAccounts: {
+    directory(kind: ManagedKind): Promise<ManagedDirectory>
+    following(kind: ManagedKind): Promise<ManagedDirectory>
+    followers(kind: ManagedKind): Promise<readonly ManagedFollower[]>
+    report(kind: ManagedKind, relationship: ManagedRelationship): Promise<ManagedReport>
+  }
+
   orders: {
     counts(accountId: string): Promise<OrderCounts>
     list(accountId: string): Promise<readonly Position[]>
     history(accountId: string): Promise<readonly Position[]>
+    /** A nonempty page permits probing the next page; only an empty page confirms the end. */
+    historyPage(accountId: string, options: { page: number }): Promise<{
+      positions: readonly Position[]
+      page: number
+      hasMore: boolean
+    }>
     place(request: PlaceOrderRequest): Promise<void>
     modify(request: ModifyOrderRequest): Promise<void>
     cancel(request: CloseOrderRequest): Promise<void>

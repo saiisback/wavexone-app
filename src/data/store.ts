@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { Notification } from './types'
 
 /**
  * Client-side session state.
@@ -15,6 +16,7 @@ type SessionState = {
   accountId: string | null
   favorites: ReadonlySet<string>
   readNotifications: ReadonlySet<string>
+  localNotifications: readonly Notification[]
   marketPeriod: MarketPeriod
   settings: Readonly<Record<SettingKey, boolean>>
 
@@ -24,6 +26,7 @@ type SessionState = {
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: (ids: readonly string[]) => void
   replaceReadNotifications: (ids: readonly string[]) => void
+  addLocalNotification: (notification: Notification) => void
   setMarketPeriod: (period: MarketPeriod) => void
   toggleSetting: (key: SettingKey) => void
 }
@@ -39,6 +42,7 @@ export const useSession = create<SessionState>((set) => ({
   accountId: null,
   favorites: new Set<string>(),
   readNotifications: new Set<string>(),
+  localNotifications: [],
   marketPeriod: 'This month',
   settings: {
     priceAlerts: true,
@@ -67,8 +71,11 @@ export const useSession = create<SessionState>((set) => ({
       return { readNotifications: new Set(state.readNotifications).add(id) }
     }),
 
-  markAllNotificationsRead: (ids) => set({ readNotifications: new Set(ids) }),
+  markAllNotificationsRead: (ids) => set((state) => ({ readNotifications: new Set([...state.readNotifications, ...ids]) })),
   replaceReadNotifications: (ids) => set({ readNotifications: new Set(ids) }),
+  addLocalNotification: (notification) => set((state) => ({
+    localNotifications: [notification, ...state.localNotifications.filter((item) => item.id !== notification.id)].slice(0, 100),
+  })),
 
   setMarketPeriod: (period) => set({ marketPeriod: period }),
 

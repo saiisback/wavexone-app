@@ -31,16 +31,16 @@ const COLUMNS: Record<Timeframe, { count: number; label: Intl.DateTimeFormat }> 
   '6M': { count: 6, label: monthLabel },
 }
 
-export type CandleLike = { time: number; open: number; close: number }
+export type CandleLike = { time: number; open: number; close: number; high?: number; low?: number }
 
 /** Shapes feed bars into the line chart: closes, column labels and a round axis. */
-export function buildChartSeries(candles: readonly CandleLike[], timeframe: Timeframe): ChartSeries | null {
+export function buildChartSeries(candles: readonly CandleLike[], timeframe: Timeframe, options: { allowSingleBar?: boolean } = {}): ChartSeries | null {
   const sorted = [...candles].sort((left, right) => left.time - right.time)
   const newest = sorted.at(-1)
   if (!newest) return null
   const cutoff = newest.time - CHART_REQUESTS[timeframe].days * DAY_MS
   const bars = sorted.filter((bar) => bar.time > cutoff)
-  if (bars.length < 2) return null
+  if (bars.length < (options.allowSingleBar ? 1 : 2)) return null
 
   const points = bars.map((bar) => bar.close)
   const { count, label } = COLUMNS[timeframe]
@@ -53,6 +53,10 @@ export function buildChartSeries(candles: readonly CandleLike[], timeframe: Time
   return {
     points,
     opens: bars.map((bar) => bar.open),
+    ...(bars.every((bar) => bar.high !== undefined && bar.low !== undefined) ? {
+      highs: bars.map((bar) => bar.high!),
+      lows: bars.map((bar) => bar.low!),
+    } : {}),
     times: bars.map((bar) => bar.time),
     labels,
     cursorIndex: last,
@@ -76,6 +80,8 @@ export function withLivePrice(series: ChartSeries, price: number | undefined): C
   return {
     ...series,
     points,
+    ...(series.highs ? { highs: [...series.highs.slice(0, last), Math.max(series.highs[last], price)] } : {}),
+    ...(series.lows ? { lows: [...series.lows.slice(0, last), Math.min(series.lows[last], price)] } : {}),
     ...(series.cursorIndex === last ? { cursorClose: price } : {}),
     ...axis,
   }

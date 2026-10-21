@@ -86,6 +86,19 @@ describe('notifications', () => {
     expect(unreadCount()).toBe(0)
   })
 
+  it('preserves previously read IDs when another batch is marked read', () => {
+    useSession.getState().markNotificationRead('previous')
+    useSession.getState().markAllNotificationsRead(['current'])
+    expect([...useSession.getState().readNotifications]).toEqual(['previous', 'current'])
+  })
+
+  it('keeps only one local notification per acknowledged request', () => {
+    const notification = { id: 'local:order:1', kind: 'order' as const, title: 'Buy confirmed', body: 'XAU/USD', time: '10:00' }
+    useSession.getState().addLocalNotification(notification)
+    useSession.getState().addLocalNotification(notification)
+    expect(useSession.getState().localNotifications).toEqual([notification])
+  })
+
   it('ignores an id that is not a notification', () => {
     useSession.getState().markNotificationRead('not-a-notification')
     expect(unreadCount()).toBe(notifications.length)

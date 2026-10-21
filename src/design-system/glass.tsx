@@ -1,8 +1,9 @@
+import { useTheme, useThemeStyles, useColors } from './theme'
+import type { Palette } from './colors'
 import { BlurView } from 'expo-blur'
 import { Platform, StyleSheet, View, type ViewProps } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 
-import { colors } from './colors'
 import { InkBackdrop } from './ink-backdrop'
 import { shadow } from './tokens'
 
@@ -40,6 +41,10 @@ export function Glass({
   children,
   ...rest
 }: GlassProps) {
+  const tones = useThemeStyles(themeTones)
+  const styles = useThemeStyles(themeStyles)
+  const { scheme } = useTheme()
+
   const blurred = blur && Platform.OS !== 'android'
   return (
     <View
@@ -56,7 +61,7 @@ export function Glass({
       {blurred ? (
         <BlurView
           intensity={tone === 'light' ? 40 : 30}
-          tint={tone === 'light' ? 'light' : 'dark'}
+          tint={tone === 'light' ? scheme : 'dark'}
           style={styles.blur}
         />
       ) : null}
@@ -68,13 +73,15 @@ export function Glass({
 
 /** A white wash fading down from the top edge, as light on curved glass. */
 function Sheen({ tone }: { tone: GlassTone }) {
+  const styles = useThemeStyles(themeStyles)
+  const colors = useColors()
   return (
     <View pointerEvents="none" style={styles.sheen}>
       <Svg width="100%" height="100%" preserveAspectRatio="none">
         <Defs>
           <LinearGradient id={`glass-sheen-${tone}`} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#FFFFFF" stopOpacity={tone === 'light' ? 0.7 : 0.14} />
-            <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
+            <Stop offset="0" stopColor={colors.sheen} stopOpacity={tone === 'light' ? 0.7 : 0.14} />
+            <Stop offset="1" stopColor={colors.sheen} stopOpacity={0} />
           </LinearGradient>
         </Defs>
         <Rect width="100%" height="100%" fill={`url(#glass-sheen-${tone})`} />
@@ -83,7 +90,7 @@ function Sheen({ tone }: { tone: GlassTone }) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => StyleSheet.create({
   base: {
     overflow: 'hidden',
     borderCurve: 'continuous',
@@ -108,17 +115,17 @@ const styles = StyleSheet.create({
     boxShadow: shadow.hero,
   },
   blurredLight: {
-    backgroundColor: 'rgba(255, 255, 255, 0.66)',
+    backgroundColor: colors.frostSoft,
   },
   blurredOnInk: {
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
 })
 
-const tones = StyleSheet.create({
+const themeTones = (colors: Palette) => (StyleSheet.create({
   light: {
     backgroundColor: colors.glass,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
+    borderColor: colors.glassBorder,
   },
   onInk: {
     backgroundColor: colors.glassOnInk,
@@ -127,6 +134,6 @@ const tones = StyleSheet.create({
   // Feature card: a plain white card, as in Stocks.
   ink: {
     backgroundColor: colors.glassStrong,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
+    borderColor: colors.glassBorder,
   },
-})
+}))

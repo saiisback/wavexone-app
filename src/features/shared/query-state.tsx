@@ -1,4 +1,6 @@
-import { EmptyState, SkeletonRows } from '../../design-system'
+import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { Button, ButtonText, EmptyState, SkeletonRows, Text, spacing } from '../../design-system'
+import { useColors } from '../../design-system/theme'
 import type { QueryState } from '../../backend/provider'
 
 type QueryStateViewProps<T> = {
@@ -23,6 +25,7 @@ export function QueryStateView<T>({
   emptyMessage,
   onRetry,
 }: QueryStateViewProps<T>) {
+  const colors = useColors()
   if (state.status === 'loading') return <SkeletonRows />
 
   if (state.status === 'error') {
@@ -36,12 +39,23 @@ export function QueryStateView<T>({
     )
   }
 
-  if (isEmpty?.(state.data)) {
-    return <EmptyState title={emptyTitle} message={emptyMessage} />
-  }
-
-  return <>{render(state.data)}</>
+  return <>
+    {state.refreshing ? <View style={styles.feedback} accessibilityLiveRegion="polite" accessibilityState={{ busy: true }}>
+      <ActivityIndicator color={colors.textMuted} size="small" />
+      <Text variant="caption" color={colors.textMuted}>Updating…</Text>
+    </View> : null}
+    {state.refreshError ? <View style={styles.feedback} accessibilityLiveRegion="polite">
+      <Text variant="caption" color={colors.textMuted} style={styles.message}>{state.refreshError}</Text>
+      <Button tone="surface" onPress={onRetry ?? state.retry} accessibilityLabel="Retry update"><ButtonText tone="surface">Try again</ButtonText></Button>
+    </View> : null}
+    {isEmpty?.(state.data) ? <EmptyState title={emptyTitle} message={emptyMessage} /> : render(state.data)}
+  </>
 }
+
+const styles = StyleSheet.create({
+  feedback: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
+  message: { flex: 1 },
+})
 
 export function UnavailableState({ title, message }: { title: string; message: string }) {
   return <EmptyState title={title} message={message} />

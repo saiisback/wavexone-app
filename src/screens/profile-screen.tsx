@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -18,7 +20,6 @@ import {
   Text,
   UserIcon,
   VerifiedIcon,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -32,6 +33,9 @@ const TITLE = 'Profile & verification'
 
 /** Account → Profile & verification. */
 export function ProfileScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const showMenu = useActionMenu()
   const { openEditPhone } = useAppNavigation()
   const accountData = useAccountData()
@@ -47,7 +51,7 @@ export function ProfileScreen() {
 
   if (accountData.status !== 'ready') {
     return (
-      <PageScreen back title={TITLE}>
+      <PageScreen back title={TITLE} tone="reference">
         <Gutter>
           <QueryStateView state={accountData} render={() => null} />
         </Gutter>
@@ -59,7 +63,7 @@ export function ProfileScreen() {
   const kycTone = profile.kycStatus === 'Verified' ? 'buy' : 'neutral'
 
   return (
-    <PageScreen back title={TITLE}>
+    <PageScreen back title={TITLE} tone="reference">
       <Reveal>
         <Gutter>
           <Card style={styles.identity}>
@@ -168,6 +172,9 @@ const KYC_STEPS: Record<Profile['kycStatus'], { done: number; caption: string }>
  * status, a thick progress bar, the steps, and a coloured band underneath.
  */
 function VerificationStatus({ status }: { status: Profile['kycStatus'] }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { done, caption } = KYC_STEPS[status]
   const complete = done === 2
   return (
@@ -205,6 +212,9 @@ function VerificationStatus({ status }: { status: Profile['kycStatus'] }) {
 }
 
 function Step({ label, done }: { label: string; done: boolean }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.step}>
       <View style={[styles.stepDot, done ? styles.stepDotDone : null]}>
@@ -217,7 +227,7 @@ function Step({ label, done }: { label: string; done: boolean }) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   identity: {
     alignItems: 'center',
     gap: spacing.md,
@@ -318,4 +328,4 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 19,
   },
-})
+}))

@@ -22,7 +22,10 @@ type TradeDraftState = {
 export const useTradeDraft = create<TradeDraftState>((set) => ({
   instrumentId: null,
   orderType: 'Market',
-  lots: 0.5,
+  // Start at the safest broadly tradeable size. The instrument picker
+  // replaces this with that market's LP minimum (for example 1 share for
+  // stocks) once a symbol is chosen.
+  lots: 0.01,
 
   setInstrumentId: (instrumentId) => set({ instrumentId }),
   setOrderType: (orderType) => set({ orderType }),

@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, {
   Extrapolation,
@@ -9,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Aurora } from './aurora'
 import { CircleButton } from './circle-button'
-import { colors } from './colors'
+import { HomeAtmosphere } from './home-atmosphere'
 import { useHeroScroll } from './hero-layout'
 import { ArrowLeftIcon } from './icons'
 import { TAB_BAR_CLEARANCE } from './screen'
@@ -34,6 +36,7 @@ export function PageTitle({
   trailing,
   leading,
   style,
+  tone = 'light',
 }: {
   scrollY: SharedValue<number>
   title: string
@@ -43,7 +46,11 @@ export function PageTitle({
   /** A back button; the title then sits beside it at heading size. */
   leading?: React.ReactNode
   style?: StyleProp<ViewStyle>
+  tone?: 'light' | 'reference'
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const fade = useAnimatedStyle(() => {
     const y = scrollY.get()
     return {
@@ -60,12 +67,21 @@ export function PageTitle({
       <View style={styles.titleRow}>
         {leading}
         <Animated.View style={[styles.titleText, leading ? null : styles.titleOrigin, fade]}>
-          <Text variant={leading ? 'heading' : 'title'} numberOfLines={1} accessibilityRole="header">
+          <Text
+            variant={leading ? 'heading' : 'title'}
+            color={tone === 'reference' ? colors.brand : colors.text}
+            numberOfLines={1}
+            accessibilityRole="header"
+          >
             {title}
           </Text>
           {subtitle ? (
             typeof subtitle === 'string' ? (
-              <Text variant="caption" color={colors.textMuted} numberOfLines={1}>
+              <Text
+                variant="caption"
+                color={tone === 'reference' ? colors.referenceMuted : colors.textMuted}
+                numberOfLines={1}
+              >
                 {subtitle}
               </Text>
             ) : subtitle
@@ -85,11 +101,16 @@ export function PageBar({
   scrollY,
   title,
   trailing,
+  tone = 'light',
 }: {
   scrollY: SharedValue<number>
   title: string
   trailing?: React.ReactNode
+  tone?: 'light' | 'reference'
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const insets = useSafeAreaInsets()
   const shown = useAnimatedStyle(() => {
     const progress = interpolate(scrollY.get(), [COLLAPSE_AT - 24, COLLAPSE_AT + 8], [0, 1], Extrapolation.CLAMP)
@@ -103,11 +124,16 @@ export function PageBar({
   return (
     <Animated.View
       pointerEvents="box-none"
-      style={[styles.bar, { paddingTop: insets.top, height: insets.top + BAR_HEIGHT }, shown]}
+      style={[
+        styles.bar,
+        tone === 'reference' ? styles.referenceBar : null,
+        { paddingTop: insets.top, height: insets.top + BAR_HEIGHT },
+        shown,
+      ]}
     >
       <View style={styles.barRow} pointerEvents="box-none">
         <Animated.View style={titleIn} pointerEvents="none">
-          <Text variant="strong" numberOfLines={1}>
+          <Text variant="strong" color={tone === 'reference' ? colors.brand : colors.text} numberOfLines={1}>
             {title}
           </Text>
         </Animated.View>
@@ -118,11 +144,24 @@ export function PageBar({
 }
 
 /** The round back button used by every pushed page. */
-export function BackButton({ onPress }: { onPress?: () => void }) {
+export function BackButton({
+  onPress,
+  tone = 'light',
+}: {
+  onPress?: () => void
+  tone?: 'light' | 'reference'
+}) {
+  const colors = useColors()
+
   const goBack = useSafeBack()
   return (
-    <CircleButton size={42} onPress={onPress ?? goBack} accessibilityLabel="Back">
-      <ArrowLeftIcon size={20} color={colors.text} />
+    <CircleButton
+      size={42}
+      tone="outline"
+      onPress={onPress ?? goBack}
+      accessibilityLabel="Back"
+    >
+      <ArrowLeftIcon size={20} color={tone === 'reference' ? colors.brand : colors.text} />
     </CircleButton>
   )
 }
@@ -143,6 +182,7 @@ export function PageScreen({
   bottomInset = TAB_BAR_CLEARANCE,
   overlay,
   refreshControl,
+  tone = 'light',
 }: {
   title: string
   subtitle?: React.ReactNode
@@ -154,13 +194,16 @@ export function PageScreen({
   /** Floating chrome drawn above the scroll view: a docked action bar. */
   overlay?: React.ReactNode
   refreshControl?: React.ComponentProps<typeof Animated.ScrollView>['refreshControl']
+  tone?: 'light' | 'reference'
 }) {
+  const styles = useThemeStyles(themeStyles)
+
   const insets = useSafeAreaInsets()
   const { scrollY, onScroll } = useHeroScroll()
 
   return (
-    <View style={styles.root}>
-      <Aurora />
+    <View style={[styles.root, tone === 'reference' ? styles.referenceRoot : null]}>
+      {tone === 'reference' ? <HomeAtmosphere /> : <Aurora />}
       <Animated.ScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
@@ -175,20 +218,29 @@ export function PageScreen({
           title={title}
           subtitle={subtitle}
           trailing={trailing}
-          leading={back ? <BackButton /> : undefined}
+          leading={back ? <BackButton tone={tone} /> : undefined}
+          tone={tone}
         />
-        <View style={[styles.content, contentStyle]}>{children}</View>
+        <View
+          testID={tone === 'reference' ? 'reference-page-content' : undefined}
+          style={[styles.content, tone === 'reference' ? styles.referenceContent : null, contentStyle]}
+        >
+          {children}
+        </View>
       </Animated.ScrollView>
-      <PageBar scrollY={scrollY} title={title} />
+      <PageBar scrollY={scrollY} title={title} trailing={trailing} tone={tone} />
       {overlay}
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  referenceRoot: {
+    backgroundColor: colors.referenceCanvas,
   },
   scroll: {
     flexGrow: 1,
@@ -218,14 +270,27 @@ const styles = StyleSheet.create({
   content: {
     gap: spacing.xxl,
   },
+  referenceContent: {
+    flexGrow: 1,
+    minHeight: 520,
+    paddingTop: spacing.xl,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
   bar: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(250, 250, 252, 0.9)',
+    backgroundColor: colors.compactBar,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+  },
+  referenceBar: {
+    backgroundColor: colors.referenceBar,
+    borderBottomColor: colors.referenceLine,
   },
   barRow: {
     flex: 1,
@@ -240,4 +305,4 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-})
+}))

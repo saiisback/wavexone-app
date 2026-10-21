@@ -48,3 +48,18 @@ yarn-error.*
 # endpoint contract derived from them lives in src/backend/endpoints.ts.
 *postman_collection.json
 *postman_environment*.json
+
+# Local release exports and automation state
+/.local-artifacts/
+/.claude/
+/.superpowers/
+*.apk
+*.aab
+/app-store-*/
+/app-store-*.zip
+/fresh-app-store-assets/
+
+# Environment files (including credentials); examples may be tracked
+.env
+.env.*
+!.env.example

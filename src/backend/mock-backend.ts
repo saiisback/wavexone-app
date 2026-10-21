@@ -11,6 +11,7 @@ import {
 } from '../data/mock'
 import type { WaveXBackend } from './contract'
 import { BackendError } from './errors'
+import { CHART_REQUESTS } from '../data/chart-series'
 
 /**
  * The contract, served from `src/data/mock.ts`.
@@ -83,10 +84,24 @@ export function createMockBackend(): WaveXBackend {
         // Only XAU/USD has a hand-built series; the rest would need the
         // charting endpoints in guide §4.4.
         if (instrumentId !== 'xauusd') unavailable(`Chart data for ${instrumentId}`)
-        return settle(xauChart[timeframe])
+        const series = xauChart[timeframe]
+        const windowMs = CHART_REQUESTS[timeframe].days * 86400000
+        // Explicit fixture timestamps. Fixture closes have no wick data,
+        // so TradingView displays them as a line rather than inventing OHLC.
+        const end = Date.UTC(2026, 9, 1)
+        return settle({ ...series, times: series.points.map((_, index) =>
+          end - windowMs + index * windowMs / Math.max(1, series.points.length - 1),
+        ) })
       },
       // The fixtures carry their own sparklines.
       sparklines: () => settle(new Map()),
+    },
+
+    managedAccounts: {
+      directory: async () => unavailable('Managed accounts'),
+      following: async () => unavailable('Managed account following'),
+      followers: async () => unavailable('Managed account followers'),
+      report: async () => unavailable('Managed account reports'),
     },
 
     orders: {
@@ -98,6 +113,7 @@ export function createMockBackend(): WaveXBackend {
         }),
       list: () => settle(positions.filter((item) => item.state !== 'Closed')),
       history: () => settle(positions.filter((item) => item.state === 'Closed')),
+      historyPage: (_accountId, { page }) => settle({ positions: page === 1 ? positions.filter((item) => item.state === 'Closed') : [], page, hasMore: false }),
       place: async () => unavailable('Placing an order'),
       modify: async () => unavailable('Modifying an order'),
       cancel: async () => unavailable('Cancelling an order'),

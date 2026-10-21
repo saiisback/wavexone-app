@@ -7,6 +7,10 @@ const finiteNumber = z
   .union([z.number(), z.string().trim().min(1)])
   .transform(Number)
   .refine(Number.isFinite, 'Expected a finite number')
+const optionalOrderNumber = z.preprocess(
+  (value) => value === '---' ? undefined : value,
+  finiteNumber.optional(),
+)
 const nonNegativeInteger = finiteNumber.refine(
   (value) => Number.isInteger(value) && value >= 0,
   'Expected a non-negative integer',
@@ -75,6 +79,37 @@ export function parseTradingAccounts(input: unknown): TradingAccountRecord[] {
     mode: account.book,
     ...(account.account_type === undefined ? {} : { accountType: account.account_type }),
   }))
+}
+
+const accountDetailSchema = z.object({
+  status: successSchema,
+  data: z.object({
+    balance: finiteNumber,
+    fund: finiteNumber,
+    credit: finiteNumber.optional().default(0),
+    equity: finiteNumber.optional(),
+    currency: z.string().min(1).optional(),
+  }),
+})
+
+export type TradingAccountDetail = {
+  balance: number
+  fund: number
+  credit: number
+  equity?: number
+  currency?: string
+}
+
+/** Authoritative amounts used by the web dashboard's current account view. */
+export function parseAccountDetail(input: unknown): TradingAccountDetail {
+  const { data } = accountDetailSchema.parse(input)
+  return {
+    balance: data.balance,
+    fund: data.fund,
+    credit: data.credit,
+    ...(data.equity === undefined ? {} : { equity: data.equity }),
+    ...(data.currency === undefined ? {} : { currency: data.currency }),
+  }
 }
 
 const nullableCount = z.union([nonNegativeInteger, z.null()]).transform((value) => value ?? 0)
@@ -173,8 +208,10 @@ export function parseMarketCatalogue(input: unknown): MarketRecord[] {
 }
 
 export type SymbolMetadata = {
+  /** Legacy API name: contract units per lot, not the bid/ask price spread. */
   spread: number
   precision: number
+  /** Minimum order volume, not contract units. */
   lot: number
 }
 
@@ -310,8 +347,8 @@ const orderSchema = z.object({
   status: z.string().min(1),
   time: z.string().optional(),
   trigger: finiteNumber.optional(),
-  sl: finiteNumber.optional(),
-  tp: finiteNumber.optional(),
+  sl: optionalOrderNumber,
+  tp: optionalOrderNumber,
   close: finiteNumber.optional(),
   pnl: finiteNumber.optional(),
   t_swap: finiteNumber.optional(),
@@ -402,12 +439,25 @@ const closedHistorySchema = z.object({
   data: z.array(orderSchema),
 })
 
+const emptyClosedHistorySchema = z.union([
+  z.object({ status: z.literal('empty'), data: z.array(z.never()).length(0) }),
+  z.object({
+    status: z.literal('fail'),
+    message: z.enum(['No Results', 'Orders Not available!']),
+    data: z.array(z.never()).length(0),
+  }),
+  z.object({ status: successSchema, data: z.array(z.never()).length(0) }),
+])
+
 export type ClosedHistory = {
   orders: TradingOrderRecord[]
   info: z.infer<typeof historyInfoSchema>
 }
 
 export function parseClosedHistory(input: unknown): ClosedHistory {
+  if (emptyClosedHistorySchema.safeParse(input).success) {
+    return { orders: [], info: { page: 1, total: 0, count: 0 } }
+  }
   const parsed = closedHistorySchema.parse(input)
   const orders = mapOrders(parsed.data)
   if (orders.some((order) => order.state !== 'Closed')) {

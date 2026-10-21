@@ -1,8 +1,9 @@
+import { useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated'
 
-import { colors } from './colors'
 import { Text } from './text'
 import { fonts, motion, radius } from './tokens'
 
@@ -23,6 +24,8 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
 }: SegmentedControlProps<T>) {
+  const styles = useThemeStyles(themeStyles)
+
   const [width, setWidth] = useState(0)
   const segment = width > 0 ? (width - INSET * 2) / options.length : 0
   const index = Math.max(options.indexOf(value), 0)
@@ -56,7 +59,7 @@ export function SegmentedControl<T extends string>({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   track: {
     flexDirection: 'row',
     backgroundColor: colors.track,
@@ -71,7 +74,7 @@ const styles = StyleSheet.create({
     left: INSET,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.gold,
     boxShadow: '0px 0px 0px 0.5px rgba(0, 0, 0, 0.08), 0px 3px 8px rgba(20, 24, 43, 0.12), 0px 1px 1px rgba(20, 24, 43, 0.04)',
   },
   segment: {
@@ -87,6 +90,6 @@ const styles = StyleSheet.create({
   },
   labelSelected: {
     fontFamily: fonts.semibold,
-    color: colors.text,
+    color: colors.homePanel,
   },
-})
+}))

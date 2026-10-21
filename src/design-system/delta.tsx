@@ -1,6 +1,6 @@
+import { useColors } from './theme'
 import { StyleSheet, View } from 'react-native'
 
-import { colors } from './colors'
 import { DeltaTriangle } from './icons'
 import { Text } from './text'
 import { fonts } from './tokens'
@@ -19,6 +19,8 @@ export type DeltaProps = {
 
 /** Triangle plus signed percentage, the pairing used on every price surface. */
 export function Delta({ label, direction, onInk = false, onCard = false, size = 17 }: DeltaProps) {
+  const colors = useColors()
+
   const tint = onCard
     ? direction === 'flat' ? 'rgba(255, 255, 255, 0.72)' : direction === 'up' ? colors.walletGain : colors.walletLoss
     : direction === 'flat'
@@ -55,6 +57,8 @@ const styles = StyleSheet.create({
  * number gets lost next to the price.
  */
 export function DeltaPill({ label, direction, size = 13 }: Omit<DeltaProps, 'onInk'>) {
+  const colors = useColors()
+
   const flat = direction === 'flat'
   const up = direction === 'up'
   // Stocks style: a solid pill with white figures.

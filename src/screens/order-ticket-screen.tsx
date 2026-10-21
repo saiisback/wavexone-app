@@ -1,6 +1,8 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import * as Crypto from 'expo-crypto'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -20,7 +22,6 @@ import {
   Sheet,
   ShieldIcon,
   Text,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -44,6 +45,7 @@ import { mutationFailureMessage } from '../backend/errors'
 import { useBackend, useInvalidateQueries } from '../backend/provider'
 import { AFTER_TRADE } from '../features/shared/query-keys'
 import type { RootStackParamList } from '../navigation/types'
+import { useSession } from '../data/store'
 
 type OrderRoute = RouteProp<RootStackParamList, 'OrderTicket'>
 
@@ -55,10 +57,15 @@ const DECIMAL = /^\d+(\.\d+)?$/
  * firing a request.
  */
 export function OrderTicketScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { params } = useRoute<OrderRoute>()
   const goBack = useSafeBack()
   const showMenu = useActionMenu()
   const backend = useBackend()
+  const placing = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
 
   const invalidate = useInvalidateQueries()
 
@@ -67,7 +74,10 @@ export function OrderTicketScreen() {
   const side = params.side
   const isLimit = params.orderType === 'Limit'
 
-  const [lots, setLots] = useState(params.lots ?? 0.5)
+  // Tickets opened directly from Markets/Instrument detail have no draft
+  // quantity. Start at the common LP minimum instead of 0.50, which is an
+  // unnecessarily large first order for Forex and metals.
+  const [lots, setLots] = useState(params.lots ?? 0.01)
   const [limitPrice, setLimitPrice] = useState('')
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
@@ -113,7 +123,9 @@ export function OrderTicketScreen() {
   const step = (direction: 1 | -1) =>
     setLots((previous) => adjustOrderLots(previous, direction, terms))
 
-  const place = () =>
+  const place = () => {
+    if (placing.current) return
+    let consumed = false
     showMenu({
       title: `${side} ${formatLots(orderLots)} ${instrument.symbol}`,
       message: isLimit
@@ -123,6 +135,11 @@ export function OrderTicketScreen() {
         label: `Confirm ${side}`,
         destructive: true,
         onSelect: () => {
+          if (consumed || placing.current) return
+          consumed = true
+          placing.current = true
+          setSubmitting(true)
+          const idempotencyKey = Crypto.randomUUID()
           void backend.orders.place({
             instrumentId: instrument.id,
             side,
@@ -130,34 +147,52 @@ export function OrderTicketScreen() {
             ...(isLimit ? { limitPrice: limitPrice.trim() } : {}),
             stopLoss: stopLoss.trim() || undefined,
             takeProfit: takeProfit.trim() || undefined,
-            idempotencyKey: Crypto.randomUUID(),
+            idempotencyKey,
           }).then(() => {
+            const title = isLimit ? 'Limit order placed' : `${side} confirmed`
+            const message = isLimit
+              ? `${side} limit for ${formatLots(orderLots)} ${instrument.symbol} is pending at ${limitPrice.trim()}. Account ${account.number}.`
+              : `${side} order for ${formatLots(orderLots)} ${instrument.symbol} was confirmed. Account ${account.number}.`
+            useSession.getState().addLocalNotification({
+              id: `local:order:${idempotencyKey}`,
+              kind: 'order',
+              title,
+              body: message,
+              time: new Date().toISOString(),
+            })
             invalidate(...AFTER_TRADE)
-            goBack()
-          }).catch((error: unknown) => showMenu({
-            title: 'Order not confirmed',
-            message: mutationFailureMessage(error),
-            options: [{ label: 'Got it' }],
-          }))
+            // Present while the ticket is still mounted; dismissing a native
+            // sheet first can swallow the iOS confirmation during transition.
+            showMenu({ title, message, options: [{ label: 'Done', onSelect: goBack }] })
+          }).catch((error: unknown) => {
+            placing.current = false
+            setSubmitting(false)
+            showMenu({
+              title: 'Order not confirmed',
+              message: mutationFailureMessage(error),
+              options: [{ label: 'Got it' }],
+            })
+          })
         },
       }],
     })
+  }
 
   const [lotCount, lotUnit] = formatLots(orderLots).split(' ')
-  const tone = side === 'Buy' ? 'brand' : 'night'
+  const tone = side === 'Buy' ? 'gold' : 'ink'
 
   return (
     <Sheet
       title="Review order"
       footer={
-        <Button tone={tone} disabled={!canPlace} onPress={place}>
+        <Button tone={tone} disabled={!canPlace || submitting} loading={submitting} onPress={place}>
           <ButtonRow>
             <ButtonText tone={tone}>
-              {isLimit
+              {submitting ? 'Submitting order…' : isLimit
                 ? limitValid ? `${side} limit at ${limitPrice.trim()}` : `${side} limit`
                 : `${side} at ${formatPrice(price, instrument.precision)}`}
             </ButtonText>
-            <ArrowRightIcon size={18} color={side === 'Buy' ? colors.white : colors.ink} />
+            <ArrowRightIcon size={18} color={side === 'Buy' ? colors.homePanel : colors.white} />
           </ButtonRow>
         </Button>
       }
@@ -293,7 +328,7 @@ export function OrderTicketScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   quotePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -347,4 +382,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing.lg,
   },
-})
+}))

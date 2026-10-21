@@ -1,6 +1,7 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StyleSheet, View } from 'react-native'
 
-import { colors } from './colors'
 import { PressableScale } from './pressable'
 import { Text } from './text'
 import { shadow } from './tokens'
@@ -21,6 +22,8 @@ export function CircleButton({
   tone = 'outline',
   accessibilityLabel,
 }: CircleButtonProps) {
+  const tones = useThemeStyles(themeTones)
+
   return (
     // The press target already carries the button role; a second one inside
     // it nests a <button> in a <button> on web.
@@ -44,6 +47,9 @@ export function CircleAction({
   onPress?: () => void
   tone?: 'onInk' | 'gold'
 }) {
+  const colors = useColors()
+  const tones = useThemeStyles(themeTones)
+
   return (
     <PressableScale onPress={onPress} scaleTo={0.94} style={styles.action} accessibilityLabel={label}>
       <View style={[styles.base, tones[tone], styles.actionCircle]}>
@@ -78,7 +84,7 @@ const styles = StyleSheet.create({
   },
 })
 
-const tones = StyleSheet.create({
+const themeTones = (colors: Palette) => (StyleSheet.create({
   // Frosted disc on the canvas.
   outline: {
     backgroundColor: colors.glass,
@@ -92,14 +98,14 @@ const tones = StyleSheet.create({
   },
   // Solid brand disc: the one primary action in a header.
   ink: {
-    backgroundColor: colors.brand,
+    backgroundColor: colors.royal,
     boxShadow: '0px 8px 18px rgba(20, 24, 43, 0.25)',
   },
   // Liquid Glass disc: thin white with a specular rim.
   glass: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: colors.frostSoft,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
+    borderColor: colors.glassBorder,
     boxShadow: 'inset 0px 1px 1px rgba(255, 255, 255, 0.95), 0px 0px 0px 0.5px rgba(20, 24, 43, 0.06), 0px 6px 18px rgba(20, 24, 43, 0.08)',
   },
   // Quiet tinted disc.
@@ -112,4 +118,4 @@ const tones = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.glassOnInkEdge,
   },
-})
+}))

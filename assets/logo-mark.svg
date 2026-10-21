@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="3 8.81 419.98 166.2">
+  <defs>
+    <linearGradient id="goldGrad" x1="317.99" y1="71.98" x2="422.98" y2="71.98" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d4af37"/>
+      <stop offset="1" stop-color="#f4e04d"/>
+    </linearGradient>
+  </defs>
+  <polygon points="87.7 175.01 168.94 175.01 84.24 8.81 3 8.81 87.7 175.01" fill="#ffffff"/>
+  <polygon points="168.94 175.01 87.7 175.01 172.37 8.81 253.61 8.81 168.94 175.01" fill="#ffffff"/>
+  <polygon points="317.99 55.44 341.74 8.81 422.98 8.81 358.61 135.15 317.99 55.44" fill="url(#goldGrad)"/>
+  <polygon points="257.04 175.01 338.28 175.01 253.61 8.81 172.37 8.81 257.04 175.01" fill="#ffffff"/>
+</svg>

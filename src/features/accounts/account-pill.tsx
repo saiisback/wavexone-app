@@ -1,6 +1,8 @@
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
-import { ChevronDownIcon, Pressable, Text, colors, fonts, radius, shadow } from '../../design-system'
+import { ChevronDownIcon, Pressable, Text, fonts, radius, shadow } from '../../design-system'
 
 /**
  * The selected account as a pill — live/demo dot, mode and number — that
@@ -18,6 +20,9 @@ export function AccountPill({
   onPress: () => void
   tone?: 'light' | 'onInk'
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const ink = tone === 'onInk'
   const demo = mode === 'DEMO'
   return (
@@ -38,7 +43,7 @@ export function AccountPill({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -91,4 +96,4 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontVariant: ['tabular-nums'],
   },
-})
+}))

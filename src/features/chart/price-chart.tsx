@@ -1,5 +1,7 @@
-import { useState } from 'react'
-import { StyleSheet, View, type LayoutChangeEvent, type TextStyle } from 'react-native'
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
+import { useMemo, useState } from 'react'
+import { Linking, StyleSheet, View, type LayoutChangeEvent, type TextStyle } from 'react-native'
 import Animated, {
   useAnimatedReaction,
   useAnimatedStyle,
@@ -7,10 +9,10 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated'
-import { Stop } from 'react-native-svg'
+import Svg, { Path, Stop } from 'react-native-svg'
 import { AnimatedText, LineChart } from 'react-native-wagmi-charts'
 
-import { Card, Text, colors, fonts, radius, type } from '../../design-system'
+import { Card, Pressable, Text, colors, fonts, radius, type } from '../../design-system'
 import { formatPrice } from '../../data/format'
 import type { ChartSeries } from '../../data/types'
 import { formatPercentWorklet, formatPriceWorklet, formatStampWorklet } from './worklet-format'
@@ -31,10 +33,10 @@ export function PriceChartProvider({
   series: ChartSeries
   children: React.ReactNode
 }) {
-  const data = series.points.map((value, index) => ({
+  const data = useMemo(() => series.points.map((value, index) => ({
     timestamp: series.times?.[index] ?? index,
     value,
-  }))
+  })), [series.points, series.times])
   return (
     // Fixed to the round axis so the gridlines and the path agree.
     <LineChart.Provider data={data} yRange={{ min: series.min, max: series.max }}>
@@ -63,6 +65,8 @@ const SCRUB_HOLD_MS = 160
 /** Space above the highest and below the lowest tick. */
 const Y_GUTTER = 16
 
+const TRADINGVIEW_URL = 'https://www.tradingview.com/'
+
 type Size = { width: number; height: number }
 
 /**
@@ -76,6 +80,9 @@ type Size = { width: number; height: number }
  * Sell / Buy pair on every screen height.
  */
 export function PriceChart({ series, color: override, precision }: PriceChartProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   // Apple Stocks convention: green when the period closed above where it
   // opened, red when below.
   const first = series.points[0] ?? 0
@@ -204,7 +211,41 @@ export function PriceChart({ series, color: override, precision }: PriceChartPro
           </Text>
         ))}
       </View>
+      <TradingViewAttribution />
     </Card>
+  )
+}
+
+export function TradingViewAttribution() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel="Charting by TradingView"
+      onPress={() => void Linking.openURL(TRADINGVIEW_URL)}
+      style={styles.attribution}
+      hitSlop={8}
+    >
+      <Text variant="micro" color={colors.textSubtle}>WaveX feed</Text>
+      <View style={styles.attributionDivider} />
+      <Svg width={35} height={19} viewBox="0 0 35 19" accessibilityElementsHidden>
+        <Path
+          fill={colors.textSubtle}
+          fillRule="evenodd"
+          d="M2 0H0v10h6v9h21.4l.5-1.3 6-15 1-2.7H23.7l-.5 1.3-.2.6a5 5 0 0 0-7-.9V0H2Zm20 17h4l5.2-13 .8-2h-7l-1 2.5-.2.5-1.5 3.8-.3.7V17Zm-.8-10a3 3 0 0 0 .7-2.7A3 3 0 1 0 16.8 7h4.4ZM14 7V2H2v6h6v9h4V7h2Z"
+          clipRule="evenodd"
+        />
+        <Path
+          fill={colors.surface}
+          fillRule="evenodd"
+          d="M14 2H2v6h6v9h6V2Zm12 15h-7l6-15h7l-6 15Zm-7-9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+          clipRule="evenodd"
+        />
+      </Svg>
+      <Text variant="micro" weight="medium" color={colors.textMuted}>Charting by TradingView</Text>
+    </Pressable>
   )
 }
 
@@ -213,6 +254,8 @@ export function PriceChart({ series, color: override, precision }: PriceChartPro
  * fading in and out rather than blinking, and drawn in the line's colour.
  */
 function CursorGuide({ height, color }: { height: number; color: string }) {
+  const styles = useThemeStyles(themeStyles)
+
   const { currentX, isActive } = LineChart.useChart()
   // A plain number animated on its own, read by the style below.
   const shown = useSharedValue(0)
@@ -256,9 +299,11 @@ export function ChartReadout({
   priceStyle,
   captionStyle,
 }: ChartReadoutProps) {
+  const styles = useThemeStyles(themeStyles)
+
   const { currentIndex, isActive, data } = LineChart.useChart()
-  const values = (data ?? []).map((point) => point.value)
-  const stamps = (data ?? []).map((point) => point.timestamp)
+  const values = useMemo(() => (data ?? []).map((point) => point.value), [data])
+  const stamps = useMemo(() => (data ?? []).map((point) => point.timestamp), [data])
   const idlePrice = formatPrice(price, precision)
 
   const priceText = useDerivedValue(() => {
@@ -292,7 +337,7 @@ function buildTicks(min: number, max: number, step: number) {
   return Array.from({ length: count + 1 }, (_, index) => max - index * step)
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   card: {
     flex: 1,
     paddingTop: 14,
@@ -342,7 +387,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
-    backgroundColor: colors.brand,
+    backgroundColor: colors.royal,
     boxShadow: '0px 6px 16px rgba(20, 24, 43, 0.28)',
   },
   tooltipText: {
@@ -365,6 +410,19 @@ const styles = StyleSheet.create({
     height: 28,
     alignItems: 'center',
   },
+  attribution: {
+    minHeight: 22,
+    paddingRight: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 7,
+  },
+  attributionDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 12,
+    backgroundColor: colors.grid,
+  },
   column: {
     flex: 1,
     textAlign: 'center',
@@ -378,7 +436,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     includeFontPadding: false,
   },
-})
+}))
 
 /** Used by the hero read-out's text styles: the live price at hero size. */
 export const readoutFonts = {

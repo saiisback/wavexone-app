@@ -1,9 +1,9 @@
+import { useColors } from './theme'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Stop } from 'react-native-svg'
 import { LineChart } from 'react-native-wagmi-charts'
 
-import { colors } from './colors'
 import './sparkline.css'
 
 export type SparklineProps = {
@@ -49,11 +49,14 @@ function SparklinePath({
   points,
   width,
   height = 44,
-  color = colors.green,
+  color,
   strokeWidth = 2,
   showEndpoint = false,
   fillOpacity = 0.24,
 }: Omit<SparklineProps, 'width'> & { width: number }) {
+  const colors = useColors()
+  color ??= colors.green
+
   const box = { width, height }
   if (points.length < 2) return <View style={box} />
 

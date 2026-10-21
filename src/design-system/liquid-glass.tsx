@@ -1,7 +1,8 @@
+import { useTheme, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { BlurView } from 'expo-blur'
 import { Platform, StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native'
 
-import { colors } from './colors'
 
 /**
  * Apple-style controls. `clear` is the quiet grey disc of a Wallet action
@@ -20,16 +21,20 @@ export function LiquidGlass({
   blur?: boolean
   style?: StyleProp<ViewStyle>
 }) {
+  const fills = useThemeStyles(themeFills)
+  const styles = useThemeStyles(themeStyles)
+  const { scheme } = useTheme()
+
   const real = tint === 'frost' && blur && Platform.OS !== 'android'
   return (
     <View {...rest} style={[styles.base, real ? styles.frostOverBlur : fills[tint], style]}>
-      {real ? <BlurView intensity={70} tint="light" style={styles.layer} /> : null}
+      {real ? <BlurView intensity={70} tint={scheme} style={styles.layer} /> : null}
       {children}
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => StyleSheet.create({
   base: {
     overflow: 'hidden',
     borderCurve: 'continuous',
@@ -39,18 +44,18 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   frostOverBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    backgroundColor: colors.frost,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(60, 60, 67, 0.14)',
+    borderColor: colors.border,
   },
 })
 
-const fills = StyleSheet.create({
+const themeFills = (colors: Palette) => (StyleSheet.create({
   clear: { backgroundColor: colors.accent },
   frost: {
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    backgroundColor: colors.frostStrong,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(60, 60, 67, 0.14)',
+    borderColor: colors.border,
   },
-  accent: { backgroundColor: colors.brand },
-})
+  accent: { backgroundColor: colors.royal },
+}))

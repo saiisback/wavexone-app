@@ -1,6 +1,7 @@
+import { useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { Text as RNText, StyleSheet, type TextProps as RNTextProps } from 'react-native'
 
-import { colors } from './colors'
 import { fonts, type } from './tokens'
 
 type Variant = keyof typeof type
@@ -18,6 +19,8 @@ export type TextProps = RNTextProps & {
  * `Text` directly, which keeps the type scale in `tokens.ts` enforceable.
  */
 export function Text({ variant = 'body', weight, color, style, ...rest }: TextProps) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <RNText
       {...rest}
@@ -32,8 +35,8 @@ export function Text({ variant = 'body', weight, color, style, ...rest }: TextPr
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   base: {
     color: colors.text,
   },
-})
+}))

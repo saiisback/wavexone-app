@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { BackendProvider } from './src/backend/provider'
 import { SignedInDataBootstrap } from './src/backend/data-bootstrap'
 import { SessionProvider, useAppSession } from './src/backend/session-provider'
-import { ActionMenuProvider, BrandSplash } from './src/design-system'
+import { ActionMenuProvider, BrandSplash, ThemeProvider, useTheme, Text, useColors } from './src/design-system'
 import { RootNavigator } from './src/navigation/root-navigator'
 import { SignInScreen } from './src/screens/sign-in-screen'
 
@@ -16,21 +16,32 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
         {/*
          * One backend for the whole app. The duplicate-submission memo lives
          * on the instance, so a second one would let a mutation run twice.
          */}
         <BackendProvider>
           <SessionProvider>
-            <ActionMenuProvider>
-              <SessionGate />
-            </ActionMenuProvider>
+            <ThemeProvider>
+              <AppAppearance />
+              <ActionMenuProvider>
+                <SessionGate />
+              </ActionMenuProvider>
+            </ThemeProvider>
           </SessionProvider>
         </BackendProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )
+}
+
+function AppAppearance() {
+  const { scheme, error } = useTheme()
+  const colors = useColors()
+  return <>
+    <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+    {error ? <Text accessibilityRole="alert" style={{ backgroundColor: colors.surface, color: colors.red, padding: 16 }}>{error}</Text> : null}
+  </>
 }
 
 /**

@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../../design-system/theme'
+import type { Palette } from '../../design-system/colors'
 import { StyleSheet, View } from 'react-native'
 
 import {
@@ -9,7 +11,6 @@ import {
   Sparkline,
   Text,
   TickFlash,
-  colors,
   radius,
   spacing,
   type AssetIconKind,
@@ -65,6 +66,9 @@ export function MoverCard({
   onPress,
   featured = false,
 }: MoverCardProps) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const quote = useLiveQuote(id)
   const price = quote?.price ?? snapshotPrice
   const changePercent = changeBase ? ((price - changeBase) / changeBase) * 100 : snapshotChange
@@ -132,7 +136,7 @@ export function MoverCard({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   card: {
     width: MOVER_CARD_WIDTH,
     borderRadius: radius.card,
@@ -174,4 +178,4 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     fontVariant: ['tabular-nums'],
   },
-})
+}))

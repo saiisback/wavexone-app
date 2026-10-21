@@ -1,8 +1,9 @@
+import { useColors, useThemeStyles, useTheme } from './theme'
+import type { Palette } from './colors'
 import { createContext, use, useRef, useState } from 'react'
 import { ActionSheetIOS, Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { colors } from './colors'
 import { Text } from './text'
 import { fonts, radius } from './tokens'
 
@@ -31,6 +32,8 @@ const ActionMenuContext = createContext<Show | undefined>(undefined)
  * up from the bottom, which is the closest platform equivalent.
  */
 export function ActionMenuProvider({ children }: { children: React.ReactNode }) {
+  const { scheme } = useTheme()
+  const colors = useColors()
   const [request, setRequest] = useState<ActionMenuRequest | undefined>(undefined)
   // Kept in a ref so dismissing never has to wait for a re-render.
   const pending = useRef<ActionMenuRequest | undefined>(undefined)
@@ -41,6 +44,8 @@ export function ActionMenuProvider({ children }: { children: React.ReactNode }) 
       ActionSheetIOS.showActionSheetWithOptions(
         {
           title: next.title,
+          userInterfaceStyle: scheme,
+          tintColor: colors.brand,
           message: next.message,
           options: [...enabled.map((option) => option.label), 'Cancel'],
           cancelButtonIndex: enabled.length,
@@ -88,6 +93,9 @@ function FallbackSheet({
   onDismiss: () => void
   onSelect: (option: ActionOption) => void
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const insets = useSafeAreaInsets()
 
   return (
@@ -149,7 +157,7 @@ function FallbackSheet({
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   scrim: {
     position: 'absolute',
     top: 0,
@@ -209,4 +217,4 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: colors.text,
   },
-})
+}))

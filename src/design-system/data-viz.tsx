@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { useEffect } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, {
@@ -12,7 +14,7 @@ import Svg, { Circle } from 'react-native-svg'
 import { colors } from './colors'
 import { motion, radius } from './tokens'
 
-const FILL = {
+const themeFILL = (colors: Palette) => ({
   navy: colors.navy,
   brand: colors.brandBright,
   gold: colors.gold,
@@ -21,12 +23,12 @@ const FILL = {
   onInk: colors.onInk,
   green: colors.green,
   red: colors.red,
-} as const
+} as const)
 
-const TRACK = {
+const themeTRACK = (colors: Palette) => ({
   light: colors.navyTint,
   onInk: 'rgba(255, 255, 255, 0.16)',
-} as const
+} as const)
 
 /**
  * A share of a whole, 0–1. The fill grows in from the left on mount and
@@ -39,10 +41,13 @@ export function ProgressBar({
   height = 8,
 }: {
   value: number
-  tone?: keyof typeof FILL
-  track?: keyof typeof TRACK
+  tone?: keyof ReturnType<typeof themeFILL>
+  track?: keyof ReturnType<typeof themeTRACK>
   height?: number
 }) {
+  const FILL = useThemeStyles(themeFILL)
+  const TRACK = useThemeStyles(themeTRACK)
+
   const clamped = Math.min(Math.max(value, 0), 1)
   const progress = useSharedValue(0)
   useEffect(() => {
@@ -134,6 +139,8 @@ export function Donut({
 
 /** The empty ring behind the segments; it does not turn. */
 function DonutTrack({ size, r, thickness }: { size: number; r: number; thickness: number }) {
+  const colors = useColors()
+
   return (
     <Svg width={size} height={size} style={styles.layer}>
       <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.track} strokeWidth={thickness} fill="none" />

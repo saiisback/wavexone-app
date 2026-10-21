@@ -1,4 +1,4 @@
-import { Pressable as RNPressable, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable as RNPressable, type AccessibilityState, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -20,6 +20,7 @@ export type PressableScaleProps = {
   disabled?: boolean
   hitSlop?: number
   accessibilityLabel?: string
+  accessibilityState?: AccessibilityState
 }
 
 const TIMING = { duration: 120 }
@@ -46,6 +47,7 @@ export function PressableScale({
   disabled = false,
   hitSlop = 0,
   accessibilityLabel,
+  accessibilityState,
 }: PressableScaleProps) {
   const pressed = useSharedValue(0)
 
@@ -59,6 +61,7 @@ export function PressableScale({
       <RNPressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ ...accessibilityState, disabled }}
         disabled={disabled}
         hitSlop={hitSlop}
         onPress={onPress}

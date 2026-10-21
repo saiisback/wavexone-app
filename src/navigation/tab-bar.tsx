@@ -1,13 +1,11 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useEffect, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, {
-  Easing,
-  interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
-  withRepeat,
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
@@ -16,11 +14,9 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 
 import {
   CandlesIcon,
-  LiquidGlass,
   PressableScale,
   TAB_BAR_HEIGHT,
   Text,
-  colors,
   fonts,
   motion,
   shadow,
@@ -38,6 +34,8 @@ import type { TabParamList } from './types'
  * it reads only as soft colour, never as legible text.
  */
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const styles = useThemeStyles(themeStyles)
+
   const insets = useSafeAreaInsets()
   const [width, setWidth] = useState(0)
   const slot = width / Math.max(state.routes.length, 1)
@@ -66,7 +64,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     <>
     <EdgeFade height={bottom + TAB_BAR_HEIGHT + 28} />
     <View pointerEvents="box-none" style={[styles.dock, { bottom }]}>
-      <LiquidGlass tint="frost" style={styles.surface} />
+      <View style={styles.surface} />
       <View style={styles.row} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
         <Animated.View pointerEvents="none" style={[styles.capsule, capsule]} />
         {state.routes.map((route, index) => {
@@ -104,14 +102,17 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
  * showing through the gaps.
  */
 function EdgeFade({ height }: { height: number }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View pointerEvents="none" style={[styles.fade, { height }]}>
       <Svg width="100%" height="100%" preserveAspectRatio="none">
         <Defs>
           <LinearGradient id="tab-edge-fade" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={colors.bg} stopOpacity={0} />
-            <Stop offset="0.45" stopColor={colors.bg} stopOpacity={0.85} />
-            <Stop offset="1" stopColor={colors.bg} stopOpacity={1} />
+            <Stop offset="0" stopColor={colors.homeBlack} stopOpacity={0} />
+            <Stop offset="0.58" stopColor={colors.homeBlack} stopOpacity={0.72} />
+            <Stop offset="1" stopColor={colors.homeBlack} stopOpacity={1} />
           </LinearGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#tab-edge-fade)" />
@@ -121,19 +122,12 @@ function EdgeFade({ height }: { height: number }) {
 }
 
 /**
- * The white glass disc that rises out of the bar, with a slow grey halo
- * breathing out from it. Taken out of flow so its label keeps the baseline
+ * The navy trade disc rises out of the bar. Taken out of flow so its label keeps the baseline
  * of the others; presses fall through to the row.
  */
 function TradeDisc({ focused }: { focused: boolean }) {
-  const halo = useSharedValue(0)
-  useEffect(() => {
-    halo.set(withDelay(900, withRepeat(withTiming(1, { duration: 2600, easing: Easing.out(Easing.quad) }), -1, false)))
-  }, [halo])
-  const haloStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(halo.get(), [0, 1], [0.22, 0]),
-    transform: [{ scale: interpolate(halo.get(), [0, 1], [1, 1.5]) }],
-  }))
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
 
   // A number in a shared value, turned into "Ndeg" per frame: the spring
   // itself can never be interpolated into a string.
@@ -150,13 +144,12 @@ function TradeDisc({ focused }: { focused: boolean }) {
 
   return (
     <View style={styles.discAnchor} pointerEvents="none">
-      <Animated.View style={[styles.halo, haloStyle]} />
       <Animated.View style={[styles.disc, lift]}>
-        <LiquidGlass tint="frost" style={styles.discGlass}>
+        <View style={styles.discGlass}>
           <Animated.View style={glyph}>
-            <CandlesIcon size={26} color={colors.text} />
+            <CandlesIcon size={26} color={colors.homeBlack} />
           </Animated.View>
-        </LiquidGlass>
+        </View>
       </Animated.View>
     </View>
   )
@@ -164,6 +157,8 @@ function TradeDisc({ focused }: { focused: boolean }) {
 
 /** The tab's icon: outline at rest, filled and lifted when selected. */
 function TabGlyph({ name, focused }: { name: keyof TabParamList; focused: boolean }) {
+  const colors = useColors()
+
   const active = useSharedValue(focused ? 1 : 0)
   useEffect(() => {
     active.set(withSpring(focused ? 1 : 0, motion.spring))
@@ -172,7 +167,7 @@ function TabGlyph({ name, focused }: { name: keyof TabParamList; focused: boolea
     transform: [{ scale: 1 + 0.06 * active.get() }, { translateY: -1 * active.get() }],
   }))
 
-  const color = focused ? colors.text : colors.textMuted
+  const color = focused ? colors.gold : 'rgba(255, 255, 255, 0.58)'
   const props = { size: 23, color, active: focused }
   return (
     <Animated.View style={lift}>
@@ -186,9 +181,9 @@ function TabGlyph({ name, focused }: { name: keyof TabParamList; focused: boolea
 
 const DISC = 58
 const GLYPH = 28
-const CAPSULE_WIDTH = 62
+const CAPSULE_WIDTH = 36
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   fade: {
     position: 'absolute',
     left: 0,
@@ -200,10 +195,14 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
   },
-  // Dense frost: whatever scrolls beneath reads as colour, not text.
+  // Dark dock from the selected reference; content remains visible above it.
   surface: {
     ...StyleSheet.absoluteFill,
-    borderRadius: 34,
+    borderRadius: 28,
+    backgroundColor: colors.homeBlack,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.10)',
+    boxShadow: shadow.float,
   },
   row: {
     height: TAB_BAR_HEIGHT,
@@ -211,15 +210,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
   },
-  // The selected lozenge: brighter glass with its own rim.
+  // A precise gold rail marks the selected destination without a pill.
   capsule: {
     position: 'absolute',
     left: 6,
-    top: (TAB_BAR_HEIGHT - 54) / 2,
+    top: TAB_BAR_HEIGHT - 6,
     width: CAPSULE_WIDTH,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: colors.track,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: colors.gold,
   },
   item: {
     flex: 1,
@@ -244,13 +243,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  halo: {
-    position: 'absolute',
-    width: DISC,
-    height: DISC,
-    borderRadius: DISC / 2,
-    backgroundColor: colors.textSubtle,
-  },
   disc: {
     width: DISC,
     height: DISC,
@@ -262,15 +254,18 @@ const styles = StyleSheet.create({
     borderRadius: DISC / 2,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.gold,
+    borderWidth: 1,
+    borderColor: colors.goldSoft,
   },
   label: {
     fontFamily: fonts.medium,
     fontSize: 11,
     lineHeight: 14,
-    color: colors.textSubtle,
+    color: 'rgba(255, 255, 255, 0.54)',
   },
   labelActive: {
     fontFamily: fonts.semibold,
-    color: colors.text,
+    color: colors.gold,
   },
-})
+}))

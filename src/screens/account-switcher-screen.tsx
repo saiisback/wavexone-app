@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import * as Crypto from 'expo-crypto'
 import { StyleSheet, View } from 'react-native'
 
@@ -15,7 +17,6 @@ import {
   Sheet,
   SwapIcon,
   Text,
-  colors,
   radius,
   shadow,
   spacing,
@@ -30,6 +31,9 @@ import { QueryStateView } from '../features/shared/query-state'
 
 /** Reached from the account pill on Positions and Trade, and from More. */
 export function AccountSwitcherScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const goBack = useSafeBack()
   const showMenu = useActionMenu()
   const backend = useBackend()
@@ -95,10 +99,10 @@ export function AccountSwitcherScreen() {
     <Sheet
       title="Switch account"
       footer={
-        <Button tone="ink" onPress={openNewAccount} accessibilityLabel="Open a new account">
+        <Button tone="gold" onPress={openNewAccount} accessibilityLabel="Open a new account">
           <ButtonRow>
-            <PlusIcon size={18} color={colors.white} />
-            <ButtonText tone="ink">Open a new account</ButtonText>
+            <PlusIcon size={18} color={colors.homePanel} />
+            <ButtonText tone="gold">Open a new account</ButtonText>
           </ButtonRow>
         </Button>
       }
@@ -150,6 +154,9 @@ function AccountCard({
   active: boolean
   onPress: (accountId: string) => void
 }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const summary = hasAccountSummary(account)
     ? `Equity ${formatMoney(account.equity)}. Leverage 1:${account.leverage}. Month ${formatPercent(account.changePercent)}.`
     : `Balance ${formatPrice(account.balance, 2)}. Select to load full account details.`
@@ -234,7 +241,7 @@ function AccountCard({
 
 const RADIO = 22
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   intro: {
     alignItems: 'center',
     gap: spacing.xs,
@@ -268,8 +275,8 @@ const styles = StyleSheet.create({
     boxShadow: shadow.card,
   },
   cardActive: {
-    borderColor: colors.brand,
-    backgroundColor: colors.brandTint,
+    borderColor: colors.goldDeep,
+    backgroundColor: colors.goldSoft,
   },
   header: {
     flexDirection: 'row',
@@ -287,14 +294,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glass,
   },
   radioActive: {
-    borderColor: colors.brand,
-    backgroundColor: colors.brand,
+    borderColor: colors.goldDeep,
+    backgroundColor: colors.gold,
   },
   radioDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.glass,
+    backgroundColor: colors.homePanel,
   },
   identity: {
     flex: 1,
@@ -349,4 +356,4 @@ const styles = StyleSheet.create({
   figureEnd: {
     alignItems: 'flex-end',
   },
-})
+}))

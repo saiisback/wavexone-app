@@ -1,15 +1,19 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import { FlashList } from '@shopify/flash-list'
 import * as Crypto from 'expo-crypto'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
-  Aurora,
   Amount,
+  Button,
+  ButtonText,
   Card,
   Donut,
   EmptyState,
+  HomeAtmosphere,
   LiveDot,
   PageBar,
   PageScreen,
@@ -20,7 +24,6 @@ import {
   SegmentedControl,
   TAB_BAR_CLEARANCE,
   Text,
-  colors,
   radius,
   spacing,
   useActionMenu,
@@ -32,6 +35,7 @@ import { mutationFailureMessage } from '../backend/errors'
 import { useBackend, useBackendQuery, useInvalidateQueries } from '../backend/provider'
 import { formatLots, formatMoney, formatSignedMoney } from '../data/format'
 import { markPosition } from '../data/live-quote'
+import { useSession } from '../data/store'
 import type { Instrument, Position } from '../data/types'
 import { useAccountData } from '../features/accounts/use-account-data'
 import { AccountPill } from '../features/accounts/account-pill'
@@ -72,7 +76,14 @@ const EMPTY_MESSAGE: Record<Tab, string> = {
 
 /** Positions tab: floating P&L, state filter, and the position cards. */
 export function PositionsScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const [tab, setTab] = useState<Tab>('Open')
+  const active = useRef(true)
+  const locks = useRef(new Set<string>())
+  const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(new Set())
+  useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   const showMenu = useActionMenu()
   const backend = useBackend()
   const invalidate = useInvalidateQueries()
@@ -83,24 +94,27 @@ export function PositionsScreen() {
   const accountData = useAccountData()
   const { catalogue } = useMarketData()
   const accountId = accountData.status === 'ready' ? accountData.data.account?.id : null
+  const [historyCursor, setHistoryCursor] = useState<{ accountId: string | null | undefined; page: number }>({ accountId: null, page: 1 })
+  const historyPage = historyCursor.accountId === accountId ? historyCursor.page : 1
   const openPositions = useBackendQuery(`positions:${accountId ?? 'none'}`, (backend) =>
     accountId ? backend.orders.list(accountId) : Promise.resolve([]),
   )
-  const closedPositions = useBackendQuery(`history:${accountId ?? 'none'}`, (backend) =>
-    accountId ? backend.orders.history(accountId) : Promise.resolve([]),
+  const closedPage = useBackendQuery(`history:${accountId ?? 'none'}:page:${historyPage}`, (backend) =>
+    accountId ? backend.orders.historyPage(accountId, { page: historyPage }) : Promise.resolve({ positions: [], page: 1, hasMore: false }),
   )
+  const closedPositions = closedPage.status === 'ready' ? { ...closedPage, data: closedPage.data.positions } : closedPage
 
-  if (accountData.status !== 'ready' || !accountData.data.account || catalogue.status !== 'ready') {
+  if (accountData.status !== 'ready' || !accountData.data.account) {
     if (accountData.status === 'ready' && !accountData.data.account) {
       return (
-        <PageScreen title="Positions" contentStyle={styles.gutter}>
+        <PageScreen title="Positions" tone="reference" contentStyle={styles.gutter}>
           <AccountSummaryUnavailable account={accountData.data.selectedAccount} />
         </PageScreen>
       )
     }
-    const state = accountData.status !== 'ready' ? accountData : catalogue
+    const state = accountData
     return (
-      <PageScreen title="Positions" contentStyle={styles.gutter}>
+      <PageScreen title="Positions" tone="reference" contentStyle={styles.gutter}>
         <QueryStateView state={state} render={() => null} />
       </PageScreen>
     )
@@ -109,7 +123,7 @@ export function PositionsScreen() {
   const account = accountData.data.account
   const positionState = tab === 'Closed' ? closedPositions : openPositions
   const positions = positionState.status === 'ready' ? positionState.data : []
-  const instrumentsById = new Map(catalogue.data.map((item) => [item.id, item]))
+  const instrumentsById = new Map((catalogue.status === 'ready' ? catalogue.data : []).map((item) => [item.id, item]))
   const positionsById = new Map(positions.map((item) => [item.id, item]))
 
   // A market the price feed does not carry still lists its positions.
@@ -127,6 +141,8 @@ export function PositionsScreen() {
     const position = positionsById.get(id)
     const instrument = position ? instrumentOf(position) : undefined
     if (!position || !instrument) return
+    const scope = `${accountId}:${id}`
+    if (locks.current.has(scope)) return
 
     if (tab === 'Closed') {
       openInstrument(position.instrumentId)
@@ -146,6 +162,7 @@ export function PositionsScreen() {
       return
     }
 
+    let consumed = false
     showMenu({
       title: `${ACTION_LABEL[tab]} — ${instrument.symbol}`,
       message: `${position.side} ${formatLots(position.lots)} · ${formatSignedMoney(position.pnl)}. Sent once and not automatically retried.`,
@@ -154,15 +171,26 @@ export function PositionsScreen() {
           label: ACTION_LABEL[tab],
           destructive: true,
           onSelect: () => {
+            if (consumed || !active.current || useSession.getState().accountId !== accountId || locks.current.has(scope)) return
+            consumed = true
+            locks.current.add(scope)
+            setPendingActions(new Set(locks.current))
             const request = { positionId: id, idempotencyKey: Crypto.randomUUID() }
-            const mutation = tab === 'Pending'
-              ? backend.orders.cancel(request)
-              : backend.orders.close(request)
-            void mutation.then(() => invalidate(...AFTER_TRADE)).catch((error: unknown) => showMenu({
-              title: 'Action not confirmed',
-              message: mutationFailureMessage(error),
-              options: [{ label: 'Got it' }],
-            }))
+            const mutation = (async () => {
+              if (tab === 'Pending') await backend.orders.cancel(request)
+              else await backend.orders.close(request)
+            })()
+            void mutation.then(() => invalidate(...AFTER_TRADE)).catch((error: unknown) => {
+              if (!active.current || useSession.getState().accountId !== accountId) return
+              showMenu({
+                title: 'Action not confirmed',
+                message: mutationFailureMessage(error),
+                options: [{ label: 'Got it' }],
+              })
+            }).finally(() => {
+              locks.current.delete(scope)
+              if (active.current) setPendingActions(new Set(locks.current))
+            })
           },
         },
         { label: 'View chart', onSelect: () => openInstrument(position.instrumentId) },
@@ -203,22 +231,23 @@ export function PositionsScreen() {
         instrument={instrument}
         streamed={instrumentsById.has(item.instrumentId)}
         actionLabel={
-          item.executing ? 'Executing…' : item.busy ? 'Closing…' : CARD_ACTION_LABEL[tab]
+          pendingActions.has(`${accountId}:${item.id}`) ? (tab === 'Pending' ? 'Cancelling…' : 'Closing…') : item.executing ? 'Executing…' : item.busy ? 'Closing…' : CARD_ACTION_LABEL[tab]
         }
+        actionLoading={pendingActions.has(`${accountId}:${item.id}`)}
         variant={tab === 'Open' ? 'open' : tab === 'Pending' ? 'pending' : 'closed'}
         entryLabel={tab === 'Pending' ? 'Order price' : 'Open'}
         currentLabel={tab === 'Closed' ? 'Closed at' : 'Current'}
         onAction={confirmAction}
         // A closed trade has nothing left to modify, nor does one in flight.
-        onModify={tab === 'Closed' || item.executing || item.busy ? undefined : openModifyOrder}
+        onModify={tab === 'Closed' || item.executing || item.busy || pendingActions.has(`${accountId}:${item.id}`) ? undefined : openModifyOrder}
         onMenu={openRowMenu}
         onPress={() => openInstrument(item.instrumentId)}
       />
     )
     // Only the first screenful settles in; later cells appear as they scroll.
     return index < 8
-      ? <Reveal index={index + 2} style={styles.gutter}>{card}</Reveal>
-      : <View style={styles.gutter}>{card}</View>
+      ? <Reveal index={index + 2} style={[styles.gutter, styles.rowSurface]}>{card}</Reveal>
+      : <View style={[styles.gutter, styles.rowSurface]}>{card}</View>
   }
 
   const liveOpen = openPositions.status === 'ready'
@@ -233,9 +262,11 @@ export function PositionsScreen() {
 
   const header = (
     <View style={styles.header}>
+      <HomeAtmosphere />
       <PageTitle
         scrollY={scrollY}
         title="Positions"
+        tone="reference"
         trailing={
           <AccountPill tone="light" mode={account.mode} number={account.number} onPress={openAccountSwitcher} />
         }
@@ -272,13 +303,14 @@ export function PositionsScreen() {
 
       <View style={[styles.gutter, styles.tabs]}>
         <SegmentedControl options={TABS} value={tab} onChange={setTab} />
+        {tab === 'Closed' && <Text variant="caption" color={colors.textMuted}>{`Last 24 hours · Page ${historyPage}`}</Text>}
+        {positionState.status === 'ready' && <QueryStateView state={positionState} render={() => null} />}
       </View>
     </View>
   )
 
   return (
     <View style={styles.root}>
-      <Aurora />
       <FlashList
         data={rows}
         renderItem={renderItem}
@@ -290,7 +322,7 @@ export function PositionsScreen() {
         contentContainerStyle={{ ...styles.list, paddingTop: insets.top + spacing.sm }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.gutter}>
+          <View style={[styles.gutter, styles.rowSurface]}>
             {positionState.status !== 'ready' ? (
               <QueryStateView state={positionState} render={() => null} />
             ) : (
@@ -306,8 +338,20 @@ export function PositionsScreen() {
             )}
           </View>
         }
+        ListFooterComponent={
+          <View style={styles.footerSurface}>
+            {tab === 'Closed' && <View style={[styles.gutter, { gap: spacing.sm }]}>
+              {historyPage > 1 && <Button tone="surface" accessibilityLabel="Previous page of closed trades" onPress={() => setHistoryCursor({ accountId, page: historyPage - 1 })}>
+                <ButtonText tone="surface">Previous page</ButtonText>
+              </Button>}
+              {closedPage.status === 'ready' && closedPage.data.hasMore && <Button tone="ink" accessibilityLabel="Next page of closed trades" onPress={() => setHistoryCursor({ accountId, page: historyPage + 1 })}>
+                <ButtonText tone="ink">Next page</ButtonText>
+              </Button>}
+            </View>}
+          </View>
+        }
       />
-      <PageBar scrollY={scrollY} title="Positions" />
+      <PageBar scrollY={scrollY} title="Positions" tone="reference" />
     </View>
   )
 }
@@ -317,6 +361,9 @@ export function PositionsScreen() {
  * small ring with a legend. Hidden until something is open.
  */
 function Exposure({ positions }: { positions: readonly Position[] }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const long = positions.filter((item) => item.side === 'Buy').reduce((sum, item) => sum + item.lots, 0)
   const short = positions.filter((item) => item.side === 'Sell').reduce((sum, item) => sum + item.lots, 0)
   const total = long + short
@@ -347,6 +394,9 @@ function Exposure({ positions }: { positions: readonly Position[] }) {
 }
 
 function LegendLine({ color, label, value }: { color: string; label: string; value: string }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={styles.legendLine}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
@@ -393,6 +443,7 @@ function LivePositionCard({
   streamed,
   variant,
   actionLabel,
+  actionLoading,
   entryLabel,
   currentLabel,
   onAction,
@@ -406,6 +457,7 @@ function LivePositionCard({
   streamed: boolean
   variant: 'open' | 'pending' | 'closed'
   actionLabel: string
+  actionLoading?: boolean
   entryLabel: string
   currentLabel: string
   onAction: (id: string) => void
@@ -434,6 +486,7 @@ function LivePositionCard({
       entryLabel={entryLabel}
       currentLabel={currentLabel}
       actionLabel={actionLabel}
+      actionLoading={actionLoading}
       onAction={onAction}
       onModify={onModify}
       onMenu={onMenu}
@@ -455,6 +508,8 @@ function FloatingPnl({
   instrumentsById: ReadonlyMap<string, Instrument>
   fallback: number
 }) {
+  const colors = useColors()
+
   const backend = useBackend()
   useLiveQuotesVersion(positions?.map((item) => item.instrumentId) ?? [])
   const total = positions
@@ -478,18 +533,20 @@ function FloatingPnl({
 }
 
 const keyExtractor = (item: Position) => item.id
-const Separator = () => <View style={styles.separator} />
+const Separator = () => { const styles = useThemeStyles(themeStyles); return <View style={styles.separator} /> }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surface,
   },
   gutter: {
     paddingHorizontal: SCREEN_PADDING,
   },
   header: {
-    paddingBottom: spacing.lg,
+    position: 'relative',
+    overflow: 'hidden',
+    paddingBottom: 0,
   },
   title: {
     paddingBottom: spacing.lg,
@@ -548,11 +605,23 @@ const styles = StyleSheet.create({
 
   tabs: {
     paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   list: {
     paddingBottom: TAB_BAR_CLEARANCE,
   },
   separator: {
     height: 12,
+    backgroundColor: colors.surface,
   },
-})
+  rowSurface: {
+    backgroundColor: colors.surface,
+  },
+  footerSurface: {
+    minHeight: TAB_BAR_CLEARANCE,
+    backgroundColor: colors.surface,
+  },
+}))

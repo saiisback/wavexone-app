@@ -1,6 +1,6 @@
+import { useColors } from '../design-system/theme'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
 
-import { colors } from '../design-system'
 
 type TabIconProps = { size?: number; color: string; active: boolean }
 
@@ -12,6 +12,8 @@ const STROKE = 1.7
  * for detail) when selected.
  */
 export function TabHomeIcon({ size = 24, color, active }: TabIconProps) {
+  const colors = useColors()
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -44,6 +46,8 @@ export function TabMarketsIcon({ size = 24, color, active }: TabIconProps) {
 }
 
 export function TabPositionsIcon({ size = 24, color, active }: TabIconProps) {
+  const colors = useColors()
+
   const line = active ? colors.white : color
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">

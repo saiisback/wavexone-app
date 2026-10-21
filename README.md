@@ -1,9 +1,11 @@
 # WavexOne — mobile UI
 
-React Native (Expo) implementation of the WavexOne trading app design. This is
-the **interface only**: every screen runs on fixtures from `src/data/mock.ts`.
-There is no networking, and no order, transfer or funding action reaches a
-server.
+React Native (Expo) implementation of the WavexOne trading app. The backend
+provider supports mock and live data; network access and mutations are governed
+by the backend gate. See [the backend contract](src/backend/README.md) before
+configuring a live environment.
+
+The visual identity is documented in [the branding guide](docs/BRANDING.md).
 
 ## Running it
 

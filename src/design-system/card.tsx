@@ -1,6 +1,7 @@
+import { useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StyleSheet, View } from 'react-native'
 
-import { colors } from './colors'
 import { Glass, type GlassProps } from './glass'
 import { radius, shadow, spacing } from './tokens'
 
@@ -20,6 +21,8 @@ export type CardProps = Omit<GlassProps, 'tone'> & {
  * and `blur` turns a card into frosted glass for content that floats.
  */
 export function Card({ tone = 'surface', padded = true, blur, lifted = true, sheen, watermark, style, ...rest }: CardProps) {
+  const tones = useThemeStyles(themeTones)
+
   const padding = padded ? styles.padded : null
   if (tone === 'ink' || blur) {
     return (
@@ -52,12 +55,10 @@ const styles = StyleSheet.create({
   },
 })
 
-const tones = StyleSheet.create({
-  // Glass: a near-opaque white pane with a bright rim, over the pastel canvas.
+const themeTones = (colors: Palette) => (StyleSheet.create({
+  // A clean white surface; hierarchy comes from spacing and one soft shadow.
   surface: {
-    backgroundColor: colors.glass,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: colors.surface,
   },
   well: {
     backgroundColor: colors.well,
@@ -72,4 +73,4 @@ const tones = StyleSheet.create({
   goldSoft: {
     backgroundColor: colors.goldSoft,
   },
-})
+}))

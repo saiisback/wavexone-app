@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from '../design-system/theme'
+import type { Palette } from '../design-system/colors'
 import * as Crypto from 'expo-crypto'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -12,7 +14,6 @@ import {
   Sheet,
   Text,
   UserIcon,
-  colors,
   spacing,
   useActionMenu,
 } from '../design-system'
@@ -27,6 +28,9 @@ const PHONE = /^\+?[\d\s()-]+$/
 
 /** Profile → Phone. Saved through `apiSaveProfile`. */
 export function EditPhoneScreen() {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   const { goBack } = useAppNavigation()
   const showMenu = useActionMenu()
   const backend = useBackend()
@@ -52,7 +56,7 @@ export function EditPhoneScreen() {
 
   const save = () => {
     setSaving(true)
-    void backend.accounts
+    return backend.accounts
       .saveProfile({ phone, idempotencyKey: Crypto.randomUUID() })
       .then(() => {
         invalidate('profile:', 'accounts:')
@@ -72,8 +76,8 @@ export function EditPhoneScreen() {
     <Sheet
       title="Phone"
       footer={
-        <Button tone="ink" disabled={!canSave} onPress={save}>
-          <ButtonText tone="ink">{saving ? 'Saving…' : 'Save'}</ButtonText>
+        <Button tone="gold" disabled={!canSave} loading={saving} onPress={save}>
+          <ButtonText tone="gold">{saving ? 'Saving…' : 'Save'}</ButtonText>
         </Button>
       }
     >
@@ -112,7 +116,7 @@ export function EditPhoneScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   intro: {
     alignItems: 'center',
     gap: spacing.md,
@@ -145,4 +149,4 @@ const styles = StyleSheet.create({
   noteText: {
     flex: 1,
   },
-})
+}))

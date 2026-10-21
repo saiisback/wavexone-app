@@ -1,3 +1,5 @@
+import { useColors, useThemeStyles } from './theme'
+import type { Palette } from './colors'
 import { StyleSheet, View } from 'react-native'
 import Svg, { Circle, G, Path, SvgXml } from 'react-native-svg'
 
@@ -8,7 +10,6 @@ import {
   type ArtworkMark,
   type FlagCode,
 } from './artwork.generated'
-import { colors } from './colors'
 import { Text } from './text'
 import { fonts } from './tokens'
 import {
@@ -46,6 +47,10 @@ export type AssetIconProps = {
  * fetches an image. Anything unrecognised gets a navy monogram.
  */
 export function AssetIcon({ kind, size = 44, label = '', tint, symbol, category }: AssetIconProps) {
+  const colors = useColors()
+  const DRAWN_STOCKS = useThemeStyles(themeDRAWN_STOCKS)
+  const styles = useThemeStyles(themeStyles)
+
   const mark =
     kind === 'generic' && symbol
       ? instrumentMark(symbol, category as InstrumentArtworkCategory | undefined)
@@ -93,7 +98,7 @@ export function AssetIcon({ kind, size = 44, label = '', tint, symbol, category 
   }
 
   if (mark === 'bitcoin' || mark === 'ethereum' || mark === 'oil' || mark === 'gas') {
-    const disc = mark === 'bitcoin' ? colors.bitcoin : mark === 'ethereum' ? colors.ethereum : colors.ink
+    const disc = mark === 'bitcoin' ? colors.bitcoin : mark === 'ethereum' ? colors.ethereum : colors.royal
     return (
       <Svg width={size} height={size} viewBox="0 0 48 48">
         <Circle cx="24" cy="24" r="24" fill={disc} />
@@ -150,6 +155,9 @@ export function AssetIcon({ kind, size = 44, label = '', tint, symbol, category 
 
 /** A bundled single-path brand or coin mark on its plate. */
 function MarkDisc({ mark, size }: { mark: ArtworkMark; size: number }) {
+  const colors = useColors()
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={[styles.box, { width: size, height: size, borderRadius: size / 2, backgroundColor: mark.plate }]}>
       <Svg width={size * 0.58} height={size * 0.58} viewBox="0 0 24 24">
@@ -162,6 +170,8 @@ function MarkDisc({ mark, size }: { mark: ArtworkMark; size: number }) {
 
 /** A square flag clipped to a circle. */
 function FlagDisc({ code, size }: { code: FlagCode; size: number }) {
+  const styles = useThemeStyles(themeStyles)
+
   return (
     <View style={[styles.box, styles.disc, { width: size, height: size, borderRadius: size / 2 }]}>
       <SvgXml xml={FLAG_SVGS[code]} width={size} height={size} />
@@ -172,6 +182,8 @@ function FlagDisc({ code, size }: { code: FlagCode; size: number }) {
 
 /** Two overlapping flags: the base currency in front, the quote behind. */
 function FlagPair({ base, quote, size }: { base: FlagCode; quote: FlagCode; size: number }) {
+  const styles = useThemeStyles(themeStyles)
+
   const disc = Math.round(size * 0.72)
   return (
     <View style={{ width: size, height: size }}>
@@ -187,6 +199,8 @@ function FlagPair({ base, quote, size }: { base: FlagCode; quote: FlagCode; size
 
 /** A hairline that keeps white plates and pale flags off a white card. */
 function Ring({ size }: { size: number }) {
+  const styles = useThemeStyles(themeStyles)
+
   return <View pointerEvents="none" style={[styles.ring, { borderRadius: size / 2 }]} />
 }
 
@@ -204,10 +218,7 @@ function Bullion({ size, tint }: { size: number; tint: string }) {
 }
 
 /** Multi-colour marks drawn by hand; everything else comes from `artwork.generated.ts`. */
-const DRAWN_STOCKS: Record<DrawnStockKind, readonly { d: string; fill: string }[]> = {
-  apple: [{ fill: colors.ink, d: 'M29 8c.3 4-2.8 7-6 7-.3-3.6 2.6-6.7 6-7ZM32.5 25c0-4 3.3-6 3.5-6.1-2-3-5.2-3.5-6.4-3.5-2.8-.3-5.4 1.7-6.8 1.7-1.3 0-3.4-1.6-5.6-1.5-3 .1-5.8 1.8-7.3 4.4-3.2 5.6-.8 14 2.3 18.4 1.5 2.2 3.1 4.4 5.4 4.3 2.2-.1 3-1.4 5.7-1.4s3.5 1.4 5.8 1.3c2.4 0 3.8-2.2 5.2-4.4 1.7-2.4 2.4-4.7 2.5-4.8-4.7-2-4.3-8.4-4.3-8.4Z' }],
-  tesla: [{ fill: colors.brandRed, d: 'M9 11c9-5 21-5 30 0l-2 4c-8-4-18-4-26 0ZM13 17c7-3 15-3 22 0l-3 4-5-2-3 23-3-23-5 2Z' }],
-  nvidia: [{ fill: colors.brandGreen, d: 'M6 24c8-11 24-14 37-3v14H25v-5h13v-6c-9-6-18-6-26 0 6 7 16 9 23 3-4 1-9 0-12-3 3-4 8-4 11-1-1-7-12-9-18 1 4 7 13 9 20 5l-3 7C23 41 12 34 6 24ZM25 10h18v8c-6-4-12-5-18-4Z' }],
+const themeDRAWN_STOCKS = (colors: Palette): Record<DrawnStockKind, readonly { d: string; fill: string }[]> => ({
   microsoft: [
     { fill: colors.brandRed, d: 'M9 9h14v14H9Z' },
     { fill: colors.brandGreen, d: 'M25 9h14v14H25Z' },
@@ -218,21 +229,12 @@ const DRAWN_STOCKS: Record<DrawnStockKind, readonly { d: string; fill: string }[
     { fill: colors.ink, d: 'M15 16c1-5 5-7 10-7 7 0 10 3 10 9v10l2 3-5 4-3-3c-3 3-6 3-9 3-6 0-9-3-9-8 0-7 8-9 17-9v-1c0-3-1-4-4-4-2 0-4 1-4 4Zm13 7c-5 0-9 1-9 4 0 2 1 3 3 3 4 0 6-3 6-7Z' },
     { fill: colors.brandOrange, d: 'M8 37c9 5 21 5 30 0-7 9-23 9-30 0Zm24-2 9-1-1 9-3-5Z' },
   ],
-  meta: [{ fill: colors.brandBlue, d: 'M7 28c0-9 3-16 8-16 5 0 10 8 14 15 3 5 4 7 7 7 3 0 4-3 4-7 0-7-3-11-5-11-4 0-8 8-12 14-4 6-6 10-11 10-6 0-10-4-10-11l5-1Zm0 1c0 4 2 6 5 6 3 0 5-4 9-10 5-8 9-13 14-13 6 0 10 7 10 15s-3 13-9 13c-6 0-9-5-13-12-4-6-7-11-9-11-4 0-7 6-7 12Z' }],
-  google: [
-    { fill: colors.brandBlue, d: 'M41 21H24v7h10c-1 4-4 7-10 7v7c11 0 18-8 18-18Z' },
-    { fill: colors.brandGreen, d: 'M24 42c6 0 11-2 14-5l-6-5c-2 2-5 3-8 3-5 0-9-3-11-7l-6 5c3 5 9 9 17 9Z' },
-    { fill: colors.brandYellow, d: 'M13 28c-1-3-1-5 0-8l-6-5c-4 6-4 12 0 18Z' },
-    { fill: colors.brandRed, d: 'M13 20c2-4 6-7 11-7 3 0 6 1 8 3l6-6c-4-3-8-4-14-4-8 0-14 4-17 9Z' },
-  ],
-  netflix: [
-    { fill: colors.brandRedDeep, d: 'M12 8h8v33l-8 1ZM28 8h8v34l-8-1Z' },
-    { fill: colors.brandRed, d: 'M12 8h8l16 34-8-1Z' },
-  ],
-}
+})
 
 /** Fallback for a pair whose currencies have no bundled flag. */
 function PairBadge({ label, size }: { label: string; size: number }) {
+  const styles = useThemeStyles(themeStyles)
+
   const pair = label.toUpperCase().replace(/[^A-Z]/g, '')
   const base = pair.slice(0, 3) || 'FX'
   const quote = pair.slice(3, 6) || 'FX'
@@ -249,7 +251,7 @@ function PairBadge({ label, size }: { label: string; size: number }) {
   )
 }
 
-const styles = StyleSheet.create({
+const themeStyles = (colors: Palette) => (StyleSheet.create({
   box: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -288,12 +290,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.surface,
   },
-  currencyBase: { left: 0, top: 2, backgroundColor: colors.navy },
+  currencyBase: { left: 0, top: 2, backgroundColor: colors.royal },
   currencyQuote: { right: 0, bottom: 2, backgroundColor: colors.gold },
   currencyText: { fontFamily: fonts.bold, color: colors.white, includeFontPadding: false },
-  currencyQuoteText: { color: colors.navy },
-  marketBadge: { backgroundColor: colors.navy },
-  cryptoWordmark: { backgroundColor: colors.ink },
+  currencyQuoteText: { color: colors.royal },
+  marketBadge: { backgroundColor: colors.royal },
+  cryptoWordmark: { backgroundColor: colors.royal },
   badgeText: { fontFamily: fonts.bold, color: colors.white, includeFontPadding: false },
   glyph: {
     fontFamily: fonts.bold,
@@ -301,4 +303,4 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
     textAlign: 'center',
   },
-})
+}))
